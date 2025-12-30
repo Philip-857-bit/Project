@@ -1,0 +1,219 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/splash_screen.dart';
+import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../../features/devices/presentation/screens/device_list_screen.dart';
+import '../../features/devices/presentation/screens/device_detail_screen.dart';
+import '../../features/devices/presentation/screens/device_pairing_screen.dart';
+import '../../features/feeding/presentation/screens/feeding_schedule_screen.dart';
+import '../../features/feeding/presentation/screens/manual_feed_screen.dart';
+import '../../features/feeding/presentation/screens/feeding_history_screen.dart';
+import '../../features/monitoring/presentation/screens/monitoring_screen.dart';
+import '../../features/calculator/presentation/screens/feed_calculator_screen.dart';
+import '../../features/settings/presentation/screens/settings_screen.dart';
+import '../../features/video/presentation/screens/video_verification_screen.dart';
+import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
+import '../providers/auth_provider.dart';
+
+final appRouterProvider = Provider<GoRouter>((ref) {
+  final authState = ref.watch(authStateProvider);
+
+  return GoRouter(
+    initialLocation: '/splash',
+    debugLogDiagnostics: true,
+    redirect: (context, state) {
+      final isLoggedIn = authState.isAuthenticated;
+      final isLoggingIn = state.matchedLocation == '/login';
+      final isRegistering = state.matchedLocation == '/register';
+      final isSplash = state.matchedLocation == '/splash';
+      final isOnboarding = state.matchedLocation == '/onboarding';
+
+      if (isSplash || isOnboarding) return null;
+
+      if (!isLoggedIn && !isLoggingIn && !isRegistering) {
+        return '/login';
+      }
+
+      if (isLoggedIn && (isLoggingIn || isRegistering)) {
+        return '/dashboard';
+      }
+
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/splash',
+        name: 'splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        name: 'onboarding',
+        builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        name: 'login',
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        name: 'register',
+        builder: (context, state) => const RegisterScreen(),
+      ),
+      ShellRoute(
+        builder: (context, state, child) => MainShell(child: child),
+        routes: [
+          GoRoute(
+            path: '/dashboard',
+            name: 'dashboard',
+            builder: (context, state) => const DashboardScreen(),
+          ),
+          GoRoute(
+            path: '/devices',
+            name: 'devices',
+            builder: (context, state) => const DeviceListScreen(),
+            routes: [
+              GoRoute(
+                path: 'pair',
+                name: 'device-pair',
+                builder: (context, state) => const DevicePairingScreen(),
+              ),
+              GoRoute(
+                path: ':deviceId',
+                name: 'device-detail',
+                builder: (context, state) => DeviceDetailScreen(
+                  deviceId: state.pathParameters['deviceId']!,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/feeding',
+            name: 'feeding',
+            builder: (context, state) => const FeedingScheduleScreen(),
+            routes: [
+              GoRoute(
+                path: 'manual',
+                name: 'manual-feed',
+                builder: (context, state) => const ManualFeedScreen(),
+              ),
+              GoRoute(
+                path: 'history',
+                name: 'feeding-history',
+                builder: (context, state) => const FeedingHistoryScreen(),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/monitoring',
+            name: 'monitoring',
+            builder: (context, state) => const MonitoringScreen(),
+          ),
+          GoRoute(
+            path: '/video',
+            name: 'video',
+            builder: (context, state) => const VideoVerificationScreen(),
+            routes: [
+              GoRoute(
+                path: ':feedingEventId',
+                name: 'video-verification',
+                builder: (context, state) => VideoVerificationScreen(
+                  feedingEventId: state.pathParameters['feedingEventId'],
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/calculator',
+            name: 'calculator',
+            builder: (context, state) => const FeedCalculatorScreen(),
+          ),
+          GoRoute(
+            path: '/settings',
+            name: 'settings',
+            builder: (context, state) => const SettingsScreen(),
+          ),
+        ],
+      ),
+    ],
+  );
+});
+
+class MainShell extends StatelessWidget {
+  final Widget child;
+
+  const MainShell({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: child,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _calculateSelectedIndex(context),
+        onDestinationSelected: (index) => _onItemTapped(index, context),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.devices_outlined),
+            selectedIcon: Icon(Icons.devices),
+            label: 'Devices',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.schedule_outlined),
+            selectedIcon: Icon(Icons.schedule),
+            label: 'Feeding',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.monitor_heart_outlined),
+            selectedIcon: Icon(Icons.monitor_heart),
+            label: 'Monitor',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _calculateSelectedIndex(BuildContext context) {
+    final location = GoRouterState.of(context).matchedLocation;
+    if (location.startsWith('/dashboard')) return 0;
+    if (location.startsWith('/devices')) return 1;
+    if (location.startsWith('/feeding')) return 2;
+    if (location.startsWith('/monitoring')) return 3;
+    if (location.startsWith('/settings')) return 4;
+    return 0;
+  }
+
+  void _onItemTapped(int index, BuildContext context) {
+    switch (index) {
+      case 0:
+        context.goNamed('dashboard');
+        break;
+      case 1:
+        context.goNamed('devices');
+        break;
+      case 2:
+        context.goNamed('feeding');
+        break;
+      case 3:
+        context.goNamed('monitoring');
+        break;
+      case 4:
+        context.goNamed('settings');
+        break;
+    }
+  }
+}

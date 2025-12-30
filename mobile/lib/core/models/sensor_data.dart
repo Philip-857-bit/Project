@@ -1,0 +1,156 @@
+import 'package:equatable/equatable.dart';
+
+class SensorData extends Equatable {
+  final String deviceId;
+  final double waterTemperature;
+  final double? dissolvedOxygen;
+  final double? ph;
+  final double? turbidity;
+  final double feedLevel;
+  final double batteryLevel;
+  final double solarVoltage;
+  final bool isSolarCharging;
+  final int signalStrength;
+  final String connectionType;
+  final DateTime timestamp;
+
+  const SensorData({
+    required this.deviceId,
+    required this.waterTemperature,
+    this.dissolvedOxygen,
+    this.ph,
+    this.turbidity,
+    required this.feedLevel,
+    required this.batteryLevel,
+    required this.solarVoltage,
+    required this.isSolarCharging,
+    required this.signalStrength,
+    required this.connectionType,
+    required this.timestamp,
+  });
+
+  factory SensorData.fromJson(Map<String, dynamic> json) {
+    return SensorData(
+      deviceId: json['device_id'] ?? '',
+      waterTemperature: (json['water_temperature'] ?? 0).toDouble(),
+      dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
+      ph: json['ph']?.toDouble(),
+      turbidity: json['turbidity']?.toDouble(),
+      feedLevel: (json['feed_level'] ?? 0).toDouble(),
+      batteryLevel: (json['battery_level'] ?? 0).toDouble(),
+      solarVoltage: (json['solar_voltage'] ?? 0).toDouble(),
+      isSolarCharging: json['is_solar_charging'] ?? false,
+      signalStrength: json['signal_strength'] ?? 0,
+      connectionType: json['connection_type'] ?? 'unknown',
+      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'device_id': deviceId,
+    'water_temperature': waterTemperature,
+    'dissolved_oxygen': dissolvedOxygen,
+    'ph': ph,
+    'turbidity': turbidity,
+    'feed_level': feedLevel,
+    'battery_level': batteryLevel,
+    'solar_voltage': solarVoltage,
+    'is_solar_charging': isSolarCharging,
+    'signal_strength': signalStrength,
+    'connection_type': connectionType,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  @override
+  List<Object?> get props => [deviceId, waterTemperature, feedLevel, batteryLevel, timestamp];
+}
+
+class SensorHistory {
+  final String sensorType;
+  final List<SensorDataPoint> dataPoints;
+  final double? min;
+  final double? max;
+  final double? average;
+
+  SensorHistory({
+    required this.sensorType,
+    required this.dataPoints,
+    this.min,
+    this.max,
+    this.average,
+  });
+
+  factory SensorHistory.fromJson(Map<String, dynamic> json) {
+    return SensorHistory(
+      sensorType: json['sensor_type'] ?? '',
+      dataPoints: (json['data_points'] as List?)
+          ?.map((e) => SensorDataPoint.fromJson(e))
+          .toList() ?? [],
+      min: json['min']?.toDouble(),
+      max: json['max']?.toDouble(),
+      average: json['average']?.toDouble(),
+    );
+  }
+}
+
+class SensorDataPoint {
+  final double value;
+  final DateTime timestamp;
+
+  SensorDataPoint({required this.value, required this.timestamp});
+
+  factory SensorDataPoint.fromJson(Map<String, dynamic> json) {
+    return SensorDataPoint(
+      value: (json['value'] ?? 0).toDouble(),
+      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
+    );
+  }
+}
+
+enum AlertSeverity { info, warning, critical }
+
+class DeviceAlert extends Equatable {
+  final String id;
+  final String deviceId;
+  final String title;
+  final String message;
+  final AlertSeverity severity;
+  final String alertType;
+  final bool isRead;
+  final DateTime createdAt;
+
+  const DeviceAlert({
+    required this.id,
+    required this.deviceId,
+    required this.title,
+    required this.message,
+    required this.severity,
+    required this.alertType,
+    required this.isRead,
+    required this.createdAt,
+  });
+
+  factory DeviceAlert.fromJson(Map<String, dynamic> json) {
+    return DeviceAlert(
+      id: json['id'] ?? '',
+      deviceId: json['device_id'] ?? '',
+      title: json['title'] ?? '',
+      message: json['message'] ?? '',
+      severity: _parseSeverity(json['severity']),
+      alertType: json['alert_type'] ?? '',
+      isRead: json['is_read'] ?? false,
+      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
+    );
+  }
+
+  static AlertSeverity _parseSeverity(String? severity) {
+    switch (severity) {
+      case 'critical': return AlertSeverity.critical;
+      case 'warning': return AlertSeverity.warning;
+      default: return AlertSeverity.info;
+    }
+  }
+
+  @override
+  List<Object?> get props => [id, deviceId, title, severity, isRead, createdAt];
+}

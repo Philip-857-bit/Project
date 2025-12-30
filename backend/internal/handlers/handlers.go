@@ -1,0 +1,51 @@
+package handlers
+
+import (
+	"smart-fish-feeder/internal/services"
+
+	"github.com/sirupsen/logrus"
+)
+
+// Handlers contains all HTTP handlers
+type Handlers struct {
+	Health       *HealthHandler
+	Auth         *AuthHandler
+	User         *UserHandler
+	Device       *DeviceHandler
+	Feeding      *FeedingHandler
+	Monitoring   *MonitoringHandler
+	Calculator   *CalculatorHandler
+	Certificate  *CertificateHandler
+	FCRAnalytics *FCRAnalyticsHandler
+	Vision       *VisionHandler
+	Power        *PowerHandler
+	Cellular     *CellularHandler
+	services     *services.Services
+	logger       *logrus.Logger
+}
+
+// New creates a new handlers instance
+func New(services *services.Services, logger *logrus.Logger) *Handlers {
+	h := &Handlers{
+		Health:       NewHealthHandler(services, logger),
+		Auth:         NewAuthHandler(services, logger),
+		User:         NewUserHandler(services, logger),
+		Device:       NewDeviceHandler(services, logger),
+		Feeding:      NewFeedingHandler(services, logger),
+		Monitoring:   NewMonitoringHandler(services, logger),
+		Calculator:   NewCalculatorHandler(services, logger),
+		Certificate:  NewCertificateHandler(services, logger),
+		FCRAnalytics: NewFCRAnalyticsHandler(services, logger),
+		services:     services,
+		logger:       logger,
+	}
+
+	// Initialize handlers that depend on services being non-nil
+	if services != nil {
+		h.Vision = NewVisionHandler(services.Vision)
+		h.Power = NewPowerHandler(services.Power, services.Diagnostics)
+		h.Cellular = NewCellularHandler(services.Cellular)
+	}
+
+	return h
+}
