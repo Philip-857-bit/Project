@@ -1,10 +1,11 @@
 # Kiro IDE folder
 .kiro/
-.docx
-.md
-.zip
-.cir
-.raw
-.db
-.log
+*.docx
+*.md
+*.zip
+*.cir
+*.raw
+*.db
+*.log
 .op.raw
+CHAPTER_3_MATERIALS_AND_METHODS.md
