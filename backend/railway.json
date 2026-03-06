@@ -1,11 +1,11 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
+    "builder": "NIXPACKS",
+    "buildCommand": "if [ -f backend/go.mod ]; then cd backend; fi; go build -o main ./cmd/server"
   },
   "deploy": {
-    "startCommand": "./main",
+    "startCommand": "if [ -f backend/main ]; then cd backend; fi; ./main",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",

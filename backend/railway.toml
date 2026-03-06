@@ -2,11 +2,11 @@
 # https://docs.railway.app/reference/config-as-code
 
 [build]
-builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+builder = "nixpacks"
+buildCommand = "if [ -f backend/go.mod ]; then cd backend; fi; go build -o main ./cmd/server"
 
 [deploy]
-startCommand = "./main"
+startCommand = "if [ -f backend/main ]; then cd backend; fi; ./main"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
