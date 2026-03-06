@@ -2,11 +2,10 @@
 # https://docs.railway.app/reference/config-as-code
 
 [build]
-builder = "nixpacks"
-nixpacksConfigPath = "/backend/nixpacks.toml"
+builder = "dockerfile"
+dockerfilePath = "/backend/Dockerfile"
 
 [deploy]
-startCommand = "cd backend && ./main"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"

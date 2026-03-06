@@ -1,8 +1,8 @@
 # Smart Fish Feeder Backend API Dockerfile
-# Optimized for Railway deployment
+# Optimized for Railway deployment from the monorepo root
 
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -10,14 +10,14 @@ WORKDIR /app
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy go mod files first for better caching
-COPY go.mod go.sum ./
+# Copy backend module files first for better caching
+COPY backend/go.mod backend/go.sum ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy backend source code from the monorepo
+COPY backend/. .
 
 # Build the application with optimizations
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \

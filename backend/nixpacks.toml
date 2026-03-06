@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["go", "git"]
-
-[phases.build]
-cmds = ["cd backend && CGO_ENABLED=0 go build -o main ./cmd/server"]
-
-[start]
-cmd = "cd backend && ./main"
