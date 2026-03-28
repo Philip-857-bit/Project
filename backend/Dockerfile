@@ -11,13 +11,13 @@ WORKDIR /app
 RUN apk add --no-cache git ca-certificates tzdata
 
 # Copy backend module files first for better caching
-COPY backend/go.mod backend/go.sum ./
+COPY go.mod go.sum ./
 
 # Download dependencies
 RUN go mod download
 
 # Copy backend source code from the monorepo
-COPY backend/. .
+COPY /. .
 
 # Build the application with optimizations
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
