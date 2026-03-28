@@ -189,6 +189,7 @@ func Load() (*Config, error) {
 	// Set up Viper to read from environment variables
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("SFF") // Smart Fish Feeder prefix
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	// Bind specific environment variables for Railway compatibility
 	// Railway provides DATABASE_URL, REDIS_URL, PORT

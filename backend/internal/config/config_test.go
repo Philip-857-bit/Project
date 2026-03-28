@@ -218,3 +218,34 @@ func TestLoadWithConnectionURLs(t *testing.T) {
 		t.Errorf("Redis.DB = %v, want %v", cfg.Redis.DB, 2)
 	}
 }
+
+func TestLoadWithCloudinaryEnvVars(t *testing.T) {
+	viper.Reset()
+
+	t.Setenv("SFF_CLOUDINARY_CLOUD_NAME", "demo-cloud")
+	t.Setenv("SFF_CLOUDINARY_API_KEY", "demo-key")
+	t.Setenv("SFF_CLOUDINARY_API_SECRET", "demo-secret")
+	t.Setenv("SFF_CLOUDINARY_FOLDER", "demo-folder")
+	t.Setenv("SFF_CLOUDINARY_ENABLED", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Cloudinary.CloudName != "demo-cloud" {
+		t.Errorf("Cloudinary.CloudName = %v, want %v", cfg.Cloudinary.CloudName, "demo-cloud")
+	}
+	if cfg.Cloudinary.APIKey != "demo-key" {
+		t.Errorf("Cloudinary.APIKey = %v, want %v", cfg.Cloudinary.APIKey, "demo-key")
+	}
+	if cfg.Cloudinary.APISecret != "demo-secret" {
+		t.Errorf("Cloudinary.APISecret = %v, want %v", cfg.Cloudinary.APISecret, "demo-secret")
+	}
+	if cfg.Cloudinary.Folder != "demo-folder" {
+		t.Errorf("Cloudinary.Folder = %v, want %v", cfg.Cloudinary.Folder, "demo-folder")
+	}
+	if !cfg.Cloudinary.Enabled {
+		t.Errorf("Cloudinary.Enabled = %v, want %v", cfg.Cloudinary.Enabled, true)
+	}
+}
