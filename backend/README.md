@@ -156,6 +156,8 @@ All configuration options can be overridden with environment variables:
 
 - `SFF_SERVER_HOST` - Server host
 - `SFF_SERVER_PORT` - Server port
+- `DATABASE_URL` or `SFF_DATABASE_URL` - Full PostgreSQL connection URI
+- `REDIS_URL` or `SFF_REDIS_URL` - Full Redis connection URI
 - `SFF_DATABASE_HOST` - Database host
 - `SFF_DATABASE_PASSWORD` - Database password
 - `SFF_JWT_SECRET_KEY` - JWT secret key
@@ -173,6 +175,8 @@ cp .env.example .env
 
 | Variable | Where to Get It |
 |----------|-----------------|
+| `DATABASE_URL` / `SFF_DATABASE_URL` | PostgreSQL provider connection URI (Railway, Supabase, RDS, etc.) |
+| `REDIS_URL` / `SFF_REDIS_URL` | Redis provider connection URI (Railway, Upstash, ElastiCache, etc.) |
 | `SFF_DATABASE_*` | Create a PostgreSQL database (local, Railway, AWS RDS, etc.) |
 | `SFF_REDIS_*` | Create a Redis instance (local, Railway, Upstash, etc.) |
 | `SFF_JWT_SECRET_KEY` | Generate with: `openssl rand -base64 32` |

@@ -41,7 +41,12 @@
 -keep class android.bluetooth.** { *; }
 
 # Keep model classes
--keep class com.smartfishfeeder.smart_fish_feeder.models.** { *; }
+-keep class com.smartaqua.app.models.** { *; }
+
+# Play Core library (fixes R8 missing class errors)
+-keep class com.google.android.play.core.** { *; }
+-keep interface com.google.android.play.core.** { *; }
+-dontwarn com.google.android.play.core.**
 
 # Keep native methods
 -keepclasseswithmembernames class * {

@@ -2,6 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -237,69 +240,50 @@ func Load() (*Config, error) {
 
 // bindRailwayEnvVars binds Railway-specific environment variables
 func bindRailwayEnvVars() {
-	// Railway provides these without prefix
-	_ = viper.BindEnv("PORT")
-	_ = viper.BindEnv("DATABASE_URL")
-	_ = viper.BindEnv("REDIS_URL")
+	// Railway provides these without prefix, while local setups may use SFF_ prefix.
+	_ = viper.BindEnv("PORT", "PORT", "SFF_PORT")
+	_ = viper.BindEnv("DATABASE_URL", "DATABASE_URL", "SFF_DATABASE_URL")
+	_ = viper.BindEnv("REDIS_URL", "REDIS_URL", "SFF_REDIS_URL")
 	_ = viper.BindEnv("RAILWAY_ENVIRONMENT")
 }
 
 // parseDatabaseURL parses a PostgreSQL connection URL
 // Format: postgresql://user:password@host:port/dbname?sslmode=disable
 func parseDatabaseURL(cfg *DatabaseConfig, url string) error {
-	// Remove postgresql:// or postgres:// prefix
-	url = strings.TrimPrefix(url, "postgresql://")
-	url = strings.TrimPrefix(url, "postgres://")
-
-	// Split by @ to get credentials and host
-	parts := strings.SplitN(url, "@", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid database URL format")
+	parsedURL, err := url.Parse(url)
+	if err != nil {
+		return fmt.Errorf("invalid database URL: %w", err)
 	}
 
-	// Parse credentials (user:password)
-	credentials := strings.SplitN(parts[0], ":", 2)
-	if len(credentials) >= 1 {
-		cfg.User = credentials[0]
-	}
-	if len(credentials) >= 2 {
-		cfg.Password = credentials[1]
+	if parsedURL.Scheme != "postgres" && parsedURL.Scheme != "postgresql" {
+		return fmt.Errorf("unsupported database URL scheme: %s", parsedURL.Scheme)
 	}
 
-	// Parse host:port/dbname?params
-	hostPart := parts[1]
-
-	// Split by ? to separate params
-	hostAndParams := strings.SplitN(hostPart, "?", 2)
-	hostPart = hostAndParams[0]
-
-	// Parse params if present
-	if len(hostAndParams) == 2 {
-		params := strings.Split(hostAndParams[1], "&")
-		for _, param := range params {
-			kv := strings.SplitN(param, "=", 2)
-			if len(kv) == 2 && kv[0] == "sslmode" {
-				cfg.SSLMode = kv[1]
-			}
+	if parsedURL.User != nil {
+		cfg.User = parsedURL.User.Username()
+		if password, hasPassword := parsedURL.User.Password(); hasPassword {
+			cfg.Password = password
 		}
 	}
 
-	// Split by / to get host:port and dbname
-	hostAndDB := strings.SplitN(hostPart, "/", 2)
-	if len(hostAndDB) >= 2 {
-		cfg.DBName = hostAndDB[1]
+	if host := parsedURL.Hostname(); host != "" {
+		cfg.Host = host
 	}
 
-	// Parse host:port
-	hostPort := strings.SplitN(hostAndDB[0], ":", 2)
-	if len(hostPort) >= 1 {
-		cfg.Host = hostPort[0]
-	}
-	if len(hostPort) >= 2 {
-		port, err := strconv.Atoi(hostPort[1])
-		if err == nil {
-			cfg.Port = port
+	if portText := parsedURL.Port(); portText != "" {
+		port, err := strconv.Atoi(portText)
+		if err != nil {
+			return fmt.Errorf("invalid database port %q: %w", portText, err)
 		}
+		cfg.Port = port
+	}
+
+	if dbName := strings.TrimPrefix(parsedURL.Path, "/"); dbName != "" {
+		cfg.DBName = dbName
+	}
+
+	if sslMode := parsedURL.Query().Get("sslmode"); sslMode != "" {
+		cfg.SSLMode = sslMode
 	}
 
 	// Railway PostgreSQL requires SSL
@@ -313,41 +297,56 @@ func parseDatabaseURL(cfg *DatabaseConfig, url string) error {
 // parseRedisURL parses a Redis connection URL
 // Format: redis://[:password@]host:port[/db]
 func parseRedisURL(cfg *RedisConfig, url string) error {
-	// Remove redis:// prefix
-	url = strings.TrimPrefix(url, "redis://")
-	url = strings.TrimPrefix(url, "rediss://") // TLS variant
-
-	// Check for password
-	if strings.Contains(url, "@") {
-		parts := strings.SplitN(url, "@", 2)
-		// Password might be :password or just password
-		password := strings.TrimPrefix(parts[0], ":")
-		cfg.Password = password
-		url = parts[1]
+	parsedURL, err := url.Parse(url)
+	if err != nil {
+		return fmt.Errorf("invalid redis URL: %w", err)
 	}
 
-	// Parse host:port/db
-	hostPart := url
-	if strings.Contains(hostPart, "/") {
-		parts := strings.SplitN(hostPart, "/", 2)
-		hostPart = parts[0]
-		if len(parts) == 2 {
-			db, err := strconv.Atoi(parts[1])
-			if err == nil {
-				cfg.DB = db
-			}
+	if parsedURL.Scheme != "redis" && parsedURL.Scheme != "rediss" {
+		return fmt.Errorf("unsupported redis URL scheme: %s", parsedURL.Scheme)
+	}
+
+	if parsedURL.User != nil {
+		if password, hasPassword := parsedURL.User.Password(); hasPassword {
+			cfg.Password = password
+		} else if username := parsedURL.User.Username(); username != "" {
+			// Fallback for providers that expose token/secret as username only.
+			cfg.Password = username
 		}
 	}
 
-	// Parse host:port
-	hostPort := strings.SplitN(hostPart, ":", 2)
-	if len(hostPort) >= 1 {
-		cfg.Host = hostPort[0]
+	if host := parsedURL.Hostname(); host != "" {
+		cfg.Host = host
 	}
-	if len(hostPort) >= 2 {
-		port, err := strconv.Atoi(hostPort[1])
-		if err == nil {
-			cfg.Port = port
+
+	if portText := parsedURL.Port(); portText != "" {
+		port, err := strconv.Atoi(portText)
+		if err != nil {
+			return fmt.Errorf("invalid redis port %q: %w", portText, err)
+		}
+		cfg.Port = port
+	}
+
+	if dbPath := strings.Trim(path.Clean(parsedURL.Path), "/"); dbPath != "" && dbPath != "." {
+		db, err := strconv.Atoi(dbPath)
+		if err != nil {
+			return fmt.Errorf("invalid redis db %q: %w", dbPath, err)
+		}
+		cfg.DB = db
+	}
+
+	if dbQuery := parsedURL.Query().Get("db"); dbQuery != "" {
+		db, err := strconv.Atoi(dbQuery)
+		if err != nil {
+			return fmt.Errorf("invalid redis db query value %q: %w", dbQuery, err)
+		}
+		cfg.DB = db
+	}
+
+	if parsedURL.Hostname() == "" {
+		host, _, err := net.SplitHostPort(parsedURL.Host)
+		if err == nil && host != "" {
+			cfg.Host = host
 		}
 	}
 

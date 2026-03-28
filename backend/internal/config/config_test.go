@@ -2,6 +2,8 @@ package config
 
 import (
 	"testing"
+
+	"github.com/spf13/viper"
 )
 
 func TestParseDatabaseURL(t *testing.T) {
@@ -113,7 +115,16 @@ func TestParseRedisURL(t *testing.T) {
 			expected: RedisConfig{
 				Host:     "containers-us-west-456.railway.app",
 				Port:     6379,
-				Password: "default:abc123",
+				Password: "abc123",
+			},
+		},
+		{
+			name: "redis URL with db query",
+			url:  "redis://localhost:6379?db=5",
+			expected: RedisConfig{
+				Host: "localhost",
+				Port: 6379,
+				DB:   5,
 			},
 		},
 	}
@@ -135,11 +146,16 @@ func TestParseRedisURL(t *testing.T) {
 			if cfg.DB != tt.expected.DB {
 				t.Errorf("DB = %v, want %v", cfg.DB, tt.expected.DB)
 			}
+			if cfg.Password != tt.expected.Password {
+				t.Errorf("Password = %v, want %v", cfg.Password, tt.expected.Password)
+			}
 		})
 	}
 }
 
 func TestLoad(t *testing.T) {
+	viper.Reset()
+
 	// Test that Load() works with defaults
 	cfg, err := Load()
 	if err != nil {
@@ -156,5 +172,49 @@ func TestLoad(t *testing.T) {
 
 	if cfg.Redis.Host == "" {
 		t.Error("Redis.Host should have a default value")
+	}
+}
+
+func TestLoadWithConnectionURLs(t *testing.T) {
+	viper.Reset()
+
+	t.Setenv("SFF_DATABASE_URL", "postgresql://dbuser:dbpass@db.example.com:5433/sff_prod?sslmode=require")
+	t.Setenv("SFF_REDIS_URL", "redis://:redispass@redis.example.com:6380/2")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Database.Host != "db.example.com" {
+		t.Errorf("Database.Host = %v, want %v", cfg.Database.Host, "db.example.com")
+	}
+	if cfg.Database.Port != 5433 {
+		t.Errorf("Database.Port = %v, want %v", cfg.Database.Port, 5433)
+	}
+	if cfg.Database.User != "dbuser" {
+		t.Errorf("Database.User = %v, want %v", cfg.Database.User, "dbuser")
+	}
+	if cfg.Database.Password != "dbpass" {
+		t.Errorf("Database.Password = %v, want %v", cfg.Database.Password, "dbpass")
+	}
+	if cfg.Database.DBName != "sff_prod" {
+		t.Errorf("Database.DBName = %v, want %v", cfg.Database.DBName, "sff_prod")
+	}
+	if cfg.Database.SSLMode != "require" {
+		t.Errorf("Database.SSLMode = %v, want %v", cfg.Database.SSLMode, "require")
+	}
+
+	if cfg.Redis.Host != "redis.example.com" {
+		t.Errorf("Redis.Host = %v, want %v", cfg.Redis.Host, "redis.example.com")
+	}
+	if cfg.Redis.Port != 6380 {
+		t.Errorf("Redis.Port = %v, want %v", cfg.Redis.Port, 6380)
+	}
+	if cfg.Redis.Password != "redispass" {
+		t.Errorf("Redis.Password = %v, want %v", cfg.Redis.Password, "redispass")
+	}
+	if cfg.Redis.DB != 2 {
+		t.Errorf("Redis.DB = %v, want %v", cfg.Redis.DB, 2)
 	}
 }
