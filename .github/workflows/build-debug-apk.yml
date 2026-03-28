@@ -1,0 +1,67 @@
+name: Build Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "mobile/**"
+      - ".github/workflows/build-debug-apk.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/build-debug-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create mobile .env from GitHub vars/secrets
+        shell: bash
+        run: |
+          cat > mobile/.env <<EOF
+          API_BASE_URL=${{ vars['API_BASE_URL'] }}
+          MQTT_HOST=${{ vars['MQTT_HOST'] }}
+          MQTT_PORT=${{ vars['MQTT_PORT'] }}
+          CERT_FINGERPRINT_1=${{ secrets['CERT_FINGERPRINT_1'] }}
+          CERT_FINGERPRINT_2=${{ secrets['CERT_FINGERPRINT_2'] }}
+          DEBUG_MODE=${{ vars['DEBUG_MODE'] }}
+          API_DOMAIN=${{ vars['API_DOMAIN'] }}
+          EOF
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Build debug APK
+        working-directory: mobile
+        run: flutter build apk --debug --dart-define-from-file=.env
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartaqua-debug-apk
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 1

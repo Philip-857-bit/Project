@@ -511,7 +511,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Your Smart Fish Feeder is now connected and ready to use.',
+                  'Your SmartAqua feeder is now connected and ready to use.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),

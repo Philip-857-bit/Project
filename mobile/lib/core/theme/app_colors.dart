@@ -9,23 +9,23 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Primary Colors - Water/Ocean theme
-  static const Color primary = Color(0xFF0277BD); // Deep ocean blue
-  static const Color primaryLight = Color(0xFF58A5F0); // Light blue
-  static const Color primaryDark = Color(0xFF004C8C); // Dark blue
-  static const Color primaryContainer = Color(0xFFB3E5FC); // Very light blue
+  // Primary Colors - SmartAqua logo palette
+  static const Color primary = Color(0xFF31B8B5); // Aqua teal
+  static const Color primaryLight = Color(0xFF63CAC8); // Light aqua
+  static const Color primaryDark = Color(0xFF1C8F8C); // Deep aqua
+  static const Color primaryContainer = Color(0xFFA9DCD7); // Mint aqua
 
-  // Secondary Colors - Growth/Nature theme
-  static const Color secondary = Color(0xFF00897B); // Teal
-  static const Color secondaryLight = Color(0xFF4DB6AC); // Light teal
-  static const Color secondaryDark = Color(0xFF00695C); // Dark teal
-  static const Color secondaryContainer = Color(0xFFB2DFDB); // Very light teal
+  // Secondary Colors - Ocean blue accent
+  static const Color secondary = Color(0xFF3D66C6); // Ocean blue
+  static const Color secondaryLight = Color(0xFF6A8DE0); // Light ocean blue
+  static const Color secondaryDark = Color(0xFF294CA5); // Deep ocean blue
+  static const Color secondaryContainer = Color(0xFFC7D6F5); // Very light ocean blue
 
-  // Tertiary Colors - Accent
-  static const Color tertiary = Color(0xFF5E35B1); // Deep purple
-  static const Color tertiaryLight = Color(0xFF9575CD); // Light purple
-  static const Color tertiaryDark = Color(0xFF4527A0); // Dark purple
-  static const Color tertiaryContainer = Color(0xFFD1C4E9); // Very light purple
+  // Tertiary Colors - Circuit gold accent
+  static const Color tertiary = Color(0xFFC79A73); // Gold accent
+  static const Color tertiaryLight = Color(0xFFD9B594); // Light gold
+  static const Color tertiaryDark = Color(0xFFAA7C54); // Deep gold
+  static const Color tertiaryContainer = Color(0xFFF0DFCF); // Very light gold
 
   // Semantic Colors - Status
   static const Color success = Color(0xFF43A047); // Green
@@ -49,7 +49,7 @@ class AppColors {
   static const Color infoContainer = Color(0xFFBBDEFB); // Very light blue
 
   // Neutral Colors
-  static const Color background = Color(0xFFFAFAFA); // Off-white
+  static const Color background = Color(0xFFEAF7F6); // Soft mint white
   static const Color backgroundDark = Color(0xFF121212); // Dark background
   static const Color surface = Color(0xFFFFFFFF); // White
   static const Color surfaceDark = Color(0xFF1E1E1E); // Dark surface
@@ -141,11 +141,11 @@ class AppColors {
 
   // Chart Colors (for data visualization)
   static const List<Color> chartColors = [
-    Color(0xFF0277BD), // Blue
-    Color(0xFF00897B), // Teal
+    Color(0xFF31B8B5), // Aqua teal
+    Color(0xFF3D66C6), // Ocean blue
+    Color(0xFFC79A73), // Gold accent
     Color(0xFF43A047), // Green
     Color(0xFFFB8C00), // Orange
-    Color(0xFF5E35B1), // Purple
     Color(0xFFE53935), // Red
     Color(0xFF00ACC1), // Cyan
     Color(0xFF7CB342), // Light green
@@ -171,7 +171,7 @@ class AppColors {
   );
 
   static const LinearGradient waterGradient = LinearGradient(
-    colors: [Color(0xFF0277BD), Color(0xFF00897B)],
+    colors: [Color(0xFF3D66C6), Color(0xFF31B8B5)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );

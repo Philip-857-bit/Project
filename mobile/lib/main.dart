@@ -30,18 +30,18 @@ void main() async {
     ),
   );
 
-  runApp(const ProviderScope(child: SmartFishFeederApp()));
+  runApp(const ProviderScope(child: SmartAquaApp()));
 }
 
-class SmartFishFeederApp extends ConsumerWidget {
-  const SmartFishFeederApp({super.key});
+class SmartAquaApp extends ConsumerWidget {
+  const SmartAquaApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'Smart Fish Feeder',
+      title: 'SmartAqua',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

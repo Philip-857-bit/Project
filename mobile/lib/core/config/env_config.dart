@@ -1,4 +1,4 @@
-/// Environment configuration for the Smart Fish Feeder mobile app.
+/// Environment configuration for the SmartAqua mobile app.
 /// 
 /// Values are loaded from compile-time environment variables using --dart-define.
 /// 
@@ -9,7 +9,7 @@
 /// 
 /// # Or individual defines
 /// flutter build apk \
-///   --dart-define=API_BASE_URL=https://api.smartfishfeeder.com/api/v1 \
+///   --dart-define=API_BASE_URL=https://smartaqua.onrender.com/api/v1 \
 ///   --dart-define=MQTT_HOST=mqtt.smartfishfeeder.com \
 ///   --dart-define=MQTT_PORT=8883
 /// ```
@@ -20,7 +20,7 @@ class EnvConfig {
   /// API base URL
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://api.smartfishfeeder.com/api/v1',
+    defaultValue: 'https://smartaqua.onrender.com/api/v1',
   );
 
   /// MQTT broker host
@@ -50,7 +50,7 @@ class EnvConfig {
   /// API domain for certificate validation
   static const String apiDomain = String.fromEnvironment(
     'API_DOMAIN',
-    defaultValue: 'smartfishfeeder.com',
+    defaultValue: 'smartaqua.onrender.com',
   );
 
   /// Debug mode flag

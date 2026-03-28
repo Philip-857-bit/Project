@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const _primaryColor = Color(0xFF2196F3);
-  static const _secondaryColor = Color(0xFF4CAF50);
+  static const _primaryColor = Color(0xFF31B8B5);
+  static const _secondaryColor = Color(0xFF3D66C6);
+  static const _surfaceTint = Color(0xFFA9DCD7);
+  static const _goldAccent = Color(0xFFC79A73);
   static const _errorColor = Color(0xFFE53935);
 
   static ThemeData get lightTheme {
@@ -12,6 +14,8 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: _primaryColor,
         secondary: _secondaryColor,
+        surfaceTint: _surfaceTint,
+        tertiary: _goldAccent,
         error: _errorColor,
         brightness: Brightness.light,
       ),
@@ -49,6 +53,8 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: _primaryColor,
         secondary: _secondaryColor,
+        surfaceTint: _surfaceTint,
+        tertiary: _goldAccent,
         error: _errorColor,
         brightness: Brightness.dark,
       ),

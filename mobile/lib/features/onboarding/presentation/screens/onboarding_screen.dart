@@ -18,7 +18,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final List<OnboardingPage> _pages = [
     OnboardingPage(
       icon: Icons.pets,
-      title: 'Smart Fish Feeding',
+      title: 'SmartAqua Feeding',
       description: 'Automate your fish feeding with intelligent scheduling and Q10-based calculations that adapt to water temperature.',
       color: Colors.blue,
     ),
