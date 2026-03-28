@@ -249,8 +249,8 @@ func bindRailwayEnvVars() {
 
 // parseDatabaseURL parses a PostgreSQL connection URL
 // Format: postgresql://user:password@host:port/dbname?sslmode=disable
-func parseDatabaseURL(cfg *DatabaseConfig, url string) error {
-	parsedURL, err := url.Parse(url)
+func parseDatabaseURL(cfg *DatabaseConfig, rawURL string) error {
+	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("invalid database URL: %w", err)
 	}
@@ -296,8 +296,8 @@ func parseDatabaseURL(cfg *DatabaseConfig, url string) error {
 
 // parseRedisURL parses a Redis connection URL
 // Format: redis://[:password@]host:port[/db]
-func parseRedisURL(cfg *RedisConfig, url string) error {
-	parsedURL, err := url.Parse(url)
+func parseRedisURL(cfg *RedisConfig, rawURL string) error {
+	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("invalid redis URL: %w", err)
 	}
@@ -305,6 +305,21 @@ func parseRedisURL(cfg *RedisConfig, url string) error {
 	if parsedURL.Scheme != "redis" && parsedURL.Scheme != "rediss" {
 		return fmt.Errorf("unsupported redis URL scheme: %s", parsedURL.Scheme)
 	}
+
+	applyRedisCredentials(cfg, parsedURL)
+
+	if err := applyRedisHostAndPort(cfg, parsedURL); err != nil {
+		return err
+	}
+
+	if err := applyRedisDB(cfg, parsedURL); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func applyRedisCredentials(cfg *RedisConfig, parsedURL *url.URL) {
 
 	if parsedURL.User != nil {
 		if password, hasPassword := parsedURL.User.Password(); hasPassword {
@@ -314,6 +329,9 @@ func parseRedisURL(cfg *RedisConfig, url string) error {
 			cfg.Password = username
 		}
 	}
+}
+
+func applyRedisHostAndPort(cfg *RedisConfig, parsedURL *url.URL) error {
 
 	if host := parsedURL.Hostname(); host != "" {
 		cfg.Host = host
@@ -326,6 +344,18 @@ func parseRedisURL(cfg *RedisConfig, url string) error {
 		}
 		cfg.Port = port
 	}
+
+	if parsedURL.Hostname() == "" {
+		host, _, err := net.SplitHostPort(parsedURL.Host)
+		if err == nil && host != "" {
+			cfg.Host = host
+		}
+	}
+
+	return nil
+}
+
+func applyRedisDB(cfg *RedisConfig, parsedURL *url.URL) error {
 
 	if dbPath := strings.Trim(path.Clean(parsedURL.Path), "/"); dbPath != "" && dbPath != "." {
 		db, err := strconv.Atoi(dbPath)
@@ -341,13 +371,6 @@ func parseRedisURL(cfg *RedisConfig, url string) error {
 			return fmt.Errorf("invalid redis db query value %q: %w", dbQuery, err)
 		}
 		cfg.DB = db
-	}
-
-	if parsedURL.Hostname() == "" {
-		host, _, err := net.SplitHostPort(parsedURL.Host)
-		if err == nil && host != "" {
-			cfg.Host = host
-		}
 	}
 
 	return nil
