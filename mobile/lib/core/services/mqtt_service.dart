@@ -17,10 +17,10 @@ class MqttService {
 
   MqttServerClient? _client;
   final Logger _logger = Logger();
-  
+
   final _connectionStateController = StreamController<AppMqttState>.broadcast();
   Stream<AppMqttState> get connectionState => _connectionStateController.stream;
-  
+
   final _messageController = StreamController<MqttMessage>.broadcast();
   Stream<MqttMessage> get messages => _messageController.stream;
 
@@ -42,13 +42,15 @@ class MqttService {
     // Use stored values if available, otherwise fall back to env config
     final storedHost = StorageService.getMqttHost();
     final storedPort = StorageService.getMqttPort();
-    
+
     // Only use stored values if they differ from defaults (user explicitly set them)
-    final host = storedHost.isNotEmpty && storedHost != 'mqtt.smartfishfeeder.com' 
-        ? storedHost 
-        : EnvConfig.mqttHost;
+    final host =
+        storedHost.isNotEmpty && storedHost != 'mqtt.smartfishfeeder.com'
+            ? storedHost
+            : EnvConfig.mqttHost;
     final port = storedPort != 8883 ? storedPort : EnvConfig.mqttPort;
-    final clientId = 'mobile_${StorageService.getUserId() ?? DateTime.now().millisecondsSinceEpoch}';
+    final clientId =
+        'mobile_${StorageService.getUserId() ?? DateTime.now().millisecondsSinceEpoch}';
 
     _client = MqttServerClient.withPort(host, clientId, port);
     _client!.logging(on: false);
@@ -62,16 +64,17 @@ class MqttService {
 
     try {
       final token = await StorageService.getAccessToken();
-      final connMessage = MqttConnectMessage()
-          .withClientIdentifier(clientId)
-          .authenticateAs('jwt', token ?? '')
-          .withWillQos(MqttQos.atLeastOnce)
-          .startClean();
-      
+      final connMessage =
+          MqttConnectMessage()
+              .withClientIdentifier(clientId)
+              .authenticateAs('jwt', token ?? '')
+              .withWillQos(MqttQos.atLeastOnce)
+              .startClean();
+
       _client!.connectionMessage = connMessage;
-      
+
       await _client!.connect();
-      
+
       if (isConnected) {
         _setupMessageListener();
         return true;
@@ -80,7 +83,7 @@ class MqttService {
       _logger.e('MQTT connection failed: $e');
       _updateState(AppMqttState.error);
     }
-    
+
     return false;
   }
 
@@ -88,14 +91,15 @@ class MqttService {
     _client!.updates?.listen((messages) {
       for (final message in messages) {
         final pubMsg = message.payload as MqttPublishMessage;
-        final payloadString = MqttPublishPayload.bytesToStringAsString(pubMsg.payload.message);
-        
+        final payloadString = MqttPublishPayload.bytesToStringAsString(
+          pubMsg.payload.message,
+        );
+
         _logger.d('MQTT Message: ${message.topic} => $payloadString');
-        
-        _messageController.add(MqttMessage(
-          topic: message.topic,
-          payload: payloadString,
-        ));
+
+        _messageController.add(
+          MqttMessage(topic: message.topic, payload: payloadString),
+        );
       }
     });
   }
@@ -139,19 +143,28 @@ class MqttService {
     _logger.d('Unsubscribed from: $topic');
   }
 
-  void publish(String topic, String message, {MqttQos qos = MqttQos.atLeastOnce, bool retain = false}) {
+  void publish(
+    String topic,
+    String message, {
+    MqttQos qos = MqttQos.atLeastOnce,
+    bool retain = false,
+  }) {
     if (!isConnected) {
       _logger.w('Cannot publish: not connected');
       return;
     }
-    
+
     final builder = MqttClientPayloadBuilder();
     builder.addString(message);
     _client!.publishMessage(topic, qos, builder.payload!, retain: retain);
     _logger.d('Published to $topic: $message');
   }
 
-  void publishJson(String topic, Map<String, dynamic> data, {MqttQos qos = MqttQos.atLeastOnce}) {
+  void publishJson(
+    String topic,
+    Map<String, dynamic> data, {
+    MqttQos qos = MqttQos.atLeastOnce,
+  }) {
     publish(topic, jsonEncode(data), qos: qos);
   }
 
@@ -183,7 +196,11 @@ class MqttService {
     unsubscribe(deviceAlertsTopic(deviceId));
   }
 
-  void sendCommand(String deviceId, String command, Map<String, dynamic> payload) {
+  void sendCommand(
+    String deviceId,
+    String command,
+    Map<String, dynamic> payload,
+  ) {
     publishJson(deviceCommandTopic(deviceId), {
       'command': command,
       'payload': payload,

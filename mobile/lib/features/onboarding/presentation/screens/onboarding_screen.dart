@@ -19,31 +19,36 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     OnboardingPage(
       assetPath: 'assets/images/logo.png',
       title: 'SmartAqua Feeding',
-      description: 'Automate your fish feeding with intelligent scheduling and Q10-based calculations that adapt to water temperature.',
+      description:
+          'Automate your fish feeding with intelligent scheduling and Q10-based calculations that adapt to water temperature.',
       color: Colors.blue,
     ),
     OnboardingPage(
       icon: Icons.sensors,
       title: 'Real-time Monitoring',
-      description: 'Monitor water temperature, feed levels, battery status, and dissolved oxygen levels from anywhere.',
+      description:
+          'Monitor water temperature, feed levels, battery status, and dissolved oxygen levels from anywhere.',
       color: Colors.green,
     ),
     OnboardingPage(
       icon: Icons.videocam,
       title: 'Video Verification',
-      description: 'Watch your fish feeding in real-time with computer vision analysis to optimize feeding efficiency.',
+      description:
+          'Watch your fish feeding in real-time with computer vision analysis to optimize feeding efficiency.',
       color: Colors.orange,
     ),
     OnboardingPage(
       icon: Icons.calculate,
       title: 'Smart Calculator',
-      description: 'Calculate optimal feed amounts based on fish species, weight, count, and environmental conditions.',
+      description:
+          'Calculate optimal feed amounts based on fish species, weight, count, and environmental conditions.',
       color: Colors.purple,
     ),
     OnboardingPage(
       icon: Icons.bluetooth,
       title: 'Easy Setup',
-      description: 'Pair your device via Bluetooth, scan the QR code, and configure WiFi or cellular connectivity in minutes.',
+      description:
+          'Pair your device via Bluetooth, scan the QR code, and configure WiFi or cellular connectivity in minutes.',
       color: Colors.teal,
     ),
   ];
@@ -114,9 +119,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     width: _currentPage == index ? 24 : 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: _currentPage == index
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey.shade300,
+                      color:
+                          _currentPage == index
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -157,30 +163,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               color: page.color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: page.assetPath != null
-                ? Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Image.asset(
-                      page.assetPath!,
-                      fit: BoxFit.contain,
-                    ),
-                  )
-                : Icon(page.icon!, size: 64, color: page.color),
+            child:
+                page.assetPath != null
+                    ? Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Image.asset(page.assetPath!, fit: BoxFit.contain),
+                    )
+                    : Icon(page.icon!, size: 64, color: page.color),
           ),
           const SizedBox(height: 48),
           Text(
             page.title,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           Text(
             page.description,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.grey[600],
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
             textAlign: TextAlign.center,
           ),
         ],

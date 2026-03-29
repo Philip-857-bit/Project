@@ -144,7 +144,7 @@ class AppTypography {
   );
 
   // Custom Styles for specific use cases
-  
+
   // Button Text
   static const TextStyle button = TextStyle(
     fontFamily: fontFamily,

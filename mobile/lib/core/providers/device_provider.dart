@@ -41,11 +41,15 @@ class DeviceListNotifier extends StateNotifier<DeviceListState> {
     try {
       final response = await _apiService.getDevices();
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data['devices'] ?? response.data ?? [];
+        final List<dynamic> data =
+            response.data['devices'] ?? response.data ?? [];
         final devices = data.map((json) => Device.fromJson(json)).toList();
         state = state.copyWith(devices: devices, isLoading: false);
       } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load devices');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load devices',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -97,11 +101,7 @@ class SelectedDeviceState {
   final bool isLoading;
   final String? error;
 
-  const SelectedDeviceState({
-    this.device,
-    this.isLoading = false,
-    this.error,
-  });
+  const SelectedDeviceState({this.device, this.isLoading = false, this.error});
 
   SelectedDeviceState copyWith({
     Device? device,
@@ -132,7 +132,10 @@ class SelectedDeviceNotifier extends StateNotifier<SelectedDeviceState> {
         final device = Device.fromJson(deviceJson);
         state = state.copyWith(device: device, isLoading: false);
       } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load device');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load device',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -149,15 +152,17 @@ class SelectedDeviceNotifier extends StateNotifier<SelectedDeviceState> {
 }
 
 // Providers
-final deviceListProvider = StateNotifierProvider<DeviceListNotifier, DeviceListState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return DeviceListNotifier(apiService);
-});
+final deviceListProvider =
+    StateNotifierProvider<DeviceListNotifier, DeviceListState>((ref) {
+      final apiService = ref.watch(apiServiceProvider);
+      return DeviceListNotifier(apiService);
+    });
 
-final selectedDeviceProvider = StateNotifierProvider<SelectedDeviceNotifier, SelectedDeviceState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return SelectedDeviceNotifier(apiService);
-});
+final selectedDeviceProvider =
+    StateNotifierProvider<SelectedDeviceNotifier, SelectedDeviceState>((ref) {
+      final apiService = ref.watch(apiServiceProvider);
+      return SelectedDeviceNotifier(apiService);
+    });
 
 // Convenience providers
 final devicesProvider = Provider<List<Device>>((ref) {

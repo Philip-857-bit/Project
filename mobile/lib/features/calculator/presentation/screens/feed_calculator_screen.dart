@@ -9,7 +9,8 @@ class FeedCalculatorScreen extends ConsumerStatefulWidget {
   const FeedCalculatorScreen({super.key});
 
   @override
-  ConsumerState<FeedCalculatorScreen> createState() => _FeedCalculatorScreenState();
+  ConsumerState<FeedCalculatorScreen> createState() =>
+      _FeedCalculatorScreenState();
 }
 
 class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
@@ -76,19 +77,30 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Fish Species', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Fish Species',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 8),
                     speciesState.isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : DropdownButtonFormField<String>(
-                            value: _selectedSpeciesId,
-                            items: speciesState.species.map((s) => DropdownMenuItem(
-                              value: s.id,
-                              child: Text(s.name),
-                            )).toList(),
-                            onChanged: (v) => setState(() => _selectedSpeciesId = v),
-                            decoration: const InputDecoration(border: OutlineInputBorder()),
+                          value: _selectedSpeciesId,
+                          items:
+                              speciesState.species
+                                  .map(
+                                    (s) => DropdownMenuItem(
+                                      value: s.id,
+                                      child: Text(s.name),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged:
+                              (v) => setState(() => _selectedSpeciesId = v),
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
                           ),
+                        ),
                     if (_selectedSpeciesId != null) ...[
                       const SizedBox(height: 8),
                       _buildSpeciesInfo(speciesState.species),
@@ -156,13 +168,17 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
             // Calculate button
             FilledButton(
               onPressed: calcState.isCalculating ? null : _calculate,
-              child: calcState.isCalculating
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('Calculate'),
+              child:
+                  calcState.isCalculating
+                      ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                      : const Text('Calculate'),
             ),
 
             // Error message
@@ -173,7 +189,10 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                   color: Colors.red.shade50,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Text(calcState.error!, style: TextStyle(color: Colors.red.shade700)),
+                    child: Text(
+                      calcState.error!,
+                      style: TextStyle(color: Colors.red.shade700),
+                    ),
                   ),
                 ),
               ),
@@ -187,26 +206,48 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      Text('Recommended Daily Feed', style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'Recommended Daily Feed',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         '${result.recommendedAmount.round()}g',
-                        style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                        style: Theme.of(
+                          context,
+                        ).textTheme.displayMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildResultRow('Biomass', '${result.biomass.toStringAsFixed(1)} kg'),
-                      _buildResultRow('Feeding Rate', '${(result.feedingRate * 100).toStringAsFixed(1)}%'),
-                      _buildResultRow('Q10 Factor', result.q10Factor.toStringAsFixed(2)),
+                      _buildResultRow(
+                        'Biomass',
+                        '${result.biomass.toStringAsFixed(1)} kg',
+                      ),
+                      _buildResultRow(
+                        'Feeding Rate',
+                        '${(result.feedingRate * 100).toStringAsFixed(1)}%',
+                      ),
+                      _buildResultRow(
+                        'Q10 Factor',
+                        result.q10Factor.toStringAsFixed(2),
+                      ),
                       if (result.obmSafetyFactor != null)
-                        _buildResultRow('OBM Safety', '${(result.obmSafetyFactor! * 100).toStringAsFixed(0)}%'),
-                      _buildResultRow('Suggested Feedings', '${result.suggestedFeedings}/day'),
+                        _buildResultRow(
+                          'OBM Safety',
+                          '${(result.obmSafetyFactor! * 100).toStringAsFixed(0)}%',
+                        ),
+                      _buildResultRow(
+                        'Suggested Feedings',
+                        '${result.suggestedFeedings}/day',
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         result.recommendation,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey[700],
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -221,7 +262,8 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   }
 
   Widget _buildSpeciesInfo(List<FishSpecies> species) {
-    final selected = species.where((s) => s.id == _selectedSpeciesId).firstOrNull;
+    final selected =
+        species.where((s) => s.id == _selectedSpeciesId).firstOrNull;
     if (selected == null) return const SizedBox.shrink();
 
     return Container(
@@ -234,8 +276,14 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildInfoChip('Q10', selected.q10Coefficient.toString()),
-          _buildInfoChip('Optimal', '${selected.optimalTempMin.toInt()}-${selected.optimalTempMax.toInt()}°C'),
-          _buildInfoChip('Ref Temp', '${selected.referenceTemperature.toInt()}°C'),
+          _buildInfoChip(
+            'Optimal',
+            '${selected.optimalTempMin.toInt()}-${selected.optimalTempMax.toInt()}°C',
+          ),
+          _buildInfoChip(
+            'Ref Temp',
+            '${selected.referenceTemperature.toInt()}°C',
+          ),
         ],
       ),
     );
@@ -266,7 +314,10 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label, style: Theme.of(context).textTheme.titleMedium),
-            Text('${value.round()}$suffix', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              '${value.round()}$suffix',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         Slider(

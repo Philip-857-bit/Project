@@ -27,7 +27,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (devices.isNotEmpty) {
       final deviceId = devices.first.id;
       await Future.wait([
-        ref.read(feedingHistoryProvider.notifier).loadHistory(deviceId, refresh: true),
+        ref
+            .read(feedingHistoryProvider.notifier)
+            .loadHistory(deviceId, refresh: true),
         ref.read(alertsProvider.notifier).loadAlerts(deviceId),
       ]);
     }
@@ -72,137 +74,148 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _loadData,
-        child: deviceState.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Overview',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
+        child:
+            deviceState.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Overview',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.devices,
-                            label: 'Devices',
-                            value: '${deviceState.devices.length}',
-                            color: AppTheme.deviceOnline,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.wifi,
-                            label: 'Online',
-                            value: '${ref.watch(onlineDevicesProvider).length}',
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.restaurant,
-                            label: 'Today\'s Feeds',
-                            value: '${todayFeedings.length}',
-                            color: AppTheme.feedLevelHigh,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.warning_amber,
-                            label: 'Alerts',
-                            value: '${alertsState.unreadCount}',
-                            color: alertsState.unreadCount > 0 
-                                ? AppTheme.feedLevelLow 
-                                : Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    Text(
-                      'Quick Actions',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _ActionButton(
-                            icon: Icons.add_circle_outline,
-                            label: 'Add Device',
-                            onTap: () => context.go('/devices/pair'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _ActionButton(
-                            icon: Icons.restaurant,
-                            label: 'Feed Now',
-                            onTap: () => context.go('/feeding/manual'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _ActionButton(
-                            icon: Icons.calculate,
-                            label: 'Calculator',
-                            onTap: () => context.go('/calculator'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    Text(
-                      'Recent Activity',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    if (feedingState.isLoading)
-                      const Center(child: CircularProgressIndicator())
-                    else if (feedingState.events.isEmpty && alertsState.alerts.isEmpty)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Center(
-                            child: Column(
-                              children: [
-                                Icon(Icons.inbox, size: 48, color: Colors.grey[400]),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'No recent activity',
-                                  style: TextStyle(color: Colors.grey[600]),
-                                ),
-                              ],
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _StatCard(
+                              icon: Icons.devices,
+                              label: 'Devices',
+                              value: '${deviceState.devices.length}',
+                              color: AppTheme.deviceOnline,
                             ),
                           ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _StatCard(
+                              icon: Icons.wifi,
+                              label: 'Online',
+                              value:
+                                  '${ref.watch(onlineDevicesProvider).length}',
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _StatCard(
+                              icon: Icons.restaurant,
+                              label: 'Today\'s Feeds',
+                              value: '${todayFeedings.length}',
+                              color: AppTheme.feedLevelHigh,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _StatCard(
+                              icon: Icons.warning_amber,
+                              label: 'Alerts',
+                              value: '${alertsState.unreadCount}',
+                              color:
+                                  alertsState.unreadCount > 0
+                                      ? AppTheme.feedLevelLow
+                                      : Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      Text(
+                        'Quick Actions',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
-                      )
-                    else
-                      ..._buildActivityItems(feedingState.events, alertsState.alerts),
-                  ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _ActionButton(
+                              icon: Icons.add_circle_outline,
+                              label: 'Add Device',
+                              onTap: () => context.go('/devices/pair'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _ActionButton(
+                              icon: Icons.restaurant,
+                              label: 'Feed Now',
+                              onTap: () => context.go('/feeding/manual'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _ActionButton(
+                              icon: Icons.calculate,
+                              label: 'Calculator',
+                              onTap: () => context.go('/calculator'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      Text(
+                        'Recent Activity',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      if (feedingState.isLoading)
+                        const Center(child: CircularProgressIndicator())
+                      else if (feedingState.events.isEmpty &&
+                          alertsState.alerts.isEmpty)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.inbox,
+                                    size: 48,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'No recent activity',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        ..._buildActivityItems(
+                          feedingState.events,
+                          alertsState.alerts,
+                        ),
+                    ],
+                  ),
                 ),
-              ),
       ),
     );
   }
@@ -214,52 +227,66 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final items = <_ActivityData>[];
 
     for (final event in feedings.take(5)) {
-      items.add(_ActivityData(
-        icon: Icons.restaurant,
-        title: event.type == 'manual' ? 'Manual Feed' : 'Scheduled Feed',
-        subtitle: '${event.amount}g dispensed',
-        time: _formatTime(event.scheduledAt),
-        timestamp: event.scheduledAt,
-        isAlert: event.status.name == 'failed',
-      ));
+      items.add(
+        _ActivityData(
+          icon: Icons.restaurant,
+          title: event.type == 'manual' ? 'Manual Feed' : 'Scheduled Feed',
+          subtitle: '${event.amount}g dispensed',
+          time: _formatTime(event.scheduledAt),
+          timestamp: event.scheduledAt,
+          isAlert: event.status.name == 'failed',
+        ),
+      );
     }
 
     for (final alert in alerts.take(3)) {
-      items.add(_ActivityData(
-        icon: _getAlertIcon(alert.alertType),
-        title: alert.title,
-        subtitle: alert.message,
-        time: _formatTime(alert.createdAt),
-        timestamp: alert.createdAt,
-        isAlert: true,
-      ));
+      items.add(
+        _ActivityData(
+          icon: _getAlertIcon(alert.alertType),
+          title: alert.title,
+          subtitle: alert.message,
+          time: _formatTime(alert.createdAt),
+          timestamp: alert.createdAt,
+          isAlert: true,
+        ),
+      );
     }
 
     items.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-    return items.take(5).map((item) => _ActivityItem(
-      icon: item.icon,
-      title: item.title,
-      subtitle: item.subtitle,
-      time: item.time,
-      isAlert: item.isAlert,
-    )).toList();
+    return items
+        .take(5)
+        .map(
+          (item) => _ActivityItem(
+            icon: item.icon,
+            title: item.title,
+            subtitle: item.subtitle,
+            time: item.time,
+            isAlert: item.isAlert,
+          ),
+        )
+        .toList();
   }
 
   IconData _getAlertIcon(String alertType) {
     switch (alertType) {
-      case 'temperature': return Icons.thermostat;
-      case 'battery': return Icons.battery_alert;
-      case 'feed_level': return Icons.inventory_2;
-      case 'oxygen': return Icons.air;
-      default: return Icons.warning;
+      case 'temperature':
+        return Icons.thermostat;
+      case 'battery':
+        return Icons.battery_alert;
+      case 'feed_level':
+        return Icons.inventory_2;
+      case 'oxygen':
+        return Icons.air;
+      default:
+        return Icons.warning;
     }
   }
 
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final diff = now.difference(time);
-    
+
     if (diff.inMinutes < 60) {
       return '${diff.inMinutes}m ago';
     } else if (diff.inHours < 24) {
@@ -313,15 +340,15 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               value,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
             ),
           ],
         ),
@@ -351,7 +378,11 @@ class _ActionButton extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
+              Icon(
+                icon,
+                size: 32,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               const SizedBox(height: 8),
               Text(
                 label,
@@ -387,19 +418,25 @@ class _ActivityItem extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: isAlert 
-              ? AppTheme.feedLevelLow.withValues(alpha: 0.2)
-              : Theme.of(context).colorScheme.primaryContainer,
+          backgroundColor:
+              isAlert
+                  ? AppTheme.feedLevelLow.withValues(alpha: 0.2)
+                  : Theme.of(context).colorScheme.primaryContainer,
           child: Icon(
             icon,
-            color: isAlert ? AppTheme.feedLevelLow : Theme.of(context).colorScheme.primary,
+            color:
+                isAlert
+                    ? AppTheme.feedLevelLow
+                    : Theme.of(context).colorScheme.primary,
           ),
         ),
         title: Text(title),
         subtitle: Text(subtitle),
         trailing: Text(
           time,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.grey),
         ),
       ),
     );

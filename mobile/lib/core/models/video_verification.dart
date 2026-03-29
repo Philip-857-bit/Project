@@ -30,7 +30,8 @@ class VideoClip extends Equatable {
       id: _stringValue(json['id']),
       deviceId: json['device_id'] ?? '',
       feedingEventId: _stringValue(json['feeding_event_id']),
-      videoUrl: json['video_url'] ?? json['cloud_url'] ?? json['file_path'] ?? '',
+      videoUrl:
+          json['video_url'] ?? json['cloud_url'] ?? json['file_path'] ?? '',
       thumbnailUrl: json['thumbnail_url'] ?? '',
       durationSeconds: json['duration_seconds'] ?? 0,
       type: _parseVideoType(json['type']),
@@ -39,16 +40,23 @@ class VideoClip extends Equatable {
             json['timestamp'] ??
             DateTime.now().toIso8601String(),
       ),
-      analysis: json['analysis'] != null ? BoilIndexAnalysis.fromJson(json['analysis']) : null,
+      analysis:
+          json['analysis'] != null
+              ? BoilIndexAnalysis.fromJson(json['analysis'])
+              : null,
     );
   }
 
   static VideoType _parseVideoType(String? type) {
     switch (type) {
-      case 'pre_feed': return VideoType.preFeed;
-      case 'active_feed': return VideoType.activeFeed;
-      case 'post_feed': return VideoType.postFeed;
-      default: return VideoType.activeFeed;
+      case 'pre_feed':
+        return VideoType.preFeed;
+      case 'active_feed':
+        return VideoType.activeFeed;
+      case 'post_feed':
+        return VideoType.postFeed;
+      default:
+        return VideoType.activeFeed;
     }
   }
 
@@ -91,7 +99,9 @@ class BoilIndexAnalysis extends Equatable {
       feedingComplete: json['feeding_complete'] ?? false,
       recommendation: json['recommendation'] ?? '',
       confidenceScore: (json['confidence_score'] ?? 0).toDouble(),
-      analyzedAt: DateTime.parse(json['analyzed_at'] ?? DateTime.now().toIso8601String()),
+      analyzedAt: DateTime.parse(
+        json['analyzed_at'] ?? DateTime.now().toIso8601String(),
+      ),
     );
   }
 
@@ -112,7 +122,13 @@ class BoilIndexAnalysis extends Equatable {
   }
 
   @override
-  List<Object?> get props => [boilIndex, satietyLevel, pelletCoverage, strikeRate, confidenceScore];
+  List<Object?> get props => [
+    boilIndex,
+    satietyLevel,
+    pelletCoverage,
+    strikeRate,
+    confidenceScore,
+  ];
 }
 
 class FeedingVerification extends Equatable {
@@ -137,13 +153,23 @@ class FeedingVerification extends Equatable {
   factory FeedingVerification.fromJson(Map<String, dynamic> json) {
     return FeedingVerification(
       feedingEventId: json['feeding_event_id'] ?? '',
-      clips: (json['clips'] as List?)?.map((c) => VideoClip.fromJson(c)).toList() ?? [],
-      preFeedAnalysis: json['pre_feed_analysis'] != null 
-          ? BoilIndexAnalysis.fromJson(json['pre_feed_analysis']) : null,
-      activeFeedAnalysis: json['active_feed_analysis'] != null 
-          ? BoilIndexAnalysis.fromJson(json['active_feed_analysis']) : null,
-      postFeedAnalysis: json['post_feed_analysis'] != null 
-          ? BoilIndexAnalysis.fromJson(json['post_feed_analysis']) : null,
+      clips:
+          (json['clips'] as List?)
+              ?.map((c) => VideoClip.fromJson(c))
+              .toList() ??
+          [],
+      preFeedAnalysis:
+          json['pre_feed_analysis'] != null
+              ? BoilIndexAnalysis.fromJson(json['pre_feed_analysis'])
+              : null,
+      activeFeedAnalysis:
+          json['active_feed_analysis'] != null
+              ? BoilIndexAnalysis.fromJson(json['active_feed_analysis'])
+              : null,
+      postFeedAnalysis:
+          json['post_feed_analysis'] != null
+              ? BoilIndexAnalysis.fromJson(json['post_feed_analysis'])
+              : null,
       overallEfficiency: (json['overall_efficiency'] ?? 0).toDouble(),
       summary: json['summary'] ?? '',
     );

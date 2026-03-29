@@ -49,9 +49,7 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
     final sensorData = sensorState.currentData;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Monitoring'),
-      ),
+      appBar: AppBar(title: const Text('Monitoring')),
       body: RefreshIndicator(
         onRefresh: _loadDeviceData,
         child: SingleChildScrollView(
@@ -65,28 +63,33 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                 child: ListTile(
                   leading: const Icon(Icons.router),
                   title: Text(_getSelectedDeviceName(deviceState.devices)),
-                  subtitle: Text(sensorState.lastUpdated != null 
-                      ? 'Last updated: ${_formatTime(sensorState.lastUpdated!)}'
-                      : 'Select a device'),
+                  subtitle: Text(
+                    sensorState.lastUpdated != null
+                        ? 'Last updated: ${_formatTime(sensorState.lastUpdated!)}'
+                        : 'Select a device',
+                  ),
                   trailing: const Icon(Icons.arrow_drop_down),
-                  onTap: () => _showDeviceSelector(context, deviceState.devices),
+                  onTap:
+                      () => _showDeviceSelector(context, deviceState.devices),
                 ),
               ),
               const SizedBox(height: 16),
 
               Text(
                 'Sensor Readings',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
 
               if (sensorState.isLoading)
-                const Center(child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
-                ))
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
               else if (sensorData == null)
                 _buildNoDataCard(context)
               else ...[
@@ -96,7 +99,8 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                       child: _SensorCard(
                         icon: Icons.thermostat,
                         label: 'Water Temp',
-                        value: '${sensorData.waterTemperature.toStringAsFixed(1)}°C',
+                        value:
+                            '${sensorData.waterTemperature.toStringAsFixed(1)}°C',
                         status: _getTempStatus(sensorData.waterTemperature),
                         statusColor: _getTempColor(sensorData.waterTemperature),
                       ),
@@ -121,7 +125,10 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                         icon: Icons.battery_charging_full,
                         label: 'Battery',
                         value: '${sensorData.batteryLevel.toInt()}%',
-                        status: sensorData.isSolarCharging ? 'Charging' : 'Discharging',
+                        status:
+                            sensorData.isSolarCharging
+                                ? 'Charging'
+                                : 'Discharging',
                         statusColor: _getBatteryColor(sensorData.batteryLevel),
                       ),
                     ),
@@ -131,15 +138,18 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                         icon: Icons.wb_sunny,
                         label: 'Solar',
                         value: '${sensorData.solarVoltage.toStringAsFixed(1)}V',
-                        status: sensorData.isSolarCharging ? 'Active' : 'Inactive',
-                        statusColor: sensorData.isSolarCharging 
-                            ? AppTheme.solarActive 
-                            : Colors.grey,
+                        status:
+                            sensorData.isSolarCharging ? 'Active' : 'Inactive',
+                        statusColor:
+                            sensorData.isSolarCharging
+                                ? AppTheme.solarActive
+                                : Colors.grey,
                       ),
                     ),
                   ],
                 ),
-                if (sensorData.dissolvedOxygen != null || sensorData.ph != null) ...[
+                if (sensorData.dissolvedOxygen != null ||
+                    sensorData.ph != null) ...[
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -148,12 +158,18 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                           child: _SensorCard(
                             icon: Icons.air,
                             label: 'Dissolved O₂',
-                            value: '${sensorData.dissolvedOxygen!.toStringAsFixed(1)} mg/L',
-                            status: _getOxygenStatus(sensorData.dissolvedOxygen!),
-                            statusColor: _getOxygenColor(sensorData.dissolvedOxygen!),
+                            value:
+                                '${sensorData.dissolvedOxygen!.toStringAsFixed(1)} mg/L',
+                            status: _getOxygenStatus(
+                              sensorData.dissolvedOxygen!,
+                            ),
+                            statusColor: _getOxygenColor(
+                              sensorData.dissolvedOxygen!,
+                            ),
                           ),
                         ),
-                      if (sensorData.dissolvedOxygen != null && sensorData.ph != null)
+                      if (sensorData.dissolvedOxygen != null &&
+                          sensorData.ph != null)
                         const SizedBox(width: 12),
                       if (sensorData.ph != null)
                         Expanded(
@@ -173,7 +189,9 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                 Card(
                   child: ListTile(
                     leading: Icon(
-                      sensorData.connectionType == 'gsm' ? Icons.signal_cellular_alt : Icons.wifi,
+                      sensorData.connectionType == 'gsm'
+                          ? Icons.signal_cellular_alt
+                          : Icons.wifi,
                       color: _getSignalColor(sensorData.signalStrength),
                     ),
                     title: Text(sensorData.connectionType.toUpperCase()),
@@ -181,7 +199,10 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                     trailing: Icon(
                       Icons.circle,
                       size: 12,
-                      color: sensorData.signalStrength > 50 ? Colors.green : Colors.orange,
+                      color:
+                          sensorData.signalStrength > 50
+                              ? Colors.green
+                              : Colors.orange,
                     ),
                   ),
                 ),
@@ -201,9 +222,9 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
               const SizedBox(height: 24),
               Text(
                 'Alerts',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
 
@@ -216,21 +237,32 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                     child: Center(
                       child: Column(
                         children: [
-                          Icon(Icons.check_circle, size: 48, color: Colors.green[300]),
+                          Icon(
+                            Icons.check_circle,
+                            size: 48,
+                            color: Colors.green[300],
+                          ),
                           const SizedBox(height: 8),
-                          Text('No alerts', style: TextStyle(color: Colors.grey[600])),
+                          Text(
+                            'No alerts',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
                         ],
                       ),
                     ),
                   ),
                 )
               else
-                ...alertsState.alerts.take(5).map((alert) => _AlertCard(
-                  title: alert.title,
-                  message: alert.message,
-                  time: _formatTime(alert.createdAt),
-                  severity: alert.severity,
-                )),
+                ...alertsState.alerts
+                    .take(5)
+                    .map(
+                      (alert) => _AlertCard(
+                        title: alert.title,
+                        message: alert.message,
+                        time: _formatTime(alert.createdAt),
+                        severity: alert.severity,
+                      ),
+                    ),
             ],
           ),
         ),
@@ -247,7 +279,10 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
             children: [
               Icon(Icons.sensors_off, size: 48, color: Colors.grey[400]),
               const SizedBox(height: 8),
-              Text('No sensor data available', style: TextStyle(color: Colors.grey[600])),
+              Text(
+                'No sensor data available',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
             ],
           ),
         ),
@@ -267,28 +302,38 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
   void _showDeviceSelector(BuildContext context, List<Device> devices) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => ListView(
-        shrinkWrap: true,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Select Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      builder:
+          (context) => ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Device',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+              ...devices.map(
+                (device) => ListTile(
+                  leading: Icon(
+                    Icons.router,
+                    color: device.isOnline ? Colors.green : Colors.grey,
+                  ),
+                  title: Text(device.name),
+                  subtitle: Text(device.serialNumber),
+                  trailing:
+                      _selectedDeviceId == device.id
+                          ? const Icon(Icons.check, color: Colors.green)
+                          : null,
+                  onTap: () {
+                    setState(() => _selectedDeviceId = device.id);
+                    _loadDeviceData();
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            ],
           ),
-          ...devices.map((device) => ListTile(
-            leading: Icon(Icons.router, color: device.isOnline ? Colors.green : Colors.grey),
-            title: Text(device.name),
-            subtitle: Text(device.serialNumber),
-            trailing: _selectedDeviceId == device.id 
-                ? const Icon(Icons.check, color: Colors.green)
-                : null,
-            onTap: () {
-              setState(() => _selectedDeviceId = device.id);
-              _loadDeviceData();
-              Navigator.pop(context);
-            },
-          )),
-        ],
-      ),
     );
   }
 
@@ -388,24 +433,24 @@ class _SensorCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
               value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             Text(
               status,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: statusColor,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: statusColor),
             ),
           ],
         ),
@@ -460,18 +505,23 @@ class _Q10StatusCard extends StatelessWidget {
   final double temperature;
   final double? dissolvedOxygen;
 
-  const _Q10StatusCard({
-    required this.temperature,
-    this.dissolvedOxygen,
-  });
+  const _Q10StatusCard({required this.temperature, this.dissolvedOxygen});
 
   // Q10 calculation: Q10^((T - Tref) / 10)
-  double _calculateQ10Factor(double temp, {double q10 = 2.2, double tRef = 25.0}) {
+  double _calculateQ10Factor(
+    double temp, {
+    double q10 = 2.2,
+    double tRef = 25.0,
+  }) {
     return q10 * ((temp - tRef) / 10);
   }
 
   // OBM Safety Factor: max(0, (DO - DO_lethal) / (DO_optimal - DO_lethal))
-  double _calculateOBMFactor(double? do2, {double doOptimal = 7.0, double doLethal = 2.0}) {
+  double _calculateOBMFactor(
+    double? do2, {
+    double doOptimal = 7.0,
+    double doLethal = 2.0,
+  }) {
     if (do2 == null) return 1.0;
     if (do2 <= doLethal) return 0.0;
     if (do2 >= doOptimal) return 1.0;
@@ -507,16 +557,21 @@ class _Q10StatusCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.science, color: Theme.of(context).colorScheme.primary),
+                Icon(
+                  Icons.science,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Q10 Metabolic Status',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Metabolic gauge
             SizedBox(
               height: 120,
@@ -538,17 +593,21 @@ class _Q10StatusCard extends StatelessWidget {
                     children: [
                       Text(
                         combinedFactor.toStringAsFixed(2),
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
-                      Text('Factor', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                      Text(
+                        'Factor',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
                     ],
                   ),
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Status indicators
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -561,13 +620,19 @@ class _Q10StatusCard extends StatelessWidget {
                 children: [
                   Icon(Icons.circle, size: 8, color: statusColor),
                   const SizedBox(width: 8),
-                  Text(metabolicStatus, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold)),
+                  Text(
+                    metabolicStatus,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Factor breakdown
             Row(
               children: [
@@ -585,12 +650,17 @@ class _Q10StatusCard extends StatelessWidget {
                     label: 'OBM Safety',
                     value: '${(obmFactor * 100).toInt()}%',
                     icon: Icons.air,
-                    color: obmFactor > 0.7 ? Colors.green : obmFactor > 0.3 ? Colors.orange : Colors.red,
+                    color:
+                        obmFactor > 0.7
+                            ? Colors.green
+                            : obmFactor > 0.3
+                            ? Colors.orange
+                            : Colors.red,
                   ),
                 ),
               ],
             ),
-            
+
             if (dissolvedOxygen != null && dissolvedOxygen! < 3.0) ...[
               const SizedBox(height: 12),
               Container(
@@ -646,7 +716,10 @@ class _FactorItem extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(height: 4),
-          Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+          Text(
+            value,
+            style: TextStyle(fontWeight: FontWeight.bold, color: color),
+          ),
           Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
         ],
       ),
@@ -672,7 +745,7 @@ class _FCRTrackingCard extends ConsumerWidget {
       FlSpot(5, 1.3),
       FlSpot(6, 1.25),
     ];
-    
+
     final currentFCR = fcrData.last.y;
     final targetFCR = 1.2;
     final improvement = ((1.8 - currentFCR) / 1.8 * 100).toStringAsFixed(1);
@@ -685,28 +758,40 @@ class _FCRTrackingCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.trending_down, color: Theme.of(context).colorScheme.primary),
+                Icon(
+                  Icons.trending_down,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'FCR Tracking',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '↓ $improvement%',
-                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Current FCR display
             Row(
               children: [
@@ -714,12 +799,22 @@ class _FCRTrackingCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Current FCR', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                      Text(
+                        'Current FCR',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
                       Text(
                         currentFCR.toStringAsFixed(2),
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: currentFCR <= 1.3 ? Colors.green : currentFCR <= 1.5 ? Colors.orange : Colors.red,
+                          color:
+                              currentFCR <= 1.3
+                                  ? Colors.green
+                                  : currentFCR <= 1.5
+                                  ? Colors.orange
+                                  : Colors.red,
                         ),
                       ),
                     ],
@@ -729,10 +824,15 @@ class _FCRTrackingCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Target FCR', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                      Text(
+                        'Target FCR',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
                       Text(
                         targetFCR.toStringAsFixed(2),
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: Colors.blue,
                         ),
@@ -742,9 +842,9 @@ class _FCRTrackingCard extends ConsumerWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // FCR trend chart
             SizedBox(
               height: 150,
@@ -754,33 +854,44 @@ class _FCRTrackingCard extends ConsumerWidget {
                     show: true,
                     drawVerticalLine: false,
                     horizontalInterval: 0.2,
-                    getDrawingHorizontalLine: (value) => FlLine(
-                      color: Colors.grey.shade200,
-                      strokeWidth: 1,
-                    ),
+                    getDrawingHorizontalLine:
+                        (value) =>
+                            FlLine(color: Colors.grey.shade200, strokeWidth: 1),
                   ),
                   titlesData: FlTitlesData(
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
                         reservedSize: 30,
-                        getTitlesWidget: (value, meta) => Text(
-                          value.toStringAsFixed(1),
-                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                        ),
+                        getTitlesWidget:
+                            (value, meta) => Text(
+                              value.toStringAsFixed(1),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey[600],
+                              ),
+                            ),
                       ),
                     ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        getTitlesWidget: (value, meta) => Text(
-                          'W${value.toInt() + 1}',
-                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                        ),
+                        getTitlesWidget:
+                            (value, meta) => Text(
+                              'W${value.toInt() + 1}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey[600],
+                              ),
+                            ),
                       ),
                     ),
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                   ),
                   borderData: FlBorderData(show: false),
                   minX: 0,
@@ -805,12 +916,14 @@ class _FCRTrackingCard extends ConsumerWidget {
                       barWidth: 3,
                       dotData: FlDotData(
                         show: true,
-                        getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-                          radius: 4,
-                          color: Colors.green,
-                          strokeWidth: 2,
-                          strokeColor: Colors.white,
-                        ),
+                        getDotPainter:
+                            (spot, percent, barData, index) =>
+                                FlDotCirclePainter(
+                                  radius: 4,
+                                  color: Colors.green,
+                                  strokeWidth: 2,
+                                  strokeColor: Colors.white,
+                                ),
                       ),
                       belowBarData: BarAreaData(
                         show: true,
@@ -821,21 +934,25 @@ class _FCRTrackingCard extends ConsumerWidget {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Legend
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _LegendItem(color: Colors.green, label: 'Actual FCR'),
                 const SizedBox(width: 16),
-                _LegendItem(color: Colors.blue, label: 'Target (1.2)', dashed: true),
+                _LegendItem(
+                  color: Colors.blue,
+                  label: 'Target (1.2)',
+                  dashed: true,
+                ),
               ],
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Recommendation
             Container(
               padding: const EdgeInsets.all(8),
@@ -845,7 +962,11 @@ class _FCRTrackingCard extends ConsumerWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.lightbulb_outline, size: 16, color: Colors.blue),
+                  const Icon(
+                    Icons.lightbulb_outline,
+                    size: 16,
+                    color: Colors.blue,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -870,7 +991,11 @@ class _LegendItem extends StatelessWidget {
   final String label;
   final bool dashed;
 
-  const _LegendItem({required this.color, required this.label, this.dashed = false});
+  const _LegendItem({
+    required this.color,
+    required this.label,
+    this.dashed = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -881,7 +1006,16 @@ class _LegendItem extends StatelessWidget {
           height: 3,
           decoration: BoxDecoration(
             color: dashed ? Colors.transparent : color,
-            border: dashed ? Border(bottom: BorderSide(color: color, width: 2, style: BorderStyle.solid)) : null,
+            border:
+                dashed
+                    ? Border(
+                      bottom: BorderSide(
+                        color: color,
+                        width: 2,
+                        style: BorderStyle.solid,
+                      ),
+                    )
+                    : null,
           ),
         ),
         const SizedBox(width: 4),

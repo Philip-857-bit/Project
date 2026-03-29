@@ -33,7 +33,8 @@ class FeedingSchedulesState {
 class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
   final ApiService _apiService;
 
-  FeedingSchedulesNotifier(this._apiService) : super(const FeedingSchedulesState());
+  FeedingSchedulesNotifier(this._apiService)
+    : super(const FeedingSchedulesState());
 
   Future<void> loadSchedules(String deviceId) async {
     state = state.copyWith(isLoading: true, error: null);
@@ -41,11 +42,16 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
     try {
       final response = await _apiService.getSchedules(deviceId);
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data['schedules'] ?? response.data ?? [];
-        final schedules = data.map((json) => FeedingSchedule.fromJson(json)).toList();
+        final List<dynamic> data =
+            response.data['schedules'] ?? response.data ?? [];
+        final schedules =
+            data.map((json) => FeedingSchedule.fromJson(json)).toList();
         state = state.copyWith(schedules: schedules, isLoading: false);
       } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load schedules');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load schedules',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -54,7 +60,10 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
 
   Future<bool> createSchedule(String deviceId, FeedingSchedule schedule) async {
     try {
-      final response = await _apiService.createSchedule(deviceId, schedule.toJson());
+      final response = await _apiService.createSchedule(
+        deviceId,
+        schedule.toJson(),
+      );
       if (response.statusCode == 200 || response.statusCode == 201) {
         await loadSchedules(deviceId);
         return true;
@@ -67,7 +76,11 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
 
   Future<bool> updateSchedule(String deviceId, FeedingSchedule schedule) async {
     try {
-      final response = await _apiService.updateSchedule(deviceId, schedule.id, schedule.toJson());
+      final response = await _apiService.updateSchedule(
+        deviceId,
+        schedule.id,
+        schedule.toJson(),
+      );
       if (response.statusCode == 200) {
         await loadSchedules(deviceId);
         return true;
@@ -143,19 +156,27 @@ class FeedingHistoryNotifier extends StateNotifier<FeedingHistoryState> {
 
     try {
       final offset = refresh ? 0 : state.events.length;
-      final response = await _apiService.getFeedingHistory(deviceId, limit: 20, offset: offset);
-      
+      final response = await _apiService.getFeedingHistory(
+        deviceId,
+        limit: 20,
+        offset: offset,
+      );
+
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data['events'] ?? response.data ?? [];
+        final List<dynamic> data =
+            response.data['events'] ?? response.data ?? [];
         final events = data.map((json) => FeedingEvent.fromJson(json)).toList();
-        
+
         state = state.copyWith(
           events: refresh ? events : [...state.events, ...events],
           isLoading: false,
           hasMore: events.length >= 20,
         );
       } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load history');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load history',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -224,20 +245,25 @@ class ManualFeedNotifier extends StateNotifier<ManualFeedState> {
 }
 
 // Providers
-final feedingSchedulesProvider = StateNotifierProvider<FeedingSchedulesNotifier, FeedingSchedulesState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return FeedingSchedulesNotifier(apiService);
-});
+final feedingSchedulesProvider =
+    StateNotifierProvider<FeedingSchedulesNotifier, FeedingSchedulesState>((
+      ref,
+    ) {
+      final apiService = ref.watch(apiServiceProvider);
+      return FeedingSchedulesNotifier(apiService);
+    });
 
-final feedingHistoryProvider = StateNotifierProvider<FeedingHistoryNotifier, FeedingHistoryState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return FeedingHistoryNotifier(apiService);
-});
+final feedingHistoryProvider =
+    StateNotifierProvider<FeedingHistoryNotifier, FeedingHistoryState>((ref) {
+      final apiService = ref.watch(apiServiceProvider);
+      return FeedingHistoryNotifier(apiService);
+    });
 
-final manualFeedProvider = StateNotifierProvider<ManualFeedNotifier, ManualFeedState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return ManualFeedNotifier(apiService);
-});
+final manualFeedProvider =
+    StateNotifierProvider<ManualFeedNotifier, ManualFeedState>((ref) {
+      final apiService = ref.watch(apiServiceProvider);
+      return ManualFeedNotifier(apiService);
+    });
 
 // Convenience providers
 final todayFeedingsProvider = Provider<List<FeedingEvent>>((ref) {
@@ -245,11 +271,15 @@ final todayFeedingsProvider = Provider<List<FeedingEvent>>((ref) {
   final today = DateTime.now();
   return events.where((e) {
     return e.scheduledAt.year == today.year &&
-           e.scheduledAt.month == today.month &&
-           e.scheduledAt.day == today.day;
+        e.scheduledAt.month == today.month &&
+        e.scheduledAt.day == today.day;
   }).toList();
 });
 
 final enabledSchedulesProvider = Provider<List<FeedingSchedule>>((ref) {
-  return ref.watch(feedingSchedulesProvider).schedules.where((s) => s.isEnabled).toList();
+  return ref
+      .watch(feedingSchedulesProvider)
+      .schedules
+      .where((s) => s.isEnabled)
+      .toList();
 });

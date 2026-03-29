@@ -23,33 +23,40 @@ class SettingsScreen extends ConsumerWidget {
             children: [
               ListTile(
                 leading: Icon(
-                  realtimeState.isConnected ? Icons.cloud_done : Icons.cloud_off,
+                  realtimeState.isConnected
+                      ? Icons.cloud_done
+                      : Icons.cloud_off,
                   color: realtimeState.isConnected ? Colors.green : Colors.grey,
                 ),
                 title: const Text('Real-time Connection'),
-                subtitle: Text(_getConnectionStatus(realtimeState.connectionState)),
-                trailing: realtimeState.connectionState == AppMqttState.connecting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Switch(
-                        value: realtimeState.isConnected,
-                        onChanged: (value) {
-                          if (value) {
-                            ref.read(realtimeProvider.notifier).connect();
-                          } else {
-                            ref.read(realtimeProvider.notifier).disconnect();
-                          }
-                        },
-                      ),
+                subtitle: Text(
+                  _getConnectionStatus(realtimeState.connectionState),
+                ),
+                trailing:
+                    realtimeState.connectionState == AppMqttState.connecting
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : Switch(
+                          value: realtimeState.isConnected,
+                          onChanged: (value) {
+                            if (value) {
+                              ref.read(realtimeProvider.notifier).connect();
+                            } else {
+                              ref.read(realtimeProvider.notifier).disconnect();
+                            }
+                          },
+                        ),
               ),
               if (realtimeState.lastMessageAt != null)
                 ListTile(
                   leading: const Icon(Icons.access_time),
                   title: const Text('Last Update'),
-                  subtitle: Text(_formatLastUpdate(realtimeState.lastMessageAt!)),
+                  subtitle: Text(
+                    _formatLastUpdate(realtimeState.lastMessageAt!),
+                  ),
                 ),
             ],
           ),
@@ -109,14 +116,23 @@ class SettingsScreen extends ConsumerWidget {
                 title: const Text('Temperature Unit'),
                 subtitle: const Text('Celsius'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () => _showUnitSelector(context, 'Temperature', ['Celsius', 'Fahrenheit']),
+                onTap:
+                    () => _showUnitSelector(context, 'Temperature', [
+                      'Celsius',
+                      'Fahrenheit',
+                    ]),
               ),
               ListTile(
                 leading: const Icon(Icons.scale),
                 title: const Text('Weight Unit'),
                 subtitle: const Text('Grams'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () => _showUnitSelector(context, 'Weight', ['Grams', 'Ounces', 'Pounds']),
+                onTap:
+                    () => _showUnitSelector(context, 'Weight', [
+                      'Grams',
+                      'Ounces',
+                      'Pounds',
+                    ]),
               ),
               ListTile(
                 leading: const Icon(Icons.palette),
@@ -188,7 +204,10 @@ class SettingsScreen extends ConsumerWidget {
                 }
               },
               icon: const Icon(Icons.logout, color: Colors.red),
-              label: const Text('Sign Out', style: TextStyle(color: Colors.red)),
+              label: const Text(
+                'Sign Out',
+                style: TextStyle(color: Colors.red),
+              ),
             ),
           ),
           const SizedBox(height: 32),
@@ -217,95 +236,128 @@ class SettingsScreen extends ConsumerWidget {
     return '${diff.inHours} hours ago';
   }
 
-  void _showUnitSelector(BuildContext context, String title, List<String> options) {
+  void _showUnitSelector(
+    BuildContext context,
+    String title,
+    List<String> options,
+  ) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      builder:
+          (ctx) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+              ...options.map(
+                (option) => ListTile(
+                  title: Text(option),
+                  trailing:
+                      option == options.first
+                          ? const Icon(Icons.check, color: Colors.green)
+                          : null,
+                  onTap: () => Navigator.pop(ctx),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
           ),
-          ...options.map((option) => ListTile(
-            title: Text(option),
-            trailing: option == options.first ? const Icon(Icons.check, color: Colors.green) : null,
-            onTap: () => Navigator.pop(ctx),
-          )),
-          const SizedBox(height: 16),
-        ],
-      ),
     );
   }
 
   void _showThemeSelector(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Theme', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      builder:
+          (ctx) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Theme',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.brightness_auto),
+                title: const Text('System default'),
+                trailing: const Icon(Icons.check, color: Colors.green),
+                onTap: () => Navigator.pop(ctx),
+              ),
+              ListTile(
+                leading: const Icon(Icons.light_mode),
+                title: const Text('Light'),
+                onTap: () => Navigator.pop(ctx),
+              ),
+              ListTile(
+                leading: const Icon(Icons.dark_mode),
+                title: const Text('Dark'),
+                onTap: () => Navigator.pop(ctx),
+              ),
+              const SizedBox(height: 16),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.brightness_auto),
-            title: const Text('System default'),
-            trailing: const Icon(Icons.check, color: Colors.green),
-            onTap: () => Navigator.pop(ctx),
-          ),
-          ListTile(
-            leading: const Icon(Icons.light_mode),
-            title: const Text('Light'),
-            onTap: () => Navigator.pop(ctx),
-          ),
-          ListTile(
-            leading: const Icon(Icons.dark_mode),
-            title: const Text('Dark'),
-            onTap: () => Navigator.pop(ctx),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
     );
   }
 
   void _showClearCacheDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear Cache'),
-        content: const Text('This will clear cached data. Your account and settings will not be affected.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cache cleared')),
-              );
-            },
-            child: const Text('Clear'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Clear Cache'),
+            content: const Text(
+              'This will clear cached data. Your account and settings will not be affected.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Cache cleared')),
+                  );
+                },
+                child: const Text('Clear'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
   Future<bool?> _showLogoutConfirmation(BuildContext context) {
     return showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sign Out', style: TextStyle(color: Colors.red)),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Sign Out'),
+            content: const Text('Are you sure you want to sign out?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Sign Out',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }

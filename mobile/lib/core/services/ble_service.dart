@@ -7,7 +7,13 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:logger/logger.dart';
 import 'package:pointycastle/export.dart';
 
-enum BleConnectionState { disconnected, scanning, connecting, connected, provisioning }
+enum BleConnectionState {
+  disconnected,
+  scanning,
+  connecting,
+  connected,
+  provisioning,
+}
 
 class BleDevice {
   final String id;
@@ -27,24 +33,28 @@ class BleDevice {
 class ECDHKeyExchange {
   late AsymmetricKeyPair<PublicKey, PrivateKey> _keyPair;
   Uint8List? _sharedSecret;
-  
+
   ECDHKeyExchange() {
     _generateKeyPair();
   }
-  
+
   void _generateKeyPair() {
     final keyParams = ECKeyGeneratorParameters(ECCurve_secp256r1());
     final random = FortunaRandom();
-    random.seed(KeyParameter(Uint8List.fromList(
-      List.generate(32, (_) => Random.secure().nextInt(256))
-    )));
-    
-    final generator = ECKeyGenerator()
-      ..init(ParametersWithRandom(keyParams, random));
-    
+    random.seed(
+      KeyParameter(
+        Uint8List.fromList(
+          List.generate(32, (_) => Random.secure().nextInt(256)),
+        ),
+      ),
+    );
+
+    final generator =
+        ECKeyGenerator()..init(ParametersWithRandom(keyParams, random));
+
     _keyPair = generator.generateKeyPair();
   }
-  
+
   /// Get our public key to send to the device
   Uint8List getPublicKey() {
     final publicKey = _keyPair.publicKey as ECPublicKey;
@@ -54,75 +64,80 @@ class ECDHKeyExchange {
     final y = _bigIntToBytes(q.y!.toBigInteger()!, 32);
     return Uint8List.fromList([0x04, ...x, ...y]);
   }
-  
+
   /// Compute shared secret from device's public key
   Uint8List computeSharedSecret(Uint8List devicePublicKeyBytes) {
     // Parse device public key (uncompressed format)
     if (devicePublicKeyBytes[0] != 0x04 || devicePublicKeyBytes.length != 65) {
       throw ArgumentError('Invalid public key format');
     }
-    
+
     final x = _bytesToBigInt(devicePublicKeyBytes.sublist(1, 33));
     final y = _bytesToBigInt(devicePublicKeyBytes.sublist(33, 65));
-    
+
     final curve = ECCurve_secp256r1();
-    final devicePublicKey = ECPublicKey(
-      curve.curve.createPoint(x, y),
-      curve,
-    );
-    
+    final devicePublicKey = ECPublicKey(curve.curve.createPoint(x, y), curve);
+
     // Compute ECDH shared secret
     final privateKey = _keyPair.privateKey as ECPrivateKey;
     final sharedPoint = devicePublicKey.Q! * privateKey.d;
-    
+
     _sharedSecret = _bigIntToBytes(sharedPoint!.x!.toBigInteger()!, 32);
     return _sharedSecret!;
   }
-  
+
   /// Encrypt data using the shared secret (AES-256-GCM)
   Uint8List encrypt(Uint8List plaintext) {
     if (_sharedSecret == null) {
       throw StateError('Shared secret not computed');
     }
-    
+
     final random = FortunaRandom();
-    random.seed(KeyParameter(Uint8List.fromList(
-      List.generate(32, (_) => Random.secure().nextInt(256))
-    )));
-    
+    random.seed(
+      KeyParameter(
+        Uint8List.fromList(
+          List.generate(32, (_) => Random.secure().nextInt(256)),
+        ),
+      ),
+    );
+
     // Generate random IV
     final iv = Uint8List(12);
     for (var i = 0; i < 12; i++) {
       iv[i] = random.nextUint8();
     }
-    
+
     // AES-GCM encryption
-    final cipher = GCMBlockCipher(AESEngine())
-      ..init(true, AEADParameters(KeyParameter(_sharedSecret!), 128, iv, Uint8List(0)));
-    
+    final cipher = GCMBlockCipher(AESEngine())..init(
+      true,
+      AEADParameters(KeyParameter(_sharedSecret!), 128, iv, Uint8List(0)),
+    );
+
     final ciphertext = cipher.process(plaintext);
-    
+
     // Return IV + ciphertext
     return Uint8List.fromList([...iv, ...ciphertext]);
   }
-  
+
   /// Decrypt data using the shared secret
   Uint8List decrypt(Uint8List ciphertext) {
     if (_sharedSecret == null) {
       throw StateError('Shared secret not computed');
     }
-    
+
     // Extract IV and ciphertext
     final iv = ciphertext.sublist(0, 12);
     final encrypted = ciphertext.sublist(12);
-    
+
     // AES-GCM decryption
-    final cipher = GCMBlockCipher(AESEngine())
-      ..init(false, AEADParameters(KeyParameter(_sharedSecret!), 128, iv, Uint8List(0)));
-    
+    final cipher = GCMBlockCipher(AESEngine())..init(
+      false,
+      AEADParameters(KeyParameter(_sharedSecret!), 128, iv, Uint8List(0)),
+    );
+
     return cipher.process(encrypted);
   }
-  
+
   Uint8List _bigIntToBytes(BigInt number, int length) {
     final bytes = Uint8List(length);
     var temp = number;
@@ -132,7 +147,7 @@ class ECDHKeyExchange {
     }
     return bytes;
   }
-  
+
   BigInt _bytesToBigInt(Uint8List bytes) {
     var result = BigInt.zero;
     for (var byte in bytes) {
@@ -148,14 +163,19 @@ class BleService {
   BleService._internal();
 
   final Logger _logger = Logger();
-  
+
   // Service and characteristic UUIDs for Smart Fish Feeder
   static const String serviceUuid = '12345678-1234-5678-1234-56789abcdef0';
-  static const String wifiConfigCharUuid = '12345678-1234-5678-1234-56789abcdef1';
-  static const String cellularConfigCharUuid = '12345678-1234-5678-1234-56789abcdef2';
-  static const String deviceInfoCharUuid = '12345678-1234-5678-1234-56789abcdef3';
-  static const String provisionStatusCharUuid = '12345678-1234-5678-1234-56789abcdef4';
-  static const String bindingCodeCharUuid = '12345678-1234-5678-1234-56789abcdef5';
+  static const String wifiConfigCharUuid =
+      '12345678-1234-5678-1234-56789abcdef1';
+  static const String cellularConfigCharUuid =
+      '12345678-1234-5678-1234-56789abcdef2';
+  static const String deviceInfoCharUuid =
+      '12345678-1234-5678-1234-56789abcdef3';
+  static const String provisionStatusCharUuid =
+      '12345678-1234-5678-1234-56789abcdef4';
+  static const String bindingCodeCharUuid =
+      '12345678-1234-5678-1234-56789abcdef5';
 
   BluetoothDevice? _connectedDevice;
   BluetoothCharacteristic? _wifiConfigChar;
@@ -190,7 +210,9 @@ class BleService {
     await FlutterBluePlus.turnOn();
   }
 
-  Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
+  Future<void> startScan({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     if (!await isBluetoothOn()) {
       _logger.w('Bluetooth is not enabled');
       await requestBluetoothOn();
@@ -201,22 +223,28 @@ class BleService {
     _scanResults.clear();
 
     FlutterBluePlus.scanResults.listen((results) {
-      _scanResults = results
-          .where((r) {
-            final name = r.device.platformName;
-            return name.contains('SmartFishFeeder') ||
-                   name.contains('SFF-') ||
-                   r.advertisementData.serviceUuids.contains(Guid(serviceUuid));
-          })
-          .map((r) => BleDevice(
-            id: r.device.remoteId.str,
-            name: r.device.platformName.isNotEmpty 
-                ? r.device.platformName 
-                : 'Unknown Device',
-            rssi: r.rssi,
-            device: r.device,
-          ))
-          .toList();
+      _scanResults =
+          results
+              .where((r) {
+                final name = r.device.platformName;
+                return name.contains('SmartFishFeeder') ||
+                    name.contains('SFF-') ||
+                    r.advertisementData.serviceUuids.contains(
+                      Guid(serviceUuid),
+                    );
+              })
+              .map(
+                (r) => BleDevice(
+                  id: r.device.remoteId.str,
+                  name:
+                      r.device.platformName.isNotEmpty
+                          ? r.device.platformName
+                          : 'Unknown Device',
+                  rssi: r.rssi,
+                  device: r.device,
+                ),
+              )
+              .toList();
       _devicesController.add(_scanResults);
     });
 
@@ -233,7 +261,7 @@ class BleService {
   Future<bool> connectToDevice(String deviceId) async {
     try {
       _updateState(BleConnectionState.connecting);
-      
+
       // Find the device from scan results
       final bleDevice = _scanResults.firstWhere(
         (d) => d.id == deviceId,
@@ -249,9 +277,10 @@ class BleService {
 
       // Discover services
       final services = await _connectedDevice!.discoverServices();
-      
+
       for (final service in services) {
-        if (service.uuid.toString().toLowerCase() == serviceUuid.toLowerCase()) {
+        if (service.uuid.toString().toLowerCase() ==
+            serviceUuid.toLowerCase()) {
           for (final char in service.characteristics) {
             final charUuid = char.uuid.toString().toLowerCase();
             if (charUuid == wifiConfigCharUuid.toLowerCase()) {
@@ -311,7 +340,7 @@ class BleService {
 
     try {
       _updateState(BleConnectionState.provisioning);
-      
+
       final config = jsonEncode({
         'type': 'wifi',
         'ssid': ssid,
@@ -328,10 +357,10 @@ class BleService {
       }
 
       await _wifiConfigChar!.write(dataToSend, withoutResponse: false);
-      
+
       // Wait for provisioning to complete
       await _waitForProvisioningComplete();
-      
+
       _updateState(BleConnectionState.connected);
       return true;
     } catch (e) {
@@ -341,7 +370,11 @@ class BleService {
     }
   }
 
-  Future<bool> provisionCellular(String apn, {String? username, String? password}) async {
+  Future<bool> provisionCellular(
+    String apn, {
+    String? username,
+    String? password,
+  }) async {
     if (_cellularConfigChar == null) {
       _logger.e('Cellular config characteristic not found');
       return false;
@@ -349,7 +382,7 @@ class BleService {
 
     try {
       _updateState(BleConnectionState.provisioning);
-      
+
       final config = jsonEncode({
         'type': 'cellular',
         'apn': apn,
@@ -367,10 +400,10 @@ class BleService {
       }
 
       await _cellularConfigChar!.write(dataToSend, withoutResponse: false);
-      
+
       // Wait for provisioning to complete
       await _waitForProvisioningComplete();
-      
+
       _updateState(BleConnectionState.connected);
       return true;
     } catch (e) {
@@ -389,49 +422,55 @@ class BleService {
 
     try {
       _ecdhKeyExchange = ECDHKeyExchange();
-      
+
       // Get our public key
       final ourPublicKey = _ecdhKeyExchange!.getPublicKey();
       _logger.d('Our public key: ${ourPublicKey.length} bytes');
-      
+
       // Find key exchange characteristic
       final services = await _connectedDevice!.discoverServices();
       BluetoothCharacteristic? keyExchangeChar;
-      
+
       for (final service in services) {
-        if (service.uuid.toString().toLowerCase() == serviceUuid.toLowerCase()) {
+        if (service.uuid.toString().toLowerCase() ==
+            serviceUuid.toLowerCase()) {
           for (final char in service.characteristics) {
             // Key exchange characteristic UUID
-            if (char.uuid.toString().toLowerCase() == '12345678-1234-5678-1234-56789abcdef6') {
+            if (char.uuid.toString().toLowerCase() ==
+                '12345678-1234-5678-1234-56789abcdef6') {
               keyExchangeChar = char;
               break;
             }
           }
         }
       }
-      
+
       if (keyExchangeChar == null) {
-        _logger.w('Key exchange characteristic not found, using unencrypted provisioning');
+        _logger.w(
+          'Key exchange characteristic not found, using unencrypted provisioning',
+        );
         _ecdhKeyExchange = null;
         return false;
       }
-      
+
       // Send our public key
       await keyExchangeChar.write(ourPublicKey, withoutResponse: false);
-      
+
       // Read device's public key
       final devicePublicKey = await keyExchangeChar.read();
-      
+
       if (devicePublicKey.isEmpty) {
         _logger.e('Failed to receive device public key');
         _ecdhKeyExchange = null;
         return false;
       }
-      
+
       // Compute shared secret
-      _ecdhKeyExchange!.computeSharedSecret(Uint8List.fromList(devicePublicKey));
+      _ecdhKeyExchange!.computeSharedSecret(
+        Uint8List.fromList(devicePublicKey),
+      );
       _logger.i('ECDH key exchange completed successfully');
-      
+
       return true;
     } catch (e) {
       _logger.e('Key exchange failed: $e');
@@ -449,14 +488,14 @@ class BleService {
 
     // Subscribe to status notifications
     await _provisionStatusChar!.setNotifyValue(true);
-    
+
     final completer = Completer<void>();
     late StreamSubscription subscription;
-    
+
     subscription = _provisionStatusChar!.onValueReceived.listen((data) {
       final status = utf8.decode(data);
       _logger.d('Provisioning status: $status');
-      
+
       if (status == 'complete' || status == 'success') {
         subscription.cancel();
         completer.complete();

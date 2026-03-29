@@ -41,11 +41,15 @@ class SpeciesListNotifier extends StateNotifier<SpeciesListState> {
     try {
       final response = await _apiService.getSpecies();
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data['species'] ?? response.data ?? [];
+        final List<dynamic> data =
+            response.data['species'] ?? response.data ?? [];
         final species = data.map((json) => FishSpecies.fromJson(json)).toList();
         state = state.copyWith(species: species, isLoading: false);
       } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load species');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load species',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -88,7 +92,9 @@ class CalculatorNotifier extends StateNotifier<CalculatorState> {
 
   CalculatorNotifier(this._apiService) : super(const CalculatorState());
 
-  Future<FeedCalculationResult?> calculate(FeedCalculationRequest request) async {
+  Future<FeedCalculationResult?> calculate(
+    FeedCalculationRequest request,
+  ) async {
     state = state.copyWith(isCalculating: true, error: null);
 
     try {
@@ -124,22 +130,27 @@ class CalculatorNotifier extends StateNotifier<CalculatorState> {
 }
 
 // Providers
-final speciesListProvider = StateNotifierProvider<SpeciesListNotifier, SpeciesListState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return SpeciesListNotifier(apiService);
-});
+final speciesListProvider =
+    StateNotifierProvider<SpeciesListNotifier, SpeciesListState>((ref) {
+      final apiService = ref.watch(apiServiceProvider);
+      return SpeciesListNotifier(apiService);
+    });
 
-final calculatorProvider = StateNotifierProvider<CalculatorNotifier, CalculatorState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return CalculatorNotifier(apiService);
-});
+final calculatorProvider =
+    StateNotifierProvider<CalculatorNotifier, CalculatorState>((ref) {
+      final apiService = ref.watch(apiServiceProvider);
+      return CalculatorNotifier(apiService);
+    });
 
 // Convenience providers
 final speciesProvider = Provider<List<FishSpecies>>((ref) {
   return ref.watch(speciesListProvider).species;
 });
 
-final speciesByIdProvider = Provider.family<FishSpecies?, String>((ref, speciesId) {
+final speciesByIdProvider = Provider.family<FishSpecies?, String>((
+  ref,
+  speciesId,
+) {
   final species = ref.watch(speciesProvider);
   try {
     return species.firstWhere((s) => s.id == speciesId);

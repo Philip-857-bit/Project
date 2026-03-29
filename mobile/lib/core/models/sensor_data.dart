@@ -38,12 +38,16 @@ class SensorData extends Equatable {
       dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
       ph: json['ph']?.toDouble(),
       turbidity: json['turbidity']?.toDouble(),
-      feedLevel: (json['feed_level'] ?? json['weight_percentage'] ?? 0).toDouble(),
+      feedLevel:
+          (json['feed_level'] ?? json['weight_percentage'] ?? 0).toDouble(),
       batteryLevel: (json['battery_level'] ?? 0).toDouble(),
       solarVoltage: (json['solar_voltage'] ?? 0).toDouble(),
-      isSolarCharging: json['is_solar_charging'] ?? ((json['power_source'] ?? '') == 'SOLAR'),
+      isSolarCharging:
+          json['is_solar_charging'] ??
+          ((json['power_source'] ?? '') == 'SOLAR'),
       signalStrength: json['signal_strength'] ?? json['cellular_signal'] ?? 0,
-      connectionType: json['connection_type'] ?? json['power_source'] ?? 'unknown',
+      connectionType:
+          json['connection_type'] ?? json['power_source'] ?? 'unknown',
       timestamp: DateTime.parse(
         json['timestamp'] ??
             json['created_at'] ??
@@ -68,7 +72,13 @@ class SensorData extends Equatable {
   };
 
   @override
-  List<Object?> get props => [deviceId, waterTemperature, feedLevel, batteryLevel, timestamp];
+  List<Object?> get props => [
+    deviceId,
+    waterTemperature,
+    feedLevel,
+    batteryLevel,
+    timestamp,
+  ];
 }
 
 class SensorHistory {
@@ -89,9 +99,11 @@ class SensorHistory {
   factory SensorHistory.fromJson(Map<String, dynamic> json) {
     return SensorHistory(
       sensorType: json['sensor_type'] ?? '',
-      dataPoints: (json['data_points'] as List?)
-          ?.map((e) => SensorDataPoint.fromJson(e))
-          .toList() ?? [],
+      dataPoints:
+          (json['data_points'] as List?)
+              ?.map((e) => SensorDataPoint.fromJson(e))
+              .toList() ??
+          [],
       min: json['min']?.toDouble(),
       max: json['max']?.toDouble(),
       average: json['average']?.toDouble(),
@@ -108,7 +120,9 @@ class SensorDataPoint {
   factory SensorDataPoint.fromJson(Map<String, dynamic> json) {
     return SensorDataPoint(
       value: (json['value'] ?? 0).toDouble(),
-      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
+      timestamp: DateTime.parse(
+        json['timestamp'] ?? DateTime.now().toIso8601String(),
+      ),
     );
   }
 }
@@ -157,9 +171,12 @@ class DeviceAlert extends Equatable {
 
   static AlertSeverity _parseSeverity(String? severity) {
     switch (severity) {
-      case 'critical': return AlertSeverity.critical;
-      case 'warning': return AlertSeverity.warning;
-      default: return AlertSeverity.info;
+      case 'critical':
+        return AlertSeverity.critical;
+      case 'warning':
+        return AlertSeverity.warning;
+      default:
+        return AlertSeverity.info;
     }
   }
 
@@ -170,9 +187,12 @@ class DeviceAlert extends Equatable {
 
     return alertType
         .split('_')
-        .map((part) => part.isEmpty
-            ? part
-            : '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+        .map(
+          (part) =>
+              part.isEmpty
+                  ? part
+                  : '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+        )
         .join(' ');
   }
 

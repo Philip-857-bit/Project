@@ -36,38 +36,50 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.read(deviceListProvider.notifier).loadDevices(),
-        child: deviceState.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : deviceState.error != null
+        child:
+            deviceState.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : deviceState.error != null
                 ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text(deviceState.error!, style: TextStyle(color: Colors.grey[600])),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () => ref.read(deviceListProvider.notifier).loadDevices(),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  )
-                : deviceState.devices.isEmpty
-                    ? _buildEmptyState(context)
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: deviceState.devices.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final device = deviceState.devices[index];
-                          return _DeviceCard(
-                            device: device,
-                            onTap: () => context.go('/devices/${device.id}'),
-                          );
-                        },
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: Colors.grey[400],
                       ),
+                      const SizedBox(height: 16),
+                      Text(
+                        deviceState.error!,
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed:
+                            () =>
+                                ref
+                                    .read(deviceListProvider.notifier)
+                                    .loadDevices(),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+                : deviceState.devices.isEmpty
+                ? _buildEmptyState(context)
+                : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: deviceState.devices.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final device = deviceState.devices[index];
+                    return _DeviceCard(
+                      device: device,
+                      onTap: () => context.go('/devices/${device.id}'),
+                    );
+                  },
+                ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.go('/devices/pair'),
@@ -88,9 +100,9 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
             const SizedBox(height: 16),
             Text(
               'No devices yet',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Colors.grey[600],
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
             Text(
@@ -115,10 +127,7 @@ class _DeviceCard extends StatelessWidget {
   final Device device;
   final VoidCallback onTap;
 
-  const _DeviceCard({
-    required this.device,
-    required this.onTap,
-  });
+  const _DeviceCard({required this.device, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +144,10 @@ class _DeviceCard extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.router,
-                    color: device.isOnline ? AppTheme.deviceOnline : AppTheme.deviceOffline,
+                    color:
+                        device.isOnline
+                            ? AppTheme.deviceOnline
+                            : AppTheme.deviceOffline,
                     size: 32,
                   ),
                   const SizedBox(width: 12),
@@ -145,31 +157,37 @@ class _DeviceCard extends StatelessWidget {
                       children: [
                         Text(
                           device.name,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         Text(
                           device.serialNumber,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey,
-                          ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: device.isOnline 
-                          ? AppTheme.deviceOnline.withValues(alpha: 0.2)
-                          : AppTheme.deviceOffline.withValues(alpha: 0.2),
+                      color:
+                          device.isOnline
+                              ? AppTheme.deviceOnline.withValues(alpha: 0.2)
+                              : AppTheme.deviceOffline.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       device.isOnline ? 'Online' : 'Offline',
                       style: TextStyle(
-                        color: device.isOnline ? AppTheme.deviceOnline : AppTheme.deviceOffline,
+                        color:
+                            device.isOnline
+                                ? AppTheme.deviceOnline
+                                : AppTheme.deviceOffline,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -256,15 +274,15 @@ class _StatusIndicator extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.grey),
         ),
       ],
     );

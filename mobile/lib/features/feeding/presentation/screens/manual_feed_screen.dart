@@ -33,7 +33,8 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
   Future<void> _triggerFeed() async {
     if (_selectedDeviceId == null) return;
 
-    final success = await ref.read(manualFeedProvider.notifier)
+    final success = await ref
+        .read(manualFeedProvider.notifier)
         .triggerFeed(_selectedDeviceId!, _amount);
 
     if (mounted) {
@@ -54,14 +55,13 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
   Widget build(BuildContext context) {
     final deviceState = ref.watch(deviceListProvider);
     final feedState = ref.watch(manualFeedProvider);
-    final selectedDevice = _selectedDeviceId != null 
-        ? ref.watch(deviceByIdProvider(_selectedDeviceId!))
-        : null;
+    final selectedDevice =
+        _selectedDeviceId != null
+            ? ref.watch(deviceByIdProvider(_selectedDeviceId!))
+            : null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manual Feed'),
-      ),
+      appBar: AppBar(title: const Text('Manual Feed')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -72,12 +72,17 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
               child: ListTile(
                 leading: Icon(
                   Icons.router,
-                  color: selectedDevice?.isOnline == true ? Colors.green : Colors.grey,
+                  color:
+                      selectedDevice?.isOnline == true
+                          ? Colors.green
+                          : Colors.grey,
                 ),
                 title: Text(selectedDevice?.name ?? 'Select a device'),
-                subtitle: Text(selectedDevice != null 
-                    ? '${selectedDevice.isOnline ? "Online" : "Offline"} • ${selectedDevice.status.feedLevel.toInt()}% feed remaining'
-                    : 'No device selected'),
+                subtitle: Text(
+                  selectedDevice != null
+                      ? '${selectedDevice.isOnline ? "Online" : "Offline"} • ${selectedDevice.status.feedLevel.toInt()}% feed remaining'
+                      : 'No device selected',
+                ),
                 trailing: const Icon(Icons.arrow_drop_down),
                 onTap: () => _showDeviceSelector(context, deviceState.devices),
               ),
@@ -97,7 +102,9 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
                     const SizedBox(height: 16),
                     Text(
                       '${_amount.round()}g',
-                      style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                      style: Theme.of(
+                        context,
+                      ).textTheme.displayMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.primary,
                       ),
@@ -113,8 +120,14 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('50g', style: Theme.of(context).textTheme.bodySmall),
-                        Text('500g', style: Theme.of(context).textTheme.bodySmall),
+                        Text(
+                          '50g',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        Text(
+                          '500g',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ],
                     ),
                   ],
@@ -181,16 +194,21 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
             SizedBox(
               height: 56,
               child: FilledButton.icon(
-                onPressed: feedState.isFeeding || _selectedDeviceId == null 
-                    ? null 
-                    : _triggerFeed,
-                icon: feedState.isFeeding 
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.restaurant),
+                onPressed:
+                    feedState.isFeeding || _selectedDeviceId == null
+                        ? null
+                        : _triggerFeed,
+                icon:
+                    feedState.isFeeding
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                        : const Icon(Icons.restaurant),
                 label: Text(feedState.isFeeding ? 'Dispensing...' : 'Feed Now'),
               ),
             ),
@@ -204,30 +222,39 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
   void _showDeviceSelector(BuildContext context, List<Device> devices) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => ListView(
-        shrinkWrap: true,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Select Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      builder:
+          (context) => ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Device',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+              ...devices.map(
+                (device) => ListTile(
+                  leading: Icon(
+                    Icons.router,
+                    color: device.isOnline ? Colors.green : Colors.grey,
+                  ),
+                  title: Text(device.name),
+                  subtitle: Text(
+                    '${device.status.feedLevel.toInt()}% feed remaining',
+                  ),
+                  trailing:
+                      _selectedDeviceId == device.id
+                          ? const Icon(Icons.check, color: Colors.green)
+                          : null,
+                  onTap: () {
+                    setState(() => _selectedDeviceId = device.id);
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            ],
           ),
-          ...devices.map((device) => ListTile(
-            leading: Icon(
-              Icons.router,
-              color: device.isOnline ? Colors.green : Colors.grey,
-            ),
-            title: Text(device.name),
-            subtitle: Text('${device.status.feedLevel.toInt()}% feed remaining'),
-            trailing: _selectedDeviceId == device.id 
-                ? const Icon(Icons.check, color: Colors.green)
-                : null,
-            onTap: () {
-              setState(() => _selectedDeviceId = device.id);
-              Navigator.pop(context);
-            },
-          )),
-        ],
-      ),
     );
   }
 }
@@ -246,15 +273,10 @@ class _QuickAmountButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: isSelected
-          ? FilledButton(
-              onPressed: onTap,
-              child: Text('${amount}g'),
-            )
-          : OutlinedButton(
-              onPressed: onTap,
-              child: Text('${amount}g'),
-            ),
+      child:
+          isSelected
+              ? FilledButton(onPressed: onTap, child: Text('${amount}g'))
+              : OutlinedButton(onPressed: onTap, child: Text('${amount}g')),
     );
   }
 }

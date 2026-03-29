@@ -28,8 +28,13 @@ class User extends Equatable {
       email: json['email'] ?? '',
       phone: json['phone'],
       avatarUrl: json['avatar_url'],
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
+      createdAt: DateTime.parse(
+        json['created_at'] ?? DateTime.now().toIso8601String(),
+      ),
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'])
+              : null,
       preferences: UserPreferences.fromJson(json['preferences'] ?? {}),
     );
   }
@@ -68,7 +73,15 @@ class User extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, name, email, phone, avatarUrl, createdAt, preferences];
+  List<Object?> get props => [
+    id,
+    name,
+    email,
+    phone,
+    avatarUrl,
+    createdAt,
+    preferences,
+  ];
 }
 
 class UserPreferences extends Equatable {
@@ -133,5 +146,13 @@ class UserPreferences extends Equatable {
   }
 
   @override
-  List<Object?> get props => [temperatureUnit, weightUnit, notificationsEnabled, emailNotifications, pushNotifications, language, timezone];
+  List<Object?> get props => [
+    temperatureUnit,
+    weightUnit,
+    notificationsEnabled,
+    emailNotifications,
+    pushNotifications,
+    language,
+    timezone,
+  ];
 }

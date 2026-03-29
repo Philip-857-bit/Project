@@ -21,7 +21,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   Future<void> _checkAuth() async {
     await Future.delayed(const Duration(seconds: 2));
-    
+
     // Check if onboarding is complete
     final onboardingComplete = StorageService.isOnboardingComplete();
     if (!onboardingComplete) {
@@ -30,9 +30,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       }
       return;
     }
-    
+
     await ref.read(authStateProvider.notifier).checkAuthStatus();
-    
+
     if (mounted) {
       final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
       if (isAuthenticated) {
@@ -59,9 +59,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             const SizedBox(height: 24),
             Text(
               'SmartAqua',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 48),
             const CircularProgressIndicator(),

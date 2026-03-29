@@ -1,12 +1,12 @@
 /// Environment configuration for the SmartAqua mobile app.
-/// 
+///
 /// Values are loaded from compile-time environment variables using --dart-define.
-/// 
+///
 /// Build commands:
 /// ```bash
 /// # Development
 /// flutter build apk --dart-define-from-file=.env
-/// 
+///
 /// # Or individual defines
 /// flutter build apk \
 ///   --dart-define=API_BASE_URL=https://smartaqua.onrender.com/api/v1 \
@@ -60,7 +60,7 @@ class EnvConfig {
   );
 
   /// Check if running in development mode
-  static bool get isDevelopment => 
+  static bool get isDevelopment =>
       const bool.fromEnvironment('dart.vm.product') == false;
 
   /// Get list of pinned certificate fingerprints

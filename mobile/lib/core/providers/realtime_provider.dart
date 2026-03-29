@@ -44,7 +44,8 @@ class RealtimeNotifier extends StateNotifier<RealtimeState> {
   StreamSubscription? _connectionSubscription;
   StreamSubscription? _messageSubscription;
 
-  RealtimeNotifier(this._ref, this._mqttService) : super(const RealtimeState()) {
+  RealtimeNotifier(this._ref, this._mqttService)
+    : super(const RealtimeState()) {
     _setupListeners();
   }
 
@@ -101,8 +102,11 @@ class RealtimeNotifier extends StateNotifier<RealtimeState> {
   }
 
   Future<bool> connect() async {
-    state = state.copyWith(connectionState: AppMqttState.connecting, error: null);
-    
+    state = state.copyWith(
+      connectionState: AppMqttState.connecting,
+      error: null,
+    );
+
     try {
       final success = await _mqttService.connect();
       if (!success) {
@@ -123,7 +127,7 @@ class RealtimeNotifier extends StateNotifier<RealtimeState> {
 
   void subscribeToDevice(String deviceId) {
     if (!state.isConnected) return;
-    
+
     // Unsubscribe from previous device
     if (state.currentDeviceId != null && state.currentDeviceId != deviceId) {
       _mqttService.unsubscribeFromDevice(state.currentDeviceId!);
@@ -174,10 +178,12 @@ final mqttServiceProvider = Provider<MqttService>((ref) {
   return MqttService();
 });
 
-final realtimeProvider = StateNotifierProvider<RealtimeNotifier, RealtimeState>((ref) {
-  final mqttService = ref.watch(mqttServiceProvider);
-  return RealtimeNotifier(ref, mqttService);
-});
+final realtimeProvider = StateNotifierProvider<RealtimeNotifier, RealtimeState>(
+  (ref) {
+    final mqttService = ref.watch(mqttServiceProvider);
+    return RealtimeNotifier(ref, mqttService);
+  },
+);
 
 // Convenience providers
 final isRealtimeConnectedProvider = Provider<bool>((ref) {

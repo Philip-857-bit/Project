@@ -28,7 +28,8 @@ class FeedingSchedule extends Equatable {
   factory FeedingSchedule.fromJson(Map<String, dynamic> json) {
     final hour = json['hour'];
     final minute = json['minute'];
-    final time = json['time'] ??
+    final time =
+        json['time'] ??
         (hour != null && minute != null
             ? '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}'
             : '08:00');
@@ -40,8 +41,14 @@ class FeedingSchedule extends Equatable {
       amount: _doubleValue(json['amount'] ?? json['quantity_grams']),
       daysOfWeek: List<int>.from(json['days_of_week'] ?? [0, 1, 2, 3, 4, 5, 6]),
       isEnabled: json['is_enabled'] ?? json['is_active'] ?? true,
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
+      createdAt:
+          json['created_at'] != null
+              ? DateTime.parse(json['created_at'])
+              : null,
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'])
+              : null,
     );
   }
 
@@ -84,10 +91,14 @@ class FeedingSchedule extends Equatable {
 
   String get daysDescription {
     if (daysOfWeek.length == 7) return 'Every day';
-    if (daysOfWeek.length == 5 && !daysOfWeek.contains(0) && !daysOfWeek.contains(6)) {
+    if (daysOfWeek.length == 5 &&
+        !daysOfWeek.contains(0) &&
+        !daysOfWeek.contains(6)) {
       return 'Weekdays';
     }
-    if (daysOfWeek.length == 2 && daysOfWeek.contains(0) && daysOfWeek.contains(6)) {
+    if (daysOfWeek.length == 2 &&
+        daysOfWeek.contains(0) &&
+        daysOfWeek.contains(6)) {
       return 'Weekends';
     }
     final dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -95,7 +106,14 @@ class FeedingSchedule extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, deviceId, time, amount, daysOfWeek, isEnabled];
+  List<Object?> get props => [
+    id,
+    deviceId,
+    time,
+    amount,
+    daysOfWeek,
+    isEnabled,
+  ];
 }
 
 enum FeedingEventStatus { completed, failed, pending, cancelled }
@@ -132,7 +150,8 @@ class FeedingEvent extends Equatable {
       id: _stringValue(json['id']),
       deviceId: json['device_id'] ?? '',
       amount: _doubleValue(json['amount'] ?? json['quantity_grams']),
-      actualAmount: (json['actual_amount'] ?? json['quantity_grams'])?.toDouble(),
+      actualAmount:
+          (json['actual_amount'] ?? json['quantity_grams'])?.toDouble(),
       status: _parseStatus(json['status'] ?? 'completed'),
       type: json['type'] ?? json['trigger_type'] ?? 'scheduled',
       errorMessage: json['error_message'],
@@ -141,7 +160,10 @@ class FeedingEvent extends Equatable {
             json['timestamp'] ??
             DateTime.now().toIso8601String(),
       ),
-      completedAt: json['completed_at'] != null ? DateTime.parse(json['completed_at']) : null,
+      completedAt:
+          json['completed_at'] != null
+              ? DateTime.parse(json['completed_at'])
+              : null,
       waterTemperature: json['water_temperature']?.toDouble(),
       dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
     );
@@ -149,11 +171,16 @@ class FeedingEvent extends Equatable {
 
   static FeedingEventStatus _parseStatus(String? status) {
     switch (status) {
-      case 'completed': return FeedingEventStatus.completed;
-      case 'failed': return FeedingEventStatus.failed;
-      case 'pending': return FeedingEventStatus.pending;
-      case 'cancelled': return FeedingEventStatus.cancelled;
-      default: return FeedingEventStatus.pending;
+      case 'completed':
+        return FeedingEventStatus.completed;
+      case 'failed':
+        return FeedingEventStatus.failed;
+      case 'pending':
+        return FeedingEventStatus.pending;
+      case 'cancelled':
+        return FeedingEventStatus.cancelled;
+      default:
+        return FeedingEventStatus.pending;
     }
   }
 
@@ -233,7 +260,8 @@ class FeedCalculationResult {
 
   factory FeedCalculationResult.fromJson(Map<String, dynamic> json) {
     final recommendation = json['recommendation'] ?? json;
-    final basicRecommendation = recommendation['basic_recommendation'] ?? const {};
+    final basicRecommendation =
+        recommendation['basic_recommendation'] ?? const {};
 
     return FeedCalculationResult(
       recommendedAmount: _doubleValue(
@@ -246,19 +274,25 @@ class FeedCalculationResult {
             : json['biomass'],
       ),
       feedingRate: _doubleValue(
-        basicRecommendation['adjustments']?['total_adjustment'] ?? json['feeding_rate'],
+        basicRecommendation['adjustments']?['total_adjustment'] ??
+            json['feeding_rate'],
       ),
       q10Factor: _doubleValue(
         recommendation['q10_recommendation']?['biological_factors']?['q10_factor'] ??
             json['q10_factor'] ??
             1,
       ),
-      obmSafetyFactor: recommendation['q10_recommendation']?['biological_factors']?['obm_safety_factor']
-          ?.toDouble(),
-      recommendation: recommendation['basic_recommendation']?['environmental_note'] ??
+      obmSafetyFactor:
+          recommendation['q10_recommendation']?['biological_factors']?['obm_safety_factor']
+              ?.toDouble(),
+      recommendation:
+          recommendation['basic_recommendation']?['environmental_note'] ??
           json['recommendation'] ??
           '',
-      suggestedFeedings: recommendation['final_feeding_frequency'] ?? json['suggested_feedings'] ?? 3,
+      suggestedFeedings:
+          recommendation['final_feeding_frequency'] ??
+          json['suggested_feedings'] ??
+          3,
     );
   }
 }
@@ -291,12 +325,20 @@ class FishSpecies {
       id: json['id'] ?? '',
       name: json['name'] ?? '',
       q10Coefficient: (json['q10_coefficient'] ?? 2.0).toDouble(),
-      referenceTemperature: (json['reference_temperature'] ?? json['optimal_temp_min'] ?? 25).toDouble(),
+      referenceTemperature:
+          (json['reference_temperature'] ?? json['optimal_temp_min'] ?? 25)
+              .toDouble(),
       optimalTempMin: (json['optimal_temp_min'] ?? 24).toDouble(),
       optimalTempMax: (json['optimal_temp_max'] ?? 30).toDouble(),
-      fingerlingFeedRate: (json['fingerling_feed_rate'] ?? json['feeding_rate_percentage'] ?? 8).toDouble(),
-      juvenileFeedRate: (json['juvenile_feed_rate'] ?? json['feeding_rate_percentage'] ?? 4).toDouble(),
-      adultFeedRate: (json['adult_feed_rate'] ?? json['feeding_rate_percentage'] ?? 1.5).toDouble(),
+      fingerlingFeedRate:
+          (json['fingerling_feed_rate'] ?? json['feeding_rate_percentage'] ?? 8)
+              .toDouble(),
+      juvenileFeedRate:
+          (json['juvenile_feed_rate'] ?? json['feeding_rate_percentage'] ?? 4)
+              .toDouble(),
+      adultFeedRate:
+          (json['adult_feed_rate'] ?? json['feeding_rate_percentage'] ?? 1.5)
+              .toDouble(),
     );
   }
 }

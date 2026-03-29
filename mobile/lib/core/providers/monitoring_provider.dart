@@ -46,8 +46,10 @@ class SensorDataNotifier extends StateNotifier<SensorDataState> {
       final response = await _apiService.getSensorData(deviceId);
       if (response.statusCode == 200) {
         final body = response.data;
-        final payload = body is Map<String, dynamic> ? (body['data'] ?? body) : body;
-        final latest = payload is List && payload.isNotEmpty ? payload.first : payload;
+        final payload =
+            body is Map<String, dynamic> ? (body['data'] ?? body) : body;
+        final latest =
+            payload is List && payload.isNotEmpty ? payload.first : payload;
         if (latest is! Map) {
           throw StateError('No sensor data available');
         }
@@ -58,7 +60,10 @@ class SensorDataNotifier extends StateNotifier<SensorDataState> {
           lastUpdated: DateTime.now(),
         );
       } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load sensor data');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load sensor data',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -66,10 +71,7 @@ class SensorDataNotifier extends StateNotifier<SensorDataState> {
   }
 
   void updateFromMqtt(SensorData data) {
-    state = state.copyWith(
-      currentData: data,
-      lastUpdated: DateTime.now(),
-    );
+    state = state.copyWith(currentData: data, lastUpdated: DateTime.now());
   }
 }
 
@@ -104,11 +106,19 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
 
   SensorHistoryNotifier(this._apiService) : super(const SensorHistoryState());
 
-  Future<void> loadHistory(String deviceId, String sensorType, {int hours = 24}) async {
+  Future<void> loadHistory(
+    String deviceId,
+    String sensorType, {
+    int hours = 24,
+  }) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.getSensorHistory(deviceId, sensorType, hours: hours);
+      final response = await _apiService.getSensorHistory(
+        deviceId,
+        sensorType,
+        hours: hours,
+      );
       if (response.statusCode == 200) {
         final history = SensorHistory.fromJson(response.data);
         state = state.copyWith(
@@ -116,7 +126,10 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
           isLoading: false,
         );
       } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load history');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load history',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -127,12 +140,21 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final sensorTypes = ['temperature', 'feed_level', 'battery', 'dissolved_oxygen'];
+      final sensorTypes = [
+        'temperature',
+        'feed_level',
+        'battery',
+        'dissolved_oxygen',
+      ];
       final Map<String, SensorHistory> histories = {};
 
       for (final type in sensorTypes) {
         try {
-          final response = await _apiService.getSensorHistory(deviceId, type, hours: hours);
+          final response = await _apiService.getSensorHistory(
+            deviceId,
+            type,
+            hours: hours,
+          );
           if (response.statusCode == 200) {
             histories[type] = SensorHistory.fromJson(response.data);
           }
@@ -190,20 +212,24 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
       final response = await _apiService.getAlerts(deviceId);
       if (response.statusCode == 200) {
         final body = response.data;
-        final payload = body is Map<String, dynamic>
-            ? (body['data'] ?? body['alerts'] ?? body)
-            : body;
+        final payload =
+            body is Map<String, dynamic>
+                ? (body['data'] ?? body['alerts'] ?? body)
+                : body;
         final List<dynamic> data = payload is List ? payload : [];
         final alerts = data.map((json) => DeviceAlert.fromJson(json)).toList();
         final unread = alerts.where((a) => !a.isRead).length;
-        
+
         state = state.copyWith(
           alerts: alerts,
           isLoading: false,
           unreadCount: unread,
         );
       } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load alerts');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load alerts',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -219,17 +245,21 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
 }
 
 // Providers
-final sensorDataProvider = StateNotifierProvider<SensorDataNotifier, SensorDataState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return SensorDataNotifier(apiService);
-});
+final sensorDataProvider =
+    StateNotifierProvider<SensorDataNotifier, SensorDataState>((ref) {
+      final apiService = ref.watch(apiServiceProvider);
+      return SensorDataNotifier(apiService);
+    });
 
-final sensorHistoryProvider = StateNotifierProvider<SensorHistoryNotifier, SensorHistoryState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return SensorHistoryNotifier(apiService);
-});
+final sensorHistoryProvider =
+    StateNotifierProvider<SensorHistoryNotifier, SensorHistoryState>((ref) {
+      final apiService = ref.watch(apiServiceProvider);
+      return SensorHistoryNotifier(apiService);
+    });
 
-final alertsProvider = StateNotifierProvider<AlertsNotifier, AlertsState>((ref) {
+final alertsProvider = StateNotifierProvider<AlertsNotifier, AlertsState>((
+  ref,
+) {
   final apiService = ref.watch(apiServiceProvider);
   return AlertsNotifier(apiService);
 });
@@ -252,7 +282,9 @@ final unreadAlertsCountProvider = Provider<int>((ref) {
 });
 
 final criticalAlertsProvider = Provider<List<DeviceAlert>>((ref) {
-  return ref.watch(alertsProvider).alerts
+  return ref
+      .watch(alertsProvider)
+      .alerts
       .where((a) => a.severity == AlertSeverity.critical)
       .toList();
 });

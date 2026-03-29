@@ -12,7 +12,8 @@ class DevicePairingScreen extends ConsumerStatefulWidget {
   const DevicePairingScreen({super.key});
 
   @override
-  ConsumerState<DevicePairingScreen> createState() => _DevicePairingScreenState();
+  ConsumerState<DevicePairingScreen> createState() =>
+      _DevicePairingScreenState();
 }
 
 class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
@@ -60,7 +61,9 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     final isAvailable = await _bleService.isBluetoothAvailable();
     if (!isAvailable && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bluetooth is not available on this device')),
+        const SnackBar(
+          content: Text('Bluetooth is not available on this device'),
+        ),
       );
     }
   }
@@ -71,7 +74,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
       _discoveredDevices = [];
       _errorMessage = null;
     });
-    
+
     try {
       await _bleService.startScan();
     } catch (e) {
@@ -128,20 +131,24 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
       if (success) {
         // Get binding code from device
         _bindingCode = await _bleService.getBindingCode();
-        
+
         // Bind device to user account
         if (_bindingCode != null) {
-          final bindSuccess = await ref.read(deviceListProvider.notifier).bindDevice(
-            _scannedSerialNumber ?? '',
-            _bindingCode!,
-            _deviceNameController.text.trim().isEmpty
-                ? 'My Fish Feeder'
-                : _deviceNameController.text.trim(),
-          );
+          final bindSuccess = await ref
+              .read(deviceListProvider.notifier)
+              .bindDevice(
+                _scannedSerialNumber ?? '',
+                _bindingCode!,
+                _deviceNameController.text.trim().isEmpty
+                    ? 'My Fish Feeder'
+                    : _deviceNameController.text.trim(),
+              );
           if (bindSuccess) {
             setState(() => _currentStep = 3);
           } else {
-            setState(() => _errorMessage = 'Failed to bind device to your account');
+            setState(
+              () => _errorMessage = 'Failed to bind device to your account',
+            );
           }
         }
       } else {
@@ -160,46 +167,47 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => SizedBox(
-        height: MediaQuery.of(context).size.height * 0.7,
-        child: Column(
-          children: [
-            AppBar(
-              title: const Text('Scan QR Code'),
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(ctx),
-              ),
+      builder:
+          (ctx) => SizedBox(
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: Column(
+              children: [
+                AppBar(
+                  title: const Text('Scan QR Code'),
+                  leading: IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ),
+                Expanded(
+                  child: MobileScanner(
+                    onDetect: (capture) {
+                      final barcodes = capture.barcodes;
+                      if (barcodes.isNotEmpty) {
+                        final code = barcodes.first.rawValue;
+                        if (code != null && code.startsWith('SFF-')) {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _scannedSerialNumber = code;
+                            _currentStep = 1;
+                          });
+                          _startScan();
+                        }
+                      }
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Point camera at the QR code on your device',
+                    style: TextStyle(color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
             ),
-            Expanded(
-              child: MobileScanner(
-                onDetect: (capture) {
-                  final barcodes = capture.barcodes;
-                  if (barcodes.isNotEmpty) {
-                    final code = barcodes.first.rawValue;
-                    if (code != null && code.startsWith('SFF-')) {
-                      Navigator.pop(ctx);
-                      setState(() {
-                        _scannedSerialNumber = code;
-                        _currentStep = 1;
-                      });
-                      _startScan();
-                    }
-                  }
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Point camera at the QR code on your device',
-                style: TextStyle(color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -207,46 +215,45 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Enter Serial Number'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Serial Number',
-            hintText: 'SFF-XXX-XXXXXX',
-            border: OutlineInputBorder(),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Enter Serial Number'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Serial Number',
+                hintText: 'SFF-XXX-XXXXXX',
+                border: OutlineInputBorder(),
+              ),
+              textCapitalization: TextCapitalization.characters,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (controller.text.isNotEmpty) {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _scannedSerialNumber = controller.text;
+                      _currentStep = 1;
+                    });
+                    _startScan();
+                  }
+                },
+                child: const Text('Continue'),
+              ),
+            ],
           ),
-          textCapitalization: TextCapitalization.characters,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                Navigator.pop(ctx);
-                setState(() {
-                  _scannedSerialNumber = controller.text;
-                  _currentStep = 1;
-                });
-                _startScan();
-              }
-            },
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Device'),
-      ),
+      appBar: AppBar(title: const Text('Add Device')),
       body: Stepper(
         currentStep: _currentStep,
         onStepContinue: _handleStepContinue,
@@ -314,7 +321,10 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                   Card(
                     color: Colors.green.shade50,
                     child: ListTile(
-                      leading: const Icon(Icons.check_circle, color: Colors.green),
+                      leading: const Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                      ),
                       title: const Text('Device Found'),
                       subtitle: Text(_scannedSerialNumber!),
                     ),
@@ -334,7 +344,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                 if (_scannedSerialNumber != null)
                   Text('Looking for: $_scannedSerialNumber'),
                 const SizedBox(height: 16),
-                
+
                 if (_isScanning)
                   const Center(
                     child: Column(
@@ -362,7 +372,11 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                         padding: const EdgeInsets.all(24),
                         child: Column(
                           children: [
-                            Icon(Icons.bluetooth_searching, size: 48, color: Colors.grey[400]),
+                            Icon(
+                              Icons.bluetooth_searching,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
                             const SizedBox(height: 16),
                             const Text('No devices found'),
                             const SizedBox(height: 8),
@@ -376,13 +390,15 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                       ),
                     )
                   else
-                    ...(_discoveredDevices.map((device) => _DeviceListItem(
-                      name: device.name,
-                      signal: _getSignalStrength(device.rssi),
-                      isSelected: _selectedDeviceId == device.id,
-                      onTap: () => _connectToDevice(device),
-                    ))),
-                  
+                    ...(_discoveredDevices.map(
+                      (device) => _DeviceListItem(
+                        name: device.name,
+                        signal: _getSignalStrength(device.rssi),
+                        isSelected: _selectedDeviceId == device.id,
+                        onTap: () => _connectToDevice(device),
+                      ),
+                    )),
+
                   const SizedBox(height: 16),
                   Center(
                     child: OutlinedButton.icon(
@@ -403,7 +419,12 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                         children: [
                           const Icon(Icons.error, color: Colors.red),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red))),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -441,7 +462,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                   onTap: () => setState(() => _networkType = 'wifi'),
                 ),
                 const SizedBox(height: 16),
-                
+
                 if (_networkType == 'cellular')
                   TextFormField(
                     controller: _apnController,
@@ -493,7 +514,12 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                         children: [
                           const Icon(Icons.error, color: Colors.red),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red))),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -609,10 +635,17 @@ class _ActionCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
+              Icon(
+                icon,
+                size: 40,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               const SizedBox(height: 8),
               Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
             ],
           ),
         ),
@@ -643,7 +676,10 @@ class _DeviceListItem extends StatelessWidget {
         leading: const Icon(Icons.bluetooth),
         title: Text(name),
         subtitle: Text('Signal: $signal'),
-        trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
+        trailing:
+            isSelected
+                ? const Icon(Icons.check_circle, color: Colors.green)
+                : null,
         onTap: onTap,
       ),
     );
@@ -673,9 +709,10 @@ class _NetworkOption extends StatelessWidget {
         leading: Icon(icon),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: isSelected 
-            ? const Icon(Icons.radio_button_checked, color: Colors.green)
-            : const Icon(Icons.radio_button_off),
+        trailing:
+            isSelected
+                ? const Icon(Icons.radio_button_checked, color: Colors.green)
+                : const Icon(Icons.radio_button_off),
         onTap: onTap,
       ),
     );

@@ -12,7 +12,8 @@ class FeedingHistoryScreen extends ConsumerStatefulWidget {
   const FeedingHistoryScreen({super.key});
 
   @override
-  ConsumerState<FeedingHistoryScreen> createState() => _FeedingHistoryScreenState();
+  ConsumerState<FeedingHistoryScreen> createState() =>
+      _FeedingHistoryScreenState();
 }
 
 class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
@@ -33,10 +34,13 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       final state = ref.read(feedingHistoryProvider);
       if (!state.isLoading && state.hasMore && _selectedDeviceId != null) {
-        ref.read(feedingHistoryProvider.notifier).loadHistory(_selectedDeviceId!);
+        ref
+            .read(feedingHistoryProvider.notifier)
+            .loadHistory(_selectedDeviceId!);
       }
     }
   }
@@ -46,7 +50,9 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
     final devices = ref.read(devicesProvider);
     if (devices.isNotEmpty && _selectedDeviceId == null) {
       _selectedDeviceId = devices.first.id;
-      await ref.read(feedingHistoryProvider.notifier).loadHistory(_selectedDeviceId!, refresh: true);
+      await ref
+          .read(feedingHistoryProvider.notifier)
+          .loadHistory(_selectedDeviceId!, refresh: true);
     }
   }
 
@@ -57,7 +63,10 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
     final todayFeedings = ref.watch(todayFeedingsProvider);
 
     // Calculate summaries
-    final todayTotal = todayFeedings.fold<double>(0, (sum, e) => sum + e.amount);
+    final todayTotal = todayFeedings.fold<double>(
+      0,
+      (sum, e) => sum + e.amount,
+    );
     final weekTotal = _calculateWeekTotal(historyState.events);
     final monthTotal = _calculateMonthTotal(historyState.events);
 
@@ -74,7 +83,9 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
       body: RefreshIndicator(
         onRefresh: () async {
           if (_selectedDeviceId != null) {
-            await ref.read(feedingHistoryProvider.notifier).loadHistory(_selectedDeviceId!, refresh: true);
+            await ref
+                .read(feedingHistoryProvider.notifier)
+                .loadHistory(_selectedDeviceId!, refresh: true);
           }
         },
         child: CustomScrollView(
@@ -90,9 +101,15 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
                     Card(
                       child: ListTile(
                         leading: const Icon(Icons.router),
-                        title: Text(_getSelectedDeviceName(deviceState.devices)),
+                        title: Text(
+                          _getSelectedDeviceName(deviceState.devices),
+                        ),
                         trailing: const Icon(Icons.arrow_drop_down),
-                        onTap: () => _showDeviceSelector(context, deviceState.devices),
+                        onTap:
+                            () => _showDeviceSelector(
+                              context,
+                              deviceState.devices,
+                            ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -146,7 +163,10 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
                     children: [
                       Icon(Icons.history, size: 64, color: Colors.grey[400]),
                       const SizedBox(height: 16),
-                      Text('No feeding history', style: TextStyle(color: Colors.grey[600])),
+                      Text(
+                        'No feeding history',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
                     ],
                   ),
                 ),
@@ -160,15 +180,19 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
                       if (index >= historyState.events.length) {
                         return historyState.hasMore
                             ? const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(child: CircularProgressIndicator()),
-                              )
+                              padding: EdgeInsets.all(16),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
                             : null;
                       }
 
                       final event = historyState.events[index];
-                      final showDateHeader = index == 0 ||
-                          !_isSameDay(event.scheduledAt, historyState.events[index - 1].scheduledAt);
+                      final showDateHeader =
+                          index == 0 ||
+                          !_isSameDay(
+                            event.scheduledAt,
+                            historyState.events[index - 1].scheduledAt,
+                          );
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,9 +201,8 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
                             if (index > 0) const SizedBox(height: 16),
                             Text(
                               _formatDateHeader(event.scheduledAt),
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
                           ],
@@ -187,7 +210,9 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
                         ],
                       );
                     },
-                    childCount: historyState.events.length + (historyState.hasMore ? 1 : 0),
+                    childCount:
+                        historyState.events.length +
+                        (historyState.hasMore ? 1 : 0),
                   ),
                 ),
               ),
@@ -209,76 +234,120 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
   void _showDeviceSelector(BuildContext context, List<Device> devices) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => ListView(
-        shrinkWrap: true,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Select Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      builder:
+          (ctx) => ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Device',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+              ...devices.map(
+                (device) => ListTile(
+                  leading: Icon(
+                    Icons.router,
+                    color: device.isOnline ? Colors.green : Colors.grey,
+                  ),
+                  title: Text(device.name),
+                  trailing:
+                      _selectedDeviceId == device.id
+                          ? const Icon(Icons.check, color: Colors.green)
+                          : null,
+                  onTap: () {
+                    setState(() => _selectedDeviceId = device.id);
+                    ref
+                        .read(feedingHistoryProvider.notifier)
+                        .loadHistory(device.id, refresh: true);
+                    Navigator.pop(ctx);
+                  },
+                ),
+              ),
+            ],
           ),
-          ...devices.map((device) => ListTile(
-            leading: Icon(Icons.router, color: device.isOnline ? Colors.green : Colors.grey),
-            title: Text(device.name),
-            trailing: _selectedDeviceId == device.id 
-                ? const Icon(Icons.check, color: Colors.green)
-                : null,
-            onTap: () {
-              setState(() => _selectedDeviceId = device.id);
-              ref.read(feedingHistoryProvider.notifier).loadHistory(device.id, refresh: true);
-              Navigator.pop(ctx);
-            },
-          )),
-        ],
-      ),
     );
   }
 
   void _showFilterDialog(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Filter by Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
+      builder:
+          (ctx) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                FilterChip(label: const Text('All'), selected: true, onSelected: (_) {}),
-                FilterChip(label: const Text('Completed'), selected: false, onSelected: (_) {}),
-                FilterChip(label: const Text('Failed'), selected: false, onSelected: (_) {}),
-                FilterChip(label: const Text('Manual'), selected: false, onSelected: (_) {}),
-                FilterChip(label: const Text('Scheduled'), selected: false, onSelected: (_) {}),
+                const Text(
+                  'Filter by Status',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    FilterChip(
+                      label: const Text('All'),
+                      selected: true,
+                      onSelected: (_) {},
+                    ),
+                    FilterChip(
+                      label: const Text('Completed'),
+                      selected: false,
+                      onSelected: (_) {},
+                    ),
+                    FilterChip(
+                      label: const Text('Failed'),
+                      selected: false,
+                      onSelected: (_) {},
+                    ),
+                    FilterChip(
+                      label: const Text('Manual'),
+                      selected: false,
+                      onSelected: (_) {},
+                    ),
+                    FilterChip(
+                      label: const Text('Scheduled'),
+                      selected: false,
+                      onSelected: (_) {},
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Apply'),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Apply'),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
   double _calculateWeekTotal(List<FeedingEvent> events) {
     final weekAgo = DateTime.now().subtract(const Duration(days: 7));
     return events
-        .where((e) => e.scheduledAt.isAfter(weekAgo) && e.status == FeedingEventStatus.completed)
+        .where(
+          (e) =>
+              e.scheduledAt.isAfter(weekAgo) &&
+              e.status == FeedingEventStatus.completed,
+        )
         .fold<double>(0, (sum, e) => sum + e.amount);
   }
 
   double _calculateMonthTotal(List<FeedingEvent> events) {
     final monthAgo = DateTime.now().subtract(const Duration(days: 30));
     return events
-        .where((e) => e.scheduledAt.isAfter(monthAgo) && e.status == FeedingEventStatus.completed)
+        .where(
+          (e) =>
+              e.scheduledAt.isAfter(monthAgo) &&
+              e.status == FeedingEventStatus.completed,
+        )
         .fold<double>(0, (sum, e) => sum + e.amount);
   }
 
@@ -324,15 +393,15 @@ class _SummaryItem extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           value,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.grey),
         ),
       ],
     );
@@ -353,7 +422,9 @@ class _HistoryItem extends StatelessWidget {
           backgroundColor: _getStatusColor().withValues(alpha: 0.2),
           child: Icon(_getStatusIcon(), color: _getStatusColor()),
         ),
-        title: Text('${event.amount.toInt()}g • ${event.type == 'manual' ? 'Manual' : 'Scheduled'}'),
+        title: Text(
+          '${event.amount.toInt()}g • ${event.type == 'manual' ? 'Manual' : 'Scheduled'}',
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -361,7 +432,10 @@ class _HistoryItem extends StatelessWidget {
             if (event.errorMessage != null)
               Text(
                 event.errorMessage!,
-                style: const TextStyle(color: AppTheme.feedLevelLow, fontSize: 12),
+                style: const TextStyle(
+                  color: AppTheme.feedLevelLow,
+                  fontSize: 12,
+                ),
               ),
             if (event.waterTemperature != null)
               Text(

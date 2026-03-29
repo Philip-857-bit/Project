@@ -30,16 +30,19 @@ class Device extends Equatable {
 
   factory Device.fromJson(Map<String, dynamic> json) {
     final lastSeen = _dateTimeValue(json['last_seen']);
-    final statusJson = json['status'] is Map
-        ? Map<String, dynamic>.from(json['status'] as Map)
-        : json;
+    final statusJson =
+        json['status'] is Map
+            ? Map<String, dynamic>.from(json['status'] as Map)
+            : json;
 
     return Device(
       id: _stringValue(json['device_id'] ?? json['id']),
       name: json['name'] ?? '',
       serialNumber: json['device_serial'] ?? json['serial_number'] ?? '',
-      isOnline: json['is_online'] ??
-          (lastSeen != null && DateTime.now().difference(lastSeen).inMinutes < 5),
+      isOnline:
+          json['is_online'] ??
+          (lastSeen != null &&
+              DateTime.now().difference(lastSeen).inMinutes < 5),
       lastSeen: lastSeen,
       status: DeviceStatus.fromJson(Map<String, dynamic>.from(statusJson)),
       config: DeviceConfig.fromJson(
@@ -81,7 +84,15 @@ class Device extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, name, serialNumber, isOnline, lastSeen, status, config];
+  List<Object?> get props => [
+    id,
+    name,
+    serialNumber,
+    isOnline,
+    lastSeen,
+    status,
+    config,
+  ];
 }
 
 class DeviceStatus extends Equatable {
@@ -110,14 +121,18 @@ class DeviceStatus extends Equatable {
   factory DeviceStatus.fromJson(Map<String, dynamic> json) {
     return DeviceStatus(
       batteryLevel: (json['battery_level'] ?? 0).toDouble(),
-      feedLevel: (json['feed_level'] ?? json['weight_percentage'] ?? 0).toDouble(),
+      feedLevel:
+          (json['feed_level'] ?? json['weight_percentage'] ?? 0).toDouble(),
       waterTemperature: (json['water_temperature'] ?? 0).toDouble(),
       dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
       ph: json['ph']?.toDouble(),
       signalStrength: json['signal_strength'] ?? json['cellular_signal'] ?? 0,
-      isSolarCharging: json['is_solar_charging'] ?? ((json['power_source'] ?? '') == 'SOLAR'),
+      isSolarCharging:
+          json['is_solar_charging'] ??
+          ((json['power_source'] ?? '') == 'SOLAR'),
       solarVoltage: (json['solar_voltage'] ?? 0).toDouble(),
-      connectionType: json['connection_type'] ?? json['power_source'] ?? 'unknown',
+      connectionType:
+          json['connection_type'] ?? json['power_source'] ?? 'unknown',
     );
   }
 
@@ -134,7 +149,17 @@ class DeviceStatus extends Equatable {
   };
 
   @override
-  List<Object?> get props => [batteryLevel, feedLevel, waterTemperature, dissolvedOxygen, ph, signalStrength, isSolarCharging, solarVoltage, connectionType];
+  List<Object?> get props => [
+    batteryLevel,
+    feedLevel,
+    waterTemperature,
+    dissolvedOxygen,
+    ph,
+    signalStrength,
+    isSolarCharging,
+    solarVoltage,
+    connectionType,
+  ];
 }
 
 class DeviceConfig extends Equatable {
@@ -175,5 +200,12 @@ class DeviceConfig extends Equatable {
   };
 
   @override
-  List<Object?> get props => [timezone, notificationsEnabled, lowFeedThreshold, lowBatteryThreshold, highTempThreshold, lowTempThreshold];
+  List<Object?> get props => [
+    timezone,
+    notificationsEnabled,
+    lowFeedThreshold,
+    lowBatteryThreshold,
+    highTempThreshold,
+    lowTempThreshold,
+  ];
 }

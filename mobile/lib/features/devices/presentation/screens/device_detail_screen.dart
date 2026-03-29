@@ -29,7 +29,9 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
     await Future.wait([
       ref.read(selectedDeviceProvider.notifier).loadDevice(widget.deviceId),
       ref.read(sensorDataProvider.notifier).loadSensorData(widget.deviceId),
-      ref.read(feedingHistoryProvider.notifier).loadHistory(widget.deviceId, refresh: true),
+      ref
+          .read(feedingHistoryProvider.notifier)
+          .loadHistory(widget.deviceId, refresh: true),
     ]);
   }
 
@@ -57,33 +59,38 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _loadData,
-        child: deviceState.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : device == null
+        child:
+            deviceState.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : device == null
                 ? _buildErrorState()
                 : SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Device Info Card
-                        _buildDeviceInfoCard(context, device),
-                        const SizedBox(height: 16),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Device Info Card
+                      _buildDeviceInfoCard(context, device),
+                      const SizedBox(height: 16),
 
-                        // Status Cards
-                        _buildStatusCards(context, device, sensorState.currentData),
-                        const SizedBox(height: 24),
+                      // Status Cards
+                      _buildStatusCards(
+                        context,
+                        device,
+                        sensorState.currentData,
+                      ),
+                      const SizedBox(height: 24),
 
-                        // Quick Actions
-                        _buildQuickActions(context, device),
-                        const SizedBox(height: 24),
+                      // Quick Actions
+                      _buildQuickActions(context, device),
+                      const SizedBox(height: 24),
 
-                        // Recent Feeding
-                        _buildRecentFeeding(context, feedingState),
-                      ],
-                    ),
+                      // Recent Feeding
+                      _buildRecentFeeding(context, feedingState),
+                    ],
                   ),
+                ),
       ),
     );
   }
@@ -97,10 +104,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
           const SizedBox(height: 16),
           Text('Device not found', style: TextStyle(color: Colors.grey[600])),
           const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
+          ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
         ],
       ),
     );
@@ -118,7 +122,10 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
                 Icon(
                   Icons.router,
                   size: 48,
-                  color: device.isOnline ? AppTheme.deviceOnline : AppTheme.deviceOffline,
+                  color:
+                      device.isOnline
+                          ? AppTheme.deviceOnline
+                          : AppTheme.deviceOffline,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -133,24 +140,32 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
                       ),
                       Text(
                         device.serialNumber,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey,
-                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: (device.isOnline ? AppTheme.deviceOnline : AppTheme.deviceOffline)
+                    color: (device.isOnline
+                            ? AppTheme.deviceOnline
+                            : AppTheme.deviceOffline)
                         .withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
                     device.isOnline ? 'Online' : 'Offline',
                     style: TextStyle(
-                      color: device.isOnline ? AppTheme.deviceOnline : AppTheme.deviceOffline,
+                      color:
+                          device.isOnline
+                              ? AppTheme.deviceOnline
+                              : AppTheme.deviceOffline,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -170,9 +185,13 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
     );
   }
 
-  Widget _buildStatusCards(BuildContext context, Device device, dynamic sensorData) {
+  Widget _buildStatusCards(
+    BuildContext context,
+    Device device,
+    dynamic sensorData,
+  ) {
     final status = device.status;
-    
+
     return Column(
       children: [
         Row(
@@ -182,7 +201,8 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
                 icon: Icons.battery_charging_full,
                 label: 'Battery',
                 value: '${status.batteryLevel.toInt()}%',
-                subtitle: status.isSolarCharging ? 'Solar charging' : 'Discharging',
+                subtitle:
+                    status.isSolarCharging ? 'Solar charging' : 'Discharging',
                 color: _getBatteryColor(status.batteryLevel),
               ),
             ),
@@ -213,7 +233,10 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: _StatusCard(
-                icon: status.connectionType == 'gsm' ? Icons.signal_cellular_alt : Icons.wifi,
+                icon:
+                    status.connectionType == 'gsm'
+                        ? Icons.signal_cellular_alt
+                        : Icons.wifi,
                 label: 'Signal',
                 value: '${status.signalStrength}%',
                 subtitle: status.connectionType.toUpperCase(),
@@ -242,7 +265,10 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
                   label: 'Solar',
                   value: '${status.solarVoltage.toStringAsFixed(1)}V',
                   subtitle: status.isSolarCharging ? 'Active' : 'Inactive',
-                  color: status.isSolarCharging ? AppTheme.solarActive : Colors.grey,
+                  color:
+                      status.isSolarCharging
+                          ? AppTheme.solarActive
+                          : Colors.grey,
                 ),
               ),
             ],
@@ -258,16 +284,19 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
       children: [
         Text(
           'Quick Actions',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
               child: FilledButton.icon(
-                onPressed: device.isOnline ? () => context.go('/feeding/manual') : null,
+                onPressed:
+                    device.isOnline
+                        ? () => context.go('/feeding/manual')
+                        : null,
                 icon: const Icon(Icons.restaurant),
                 label: const Text('Feed Now'),
               ),
@@ -306,7 +335,10 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
     );
   }
 
-  Widget _buildRecentFeeding(BuildContext context, FeedingHistoryState feedingState) {
+  Widget _buildRecentFeeding(
+    BuildContext context,
+    FeedingHistoryState feedingState,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -315,9 +347,9 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
           children: [
             Text(
               'Recent Feeding',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             TextButton(
               onPressed: () => context.go('/feeding/history'),
@@ -333,18 +365,25 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Center(
-                child: Text('No feeding history', style: TextStyle(color: Colors.grey[600])),
+                child: Text(
+                  'No feeding history',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
               ),
             ),
           )
         else
-          ...feedingState.events.take(3).map((event) => _FeedingHistoryItem(
-            time: DateFormat('h:mm a').format(event.scheduledAt),
-            amount: '${event.amount.toInt()}g',
-            type: event.type == 'manual' ? 'Manual' : 'Scheduled',
-            status: event.status.name,
-            isPending: event.status.name == 'pending',
-          )),
+          ...feedingState.events
+              .take(3)
+              .map(
+                (event) => _FeedingHistoryItem(
+                  time: DateFormat('h:mm a').format(event.scheduledAt),
+                  amount: '${event.amount.toInt()}g',
+                  type: event.type == 'manual' ? 'Manual' : 'Scheduled',
+                  status: event.status.name,
+                  isPending: event.status.name == 'pending',
+                ),
+              ),
       ],
     );
   }
@@ -352,45 +391,49 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
   void _showDeviceSettings(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Rename Device'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showRenameDialog(context);
-              },
+      builder:
+          (ctx) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.edit),
+                  title: const Text('Rename Device'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showRenameDialog(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.notifications),
+                  title: const Text('Notification Settings'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.go('/settings');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.tune),
+                  title: const Text('Threshold Settings'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.link_off, color: Colors.red),
+                  title: const Text(
+                    'Unbind Device',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showUnbindConfirmation(context);
+                  },
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.notifications),
-              title: const Text('Notification Settings'),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.go('/settings');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.tune),
-              title: const Text('Threshold Settings'),
-              onTap: () {
-                Navigator.pop(ctx);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.link_off, color: Colors.red),
-              title: const Text('Unbind Device', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showUnbindConfirmation(context);
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -398,43 +441,61 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
     final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rename Device'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Device Name',
-            border: OutlineInputBorder(),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Rename Device'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Device Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Save'),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Save')),
-        ],
-      ),
     );
   }
 
   void _showUnbindConfirmation(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Unbind Device'),
-        content: const Text('Are you sure you want to unbind this device? You will need to pair it again to use it.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final success = await ref.read(deviceListProvider.notifier).unbindDevice(widget.deviceId);
-              if (success && mounted) {
-                context.go('/devices');
-              }
-            },
-            child: const Text('Unbind', style: TextStyle(color: Colors.red)),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Unbind Device'),
+            content: const Text(
+              'Are you sure you want to unbind this device? You will need to pair it again to use it.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final success = await ref
+                      .read(deviceListProvider.notifier)
+                      .unbindDevice(widget.deviceId);
+                  if (success && mounted) {
+                    context.go('/devices');
+                  }
+                },
+                child: const Text(
+                  'Unbind',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -521,12 +582,27 @@ class _StatusCard extends StatelessWidget {
               children: [
                 Icon(icon, color: color, size: 24),
                 const SizedBox(width: 8),
-                Text(label, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
+                Text(
+                  label,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(value, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-            Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
+            Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              subtitle,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+            ),
           ],
         ),
       ),
@@ -555,9 +631,10 @@ class _FeedingHistoryItem extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: isPending 
-              ? Colors.orange.withValues(alpha: 0.2)
-              : AppTheme.feedLevelHigh.withValues(alpha: 0.2),
+          backgroundColor:
+              isPending
+                  ? Colors.orange.withValues(alpha: 0.2)
+                  : AppTheme.feedLevelHigh.withValues(alpha: 0.2),
           child: Icon(
             isPending ? Icons.schedule : Icons.check,
             color: isPending ? Colors.orange : AppTheme.feedLevelHigh,
@@ -568,9 +645,10 @@ class _FeedingHistoryItem extends StatelessWidget {
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: isPending 
-                ? Colors.orange.withValues(alpha: 0.2)
-                : AppTheme.feedLevelHigh.withValues(alpha: 0.2),
+            color:
+                isPending
+                    ? Colors.orange.withValues(alpha: 0.2)
+                    : AppTheme.feedLevelHigh.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(

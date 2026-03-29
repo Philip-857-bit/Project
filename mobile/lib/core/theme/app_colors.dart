@@ -19,7 +19,9 @@ class AppColors {
   static const Color secondary = Color(0xFF3D66C6); // Ocean blue
   static const Color secondaryLight = Color(0xFF6A8DE0); // Light ocean blue
   static const Color secondaryDark = Color(0xFF294CA5); // Deep ocean blue
-  static const Color secondaryContainer = Color(0xFFC7D6F5); // Very light ocean blue
+  static const Color secondaryContainer = Color(
+    0xFFC7D6F5,
+  ); // Very light ocean blue
 
   // Tertiary Colors - Circuit gold accent
   static const Color tertiary = Color(0xFFC79A73); // Gold accent
@@ -60,17 +62,23 @@ class AppColors {
   static const Color onPrimary = Color(0xFFFFFFFF); // White on primary
   static const Color onSecondary = Color(0xFFFFFFFF); // White on secondary
   static const Color onTertiary = Color(0xFFFFFFFF); // White on tertiary
-  static const Color onBackground = Color(0xFF212121); // Dark gray on background
+  static const Color onBackground = Color(
+    0xFF212121,
+  ); // Dark gray on background
   static const Color onBackgroundDark = Color(0xFFE0E0E0); // Light gray on dark
   static const Color onSurface = Color(0xFF212121); // Dark gray on surface
-  static const Color onSurfaceDark = Color(0xFFE0E0E0); // Light gray on dark surface
+  static const Color onSurfaceDark = Color(
+    0xFFE0E0E0,
+  ); // Light gray on dark surface
   static const Color onError = Color(0xFFFFFFFF); // White on error
 
   // Text Hierarchy
   static const Color textPrimary = Color(0xFF212121); // Primary text
   static const Color textPrimaryDark = Color(0xFFE0E0E0); // Primary text dark
   static const Color textSecondary = Color(0xFF757575); // Secondary text
-  static const Color textSecondaryDark = Color(0xFFB0B0B0); // Secondary text dark
+  static const Color textSecondaryDark = Color(
+    0xFFB0B0B0,
+  ); // Secondary text dark
   static const Color textDisabled = Color(0xFFBDBDBD); // Disabled text
   static const Color textDisabledDark = Color(0xFF616161); // Disabled text dark
 
@@ -87,7 +95,7 @@ class AppColors {
   static const Color shadowDark = Color(0x52000000); // 32% black
 
   // App-Specific Semantic Colors
-  
+
   // Device Status
   static const Color deviceOnline = Color(0xFF43A047); // Green
   static const Color deviceOffline = Color(0xFF9E9E9E); // Gray

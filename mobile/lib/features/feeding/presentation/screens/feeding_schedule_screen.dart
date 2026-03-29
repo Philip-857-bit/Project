@@ -11,7 +11,8 @@ class FeedingScheduleScreen extends ConsumerStatefulWidget {
   const FeedingScheduleScreen({super.key});
 
   @override
-  ConsumerState<FeedingScheduleScreen> createState() => _FeedingScheduleScreenState();
+  ConsumerState<FeedingScheduleScreen> createState() =>
+      _FeedingScheduleScreenState();
 }
 
 class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
@@ -28,7 +29,9 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
     final devices = ref.read(devicesProvider);
     if (devices.isNotEmpty && _selectedDeviceId == null) {
       _selectedDeviceId = devices.first.id;
-      await ref.read(feedingSchedulesProvider.notifier).loadSchedules(_selectedDeviceId!);
+      await ref
+          .read(feedingSchedulesProvider.notifier)
+          .loadSchedules(_selectedDeviceId!);
     }
   }
 
@@ -50,7 +53,9 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
       body: RefreshIndicator(
         onRefresh: () async {
           if (_selectedDeviceId != null) {
-            await ref.read(feedingSchedulesProvider.notifier).loadSchedules(_selectedDeviceId!);
+            await ref
+                .read(feedingSchedulesProvider.notifier)
+                .loadSchedules(_selectedDeviceId!);
           }
         },
         child: ListView(
@@ -75,12 +80,14 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
             else if (schedulesState.schedules.isEmpty)
               _buildEmptyState(context)
             else
-              ...schedulesState.schedules.map((schedule) => _ScheduleCard(
-                schedule: schedule,
-                onToggle: () => _toggleSchedule(schedule),
-                onEdit: () => _showEditScheduleDialog(context, schedule),
-                onDelete: () => _deleteSchedule(schedule),
-              )),
+              ...schedulesState.schedules.map(
+                (schedule) => _ScheduleCard(
+                  schedule: schedule,
+                  onToggle: () => _toggleSchedule(schedule),
+                  onEdit: () => _showEditScheduleDialog(context, schedule),
+                  onDelete: () => _deleteSchedule(schedule),
+                ),
+              ),
           ],
         ),
       ),
@@ -95,9 +102,10 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
           const SizedBox(height: 12),
           FloatingActionButton.extended(
             heroTag: 'schedule',
-            onPressed: _selectedDeviceId != null 
-                ? () => _showAddScheduleDialog(context)
-                : null,
+            onPressed:
+                _selectedDeviceId != null
+                    ? () => _showAddScheduleDialog(context)
+                    : null,
             icon: const Icon(Icons.add),
             label: const Text('Add Schedule'),
           ),
@@ -125,9 +133,9 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
             const SizedBox(height: 16),
             Text(
               'No schedules yet',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.grey[600],
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
             Text(
@@ -144,31 +152,40 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
   void _showDeviceSelector(BuildContext context, List<Device> devices) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => ListView(
-        shrinkWrap: true,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Select Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      builder:
+          (context) => ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Device',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+              ...devices.map(
+                (device) => ListTile(
+                  leading: Icon(
+                    Icons.router,
+                    color: device.isOnline ? Colors.green : Colors.grey,
+                  ),
+                  title: Text(device.name),
+                  subtitle: Text(device.serialNumber),
+                  trailing:
+                      _selectedDeviceId == device.id
+                          ? const Icon(Icons.check, color: Colors.green)
+                          : null,
+                  onTap: () {
+                    setState(() => _selectedDeviceId = device.id);
+                    ref
+                        .read(feedingSchedulesProvider.notifier)
+                        .loadSchedules(device.id);
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            ],
           ),
-          ...devices.map((device) => ListTile(
-            leading: Icon(
-              Icons.router,
-              color: device.isOnline ? Colors.green : Colors.grey,
-            ),
-            title: Text(device.name),
-            subtitle: Text(device.serialNumber),
-            trailing: _selectedDeviceId == device.id 
-                ? const Icon(Icons.check, color: Colors.green)
-                : null,
-            onTap: () {
-              setState(() => _selectedDeviceId = device.id);
-              ref.read(feedingSchedulesProvider.notifier).loadSchedules(device.id);
-              Navigator.pop(context);
-            },
-          )),
-        ],
-      ),
     );
   }
 
@@ -176,18 +193,20 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _AddScheduleSheet(
-        deviceId: _selectedDeviceId!,
-        onSave: (schedule) async {
-          final success = await ref.read(feedingSchedulesProvider.notifier)
-              .createSchedule(_selectedDeviceId!, schedule);
-          if (success && ctx.mounted) {
-            ScaffoldMessenger.of(ctx).showSnackBar(
-              const SnackBar(content: Text('Schedule created')),
-            );
-          }
-        },
-      ),
+      builder:
+          (ctx) => _AddScheduleSheet(
+            deviceId: _selectedDeviceId!,
+            onSave: (schedule) async {
+              final success = await ref
+                  .read(feedingSchedulesProvider.notifier)
+                  .createSchedule(_selectedDeviceId!, schedule);
+              if (success && ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Schedule created')),
+                );
+              }
+            },
+          ),
     );
   }
 
@@ -195,53 +214,63 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _AddScheduleSheet(
-        deviceId: _selectedDeviceId!,
-        schedule: schedule,
-        onSave: (updated) async {
-          final success = await ref.read(feedingSchedulesProvider.notifier)
-              .updateSchedule(_selectedDeviceId!, updated);
-          if (success && ctx.mounted) {
-            ScaffoldMessenger.of(ctx).showSnackBar(
-              const SnackBar(content: Text('Schedule updated')),
-            );
-          }
-        },
-      ),
+      builder:
+          (ctx) => _AddScheduleSheet(
+            deviceId: _selectedDeviceId!,
+            schedule: schedule,
+            onSave: (updated) async {
+              final success = await ref
+                  .read(feedingSchedulesProvider.notifier)
+                  .updateSchedule(_selectedDeviceId!, updated);
+              if (success && ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Schedule updated')),
+                );
+              }
+            },
+          ),
     );
   }
 
   Future<void> _toggleSchedule(FeedingSchedule schedule) async {
-    await ref.read(feedingSchedulesProvider.notifier)
+    await ref
+        .read(feedingSchedulesProvider.notifier)
         .toggleSchedule(_selectedDeviceId!, schedule);
   }
 
   Future<void> _deleteSchedule(FeedingSchedule schedule) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Schedule'),
-        content: const Text('Are you sure you want to delete this schedule?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Schedule'),
+            content: const Text(
+              'Are you sure you want to delete this schedule?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
     );
 
     if (confirm == true) {
-      final success = await ref.read(feedingSchedulesProvider.notifier)
+      final success = await ref
+          .read(feedingSchedulesProvider.notifier)
           .deleteSchedule(_selectedDeviceId!, schedule.id);
       if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Schedule deleted')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Schedule deleted')));
       }
     }
   }
@@ -282,29 +311,30 @@ class _ScheduleCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '${schedule.amount.toInt()}g • ${schedule.daysDescription}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
                   ),
                 ],
               ),
             ),
-            Switch(
-              value: schedule.isEnabled,
-              onChanged: (_) => onToggle(),
-            ),
+            Switch(value: schedule.isEnabled, onChanged: (_) => onToggle()),
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'edit') onEdit();
                 if (value == 'delete') onDelete();
               },
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Text('Delete', style: TextStyle(color: Colors.red)),
-                ),
-              ],
+              itemBuilder:
+                  (context) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
             ),
           ],
         ),
@@ -366,9 +396,9 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
         children: [
           Text(
             widget.schedule != null ? 'Edit Schedule' : 'Add Schedule',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
 
@@ -434,7 +464,9 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
 
           FilledButton(
             onPressed: _selectedDays.isNotEmpty ? _save : null,
-            child: Text(widget.schedule != null ? 'Update Schedule' : 'Save Schedule'),
+            child: Text(
+              widget.schedule != null ? 'Update Schedule' : 'Save Schedule',
+            ),
           ),
           const SizedBox(height: 16),
         ],
@@ -443,7 +475,8 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
   }
 
   void _save() {
-    final timeStr = '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}';
+    final timeStr =
+        '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}';
     final schedule = FeedingSchedule(
       id: widget.schedule?.id ?? '',
       deviceId: widget.deviceId,

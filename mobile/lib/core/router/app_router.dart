@@ -86,9 +86,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: ':deviceId',
                 name: 'device-detail',
-                builder: (context, state) => DeviceDetailScreen(
-                  deviceId: state.pathParameters['deviceId']!,
-                ),
+                builder:
+                    (context, state) => DeviceDetailScreen(
+                      deviceId: state.pathParameters['deviceId']!,
+                    ),
               ),
             ],
           ),
@@ -122,9 +123,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: ':feedingEventId',
                 name: 'video-verification',
-                builder: (context, state) => VideoVerificationScreen(
-                  feedingEventId: state.pathParameters['feedingEventId'],
-                ),
+                builder:
+                    (context, state) => VideoVerificationScreen(
+                      feedingEventId: state.pathParameters['feedingEventId'],
+                    ),
               ),
             ],
           ),
