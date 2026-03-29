@@ -96,6 +96,7 @@ func (a *App) Run() error {
 
 	// Initialize handlers
 	handlers := handlers.New(services, a.logger)
+	handlers.Device.SetMQTTClient(a.mqttClient)
 
 	// Setup router
 	router := a.setupRouter(handlers)
@@ -242,6 +243,9 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 			auth.POST("/login", h.Auth.Login)
 			auth.POST("/refresh", h.Auth.RefreshToken)
 			auth.POST("/logout", middleware.AuthRequired(), h.Auth.Logout)
+			auth.POST("/password-reset/request", h.Auth.RequestPasswordReset)
+			auth.POST("/password-reset/verify", h.Auth.VerifyPasswordResetCode)
+			auth.POST("/password-reset/confirm", h.Auth.ConfirmPasswordReset)
 		}
 
 		// User routes
@@ -260,6 +264,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 			devices.POST("/bind", middleware.AuthRequired(), h.Device.Bind)
 			devices.GET("", middleware.AuthRequired(), h.Device.List)
 			devices.GET("/:id", middleware.AuthRequired(), h.Device.Get)
+			devices.POST("/:id/capture-video", middleware.AuthRequired(), h.Device.CaptureVideo)
 			devices.PUT("/:id", middleware.AuthRequired(), h.Device.Update)
 			devices.DELETE("/:id", middleware.AuthRequired(), h.Device.Delete)
 		}
@@ -351,6 +356,12 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 			vision.GET("/boil-index/device/:device_id", h.Vision.GetBoilIndexAnalyses)
 			vision.GET("/stats/:device_id", h.Vision.GetVisionStats)
 			vision.GET("/storage/:device_id", h.Vision.GetStorageUsage)
+		}
+
+		feedingEvents := v1.Group("/feeding-events")
+		feedingEvents.Use(middleware.AuthRequired())
+		{
+			feedingEvents.GET("/:feeding_event_id/verification", h.Vision.GetFeedingVerification)
 		}
 
 		// Power management routes

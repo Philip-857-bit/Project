@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"smart-fish-feeder/internal/repository"
 
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // VisionService handles computer vision data management
@@ -850,6 +852,20 @@ func (s *VisionService) GetBoilIndexAnalyses(ctx context.Context, deviceID strin
 		return nil, fmt.Errorf("repository not initialized")
 	}
 	return s.repo.GetBoilIndexAnalysesByDevice(ctx, deviceID, limit)
+}
+
+// GetBoilIndexByFeedingEvent retrieves boil index analysis for a feeding event.
+func (s *VisionService) GetBoilIndexByFeedingEvent(ctx context.Context, feedingEventID uint) (*models.BoilIndexAnalysis, error) {
+	if s.repo == nil {
+		return nil, fmt.Errorf("repository not initialized")
+	}
+
+	analysis, err := s.repo.GetBoilIndexByFeedingEvent(ctx, feedingEventID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+
+	return analysis, err
 }
 
 // GetVisionStats retrieves aggregated vision statistics

@@ -27,7 +27,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _tryBiometricLogin() async {
     final authState = ref.read(authStateProvider);
     if (authState.biometricAvailable && authState.biometricEnabled) {
-      final success = await ref.read(authStateProvider.notifier).authenticateWithBiometrics();
+      final success =
+          await ref
+              .read(authStateProvider.notifier)
+              .authenticateWithBiometrics();
       if (success && mounted) {
         context.go('/dashboard');
       }
@@ -43,11 +46,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
-      final success = await ref.read(authStateProvider.notifier).login(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
-      
+      final success = await ref
+          .read(authStateProvider.notifier)
+          .login(_emailController.text.trim(), _passwordController.text);
+
       if (success && mounted) {
         context.go('/dashboard');
       }
@@ -62,95 +64,145 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final authState = ref.watch(authStateProvider);
-          
-          return AlertDialog(
-            title: Text(step == 0 ? 'Reset Password' : step == 1 ? 'Enter Code' : 'New Password'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (step == 0) ...[
-                  const Text('Enter your email to receive a reset code.'),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
+      builder:
+          (ctx) => StatefulBuilder(
+            builder: (ctx, setDialogState) {
+              final authState = ref.watch(authStateProvider);
+
+              return AlertDialog(
+                title: Text(
+                  step == 0
+                      ? 'Reset Password'
+                      : step == 1
+                      ? 'Enter Code'
+                      : 'New Password',
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (step == 0) ...[
+                      const Text('Enter your email to receive a reset code.'),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: emailController,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                    ] else if (step == 1) ...[
+                      const Text('Enter the 6-digit code sent to your email.'),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: codeController,
+                        decoration: const InputDecoration(
+                          labelText: 'Reset Code',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                      ),
+                    ] else ...[
+                      const Text('Enter your new password.'),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: newPasswordController,
+                        decoration: const InputDecoration(
+                          labelText: 'New Password',
+                          border: OutlineInputBorder(),
+                        ),
+                        obscureText: true,
+                      ),
+                    ],
+                    if (authState.error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          authState.error!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    if (authState.statusMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          authState.statusMessage!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
                   ),
-                ] else if (step == 1) ...[
-                  const Text('Enter the 6-digit code sent to your email.'),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: codeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Reset Code',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                  ),
-                ] else ...[
-                  const Text('Enter your new password.'),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: newPasswordController,
-                    decoration: const InputDecoration(
-                      labelText: 'New Password',
-                      border: OutlineInputBorder(),
-                    ),
-                    obscureText: true,
+                  FilledButton(
+                    onPressed:
+                        authState.isLoading
+                            ? null
+                            : () async {
+                              if (step == 0) {
+                                final success = await ref
+                                    .read(authStateProvider.notifier)
+                                    .requestPasswordReset(
+                                      emailController.text.trim(),
+                                    );
+                                if (success) {
+                                  setDialogState(() => step = 1);
+                                }
+                              } else if (step == 1) {
+                                final success = await ref
+                                    .read(authStateProvider.notifier)
+                                    .verifyResetCode(
+                                      emailController.text.trim(),
+                                      codeController.text,
+                                    );
+                                if (success) {
+                                  setDialogState(() => step = 2);
+                                }
+                              } else {
+                                final success = await ref
+                                    .read(authStateProvider.notifier)
+                                    .resetPassword(
+                                      emailController.text.trim(),
+                                      codeController.text,
+                                      newPasswordController.text,
+                                    );
+                                if (success && ctx.mounted) {
+                                  Navigator.pop(ctx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Password reset successfully. Please login.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                    child:
+                        authState.isLoading
+                            ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : Text(
+                              step == 0
+                                  ? 'Send Code'
+                                  : step == 1
+                                  ? 'Verify'
+                                  : 'Reset',
+                            ),
                   ),
                 ],
-                if (authState.error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(authState.error!, style: const TextStyle(color: Colors.red)),
-                  ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: authState.isLoading ? null : () async {
-                  if (step == 0) {
-                    final success = await ref.read(authStateProvider.notifier)
-                        .requestPasswordReset(emailController.text.trim());
-                    if (success) {
-                      setDialogState(() => step = 1);
-                    }
-                  } else if (step == 1) {
-                    final success = await ref.read(authStateProvider.notifier)
-                        .verifyResetCode(emailController.text.trim(), codeController.text);
-                    if (success) {
-                      setDialogState(() => step = 2);
-                    }
-                  } else {
-                    final success = await ref.read(authStateProvider.notifier)
-                        .resetPassword(emailController.text.trim(), codeController.text, newPasswordController.text);
-                    if (success && ctx.mounted) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Password reset successfully. Please login.')),
-                      );
-                    }
-                  }
-                },
-                child: authState.isLoading
-                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Text(step == 0 ? 'Send Code' : step == 1 ? 'Verify' : 'Reset'),
-              ),
-            ],
-          );
-        },
-      ),
+              );
+            },
+          ),
     );
   }
 
@@ -179,10 +231,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 48),
-                Icon(
-                  Icons.set_meal,
-                  size: 80,
-                  color: Theme.of(context).colorScheme.primary,
+                Image.asset(
+                  'assets/images/logo.png',
+                  width: 96,
+                  height: 96,
+                  fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -194,10 +247,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Sign in to manage your fish feeders',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.grey,
-                  ),
+                  'Sign in to manage your SmartAqua feeders',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 48),
@@ -226,8 +279,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     labelText: 'Password',
                     prefixIcon: const Icon(Icons.lock_outlined),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                      ),
+                      onPressed:
+                          () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                     ),
                   ),
                   validator: (value) {
@@ -248,37 +308,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 8),
                   Text(
                     authState.error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: authState.isLoading ? null : _login,
-                  child: authState.isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Sign In'),
+                  child:
+                      authState.isLoading
+                          ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Text('Sign In'),
                 ),
                 // Biometric login button
-                if (authState.biometricAvailable && authState.biometricEnabled) ...[
+                if (authState.biometricAvailable &&
+                    authState.biometricEnabled) ...[
                   const SizedBox(height: 16),
                   FutureBuilder<List<BiometricType>>(
-                    future: ref.read(authStateProvider.notifier).getAvailableBiometrics(),
+                    future:
+                        ref
+                            .read(authStateProvider.notifier)
+                            .getAvailableBiometrics(),
                     builder: (context, snapshot) {
                       final types = snapshot.data ?? [];
                       return OutlinedButton.icon(
                         onPressed: () async {
-                          final success = await ref.read(authStateProvider.notifier).authenticateWithBiometrics();
+                          final success =
+                              await ref
+                                  .read(authStateProvider.notifier)
+                                  .authenticateWithBiometrics();
                           if (success && mounted) {
                             context.go('/dashboard');
                           }
                         },
                         icon: Icon(_getBiometricIcon(types)),
-                        label: Text('Sign in with ${_getBiometricLabel(types)}'),
+                        label: Text(
+                          'Sign in with ${_getBiometricLabel(types)}',
+                        ),
                       );
                     },
                   ),

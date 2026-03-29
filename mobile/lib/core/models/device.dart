@@ -1,5 +1,14 @@
 import 'package:equatable/equatable.dart';
 
+String _stringValue(dynamic value) => value?.toString() ?? '';
+
+DateTime? _dateTimeValue(dynamic value) {
+  if (value is String && value.isNotEmpty) {
+    return DateTime.tryParse(value);
+  }
+  return null;
+}
+
 class Device extends Equatable {
   final String id;
   final String name;
@@ -20,14 +29,24 @@ class Device extends Equatable {
   });
 
   factory Device.fromJson(Map<String, dynamic> json) {
+    final lastSeen = _dateTimeValue(json['last_seen']);
+    final statusJson = json['status'] is Map
+        ? Map<String, dynamic>.from(json['status'] as Map)
+        : json;
+
     return Device(
-      id: json['id'] ?? '',
+      id: _stringValue(json['device_id'] ?? json['id']),
       name: json['name'] ?? '',
-      serialNumber: json['serial_number'] ?? '',
-      isOnline: json['is_online'] ?? false,
-      lastSeen: json['last_seen'] != null ? DateTime.parse(json['last_seen']) : null,
-      status: DeviceStatus.fromJson(json['status'] ?? {}),
-      config: DeviceConfig.fromJson(json['config'] ?? {}),
+      serialNumber: json['device_serial'] ?? json['serial_number'] ?? '',
+      isOnline: json['is_online'] ??
+          (lastSeen != null && DateTime.now().difference(lastSeen).inMinutes < 5),
+      lastSeen: lastSeen,
+      status: DeviceStatus.fromJson(Map<String, dynamic>.from(statusJson)),
+      config: DeviceConfig.fromJson(
+        json['config'] is Map
+            ? Map<String, dynamic>.from(json['config'] as Map)
+            : const <String, dynamic>{},
+      ),
     );
   }
 
@@ -91,14 +110,14 @@ class DeviceStatus extends Equatable {
   factory DeviceStatus.fromJson(Map<String, dynamic> json) {
     return DeviceStatus(
       batteryLevel: (json['battery_level'] ?? 0).toDouble(),
-      feedLevel: (json['feed_level'] ?? 0).toDouble(),
+      feedLevel: (json['feed_level'] ?? json['weight_percentage'] ?? 0).toDouble(),
       waterTemperature: (json['water_temperature'] ?? 0).toDouble(),
       dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
       ph: json['ph']?.toDouble(),
-      signalStrength: json['signal_strength'] ?? 0,
-      isSolarCharging: json['is_solar_charging'] ?? false,
+      signalStrength: json['signal_strength'] ?? json['cellular_signal'] ?? 0,
+      isSolarCharging: json['is_solar_charging'] ?? ((json['power_source'] ?? '') == 'SOLAR'),
       solarVoltage: (json['solar_voltage'] ?? 0).toDouble(),
-      connectionType: json['connection_type'] ?? 'unknown',
+      connectionType: json['connection_type'] ?? json['power_source'] ?? 'unknown',
     );
   }
 

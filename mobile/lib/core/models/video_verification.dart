@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+String _stringValue(dynamic value) => value?.toString() ?? '';
+
 class VideoClip extends Equatable {
   final String id;
   final String deviceId;
@@ -25,14 +27,18 @@ class VideoClip extends Equatable {
 
   factory VideoClip.fromJson(Map<String, dynamic> json) {
     return VideoClip(
-      id: json['id'] ?? '',
+      id: _stringValue(json['id']),
       deviceId: json['device_id'] ?? '',
-      feedingEventId: json['feeding_event_id'] ?? '',
-      videoUrl: json['video_url'] ?? '',
+      feedingEventId: _stringValue(json['feeding_event_id']),
+      videoUrl: json['video_url'] ?? json['cloud_url'] ?? json['file_path'] ?? '',
       thumbnailUrl: json['thumbnail_url'] ?? '',
       durationSeconds: json['duration_seconds'] ?? 0,
       type: _parseVideoType(json['type']),
-      capturedAt: DateTime.parse(json['captured_at'] ?? DateTime.now().toIso8601String()),
+      capturedAt: DateTime.parse(
+        json['captured_at'] ??
+            json['timestamp'] ??
+            DateTime.now().toIso8601String(),
+      ),
       analysis: json['analysis'] != null ? BoilIndexAnalysis.fromJson(json['analysis']) : null,
     );
   }

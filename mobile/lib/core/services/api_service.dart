@@ -11,73 +11,83 @@ import 'storage_service.dart';
 class ApiService {
   /// API base URL from environment configuration
   static String get baseUrl => EnvConfig.apiBaseUrl;
-  
+
   /// Certificate fingerprints from environment configuration
   static List<String> get _pinnedCertificates => EnvConfig.pinnedCertificates;
-  
+
   /// API domain for certificate validation
   static String get _apiDomain => EnvConfig.apiDomain;
-  
+
   late final Dio _dio;
   final Logger _logger = Logger();
 
   ApiService() {
-    _dio = Dio(BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    ));
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
 
     // Configure certificate pinning
     _configureCertificatePinning();
 
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: _onRequest,
-      onResponse: _onResponse,
-      onError: _onError,
-    ));
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: _onRequest,
+        onResponse: _onResponse,
+        onError: _onError,
+      ),
+    );
   }
 
   /// Configure certificate pinning for enhanced security
   void _configureCertificatePinning() {
     (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
       final client = HttpClient();
-      client.badCertificateCallback = (X509Certificate cert, String host, int port) {
+      client.badCertificateCallback = (
+        X509Certificate cert,
+        String host,
+        int port,
+      ) {
         // Only validate certificates for our domain
         if (!host.contains(_apiDomain)) {
           return false;
         }
-        
+
         // Skip pinning if no certificates configured
         if (_pinnedCertificates.isEmpty) {
           if (EnvConfig.isDevelopment) {
-            _logger.w('No certificate fingerprints configured - skipping pinning in dev mode');
+            _logger.w(
+              'No certificate fingerprints configured - skipping pinning in dev mode',
+            );
             return true;
           }
           _logger.e('No certificate fingerprints configured!');
           return false;
         }
-        
+
         // Compute SHA256 fingerprint of the certificate
         final fingerprint = _computeCertificateFingerprint(cert);
-        
+
         // Check if fingerprint matches any pinned certificate
         for (final pinned in _pinnedCertificates) {
           if (pinned.contains(fingerprint)) {
             return true;
           }
         }
-        
+
         // In development mode, allow self-signed certificates
         if (EnvConfig.isDevelopment || EnvConfig.debugMode) {
           _logger.w('Certificate pinning bypassed in development mode');
           return true;
         }
-        
+
         _logger.e('Certificate pinning failed for $host');
         return false;
       };
@@ -108,13 +118,20 @@ class ApiService {
   }
 
   void _onResponse(Response response, ResponseInterceptorHandler handler) {
-    _logger.d('RESPONSE[${response.statusCode}] => PATH: ${response.requestOptions.path}');
+    _logger.d(
+      'RESPONSE[${response.statusCode}] => PATH: ${response.requestOptions.path}',
+    );
     handler.next(response);
   }
 
-  Future<void> _onError(DioException err, ErrorInterceptorHandler handler) async {
-    _logger.e('ERROR[${err.response?.statusCode}] => PATH: ${err.requestOptions.path}');
-    
+  Future<void> _onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    _logger.e(
+      'ERROR[${err.response?.statusCode}] => PATH: ${err.requestOptions.path}',
+    );
+
     if (err.response?.statusCode == 401) {
       // Try to refresh token
       final refreshed = await _refreshToken();
@@ -125,7 +142,7 @@ class ApiService {
         return;
       }
     }
-    
+
     handler.next(err);
   }
 
@@ -142,10 +159,10 @@ class ApiService {
       if (response.statusCode == 200) {
         final newAccessToken = response.data['access_token'];
         final newRefreshToken = response.data['refresh_token'];
-        
+
         await StorageService.setAccessToken(newAccessToken);
         await StorageService.setRefreshToken(newRefreshToken);
-        
+
         return true;
       }
     } catch (e) {
@@ -158,10 +175,7 @@ class ApiService {
     final token = await StorageService.getAccessToken();
     final options = Options(
       method: requestOptions.method,
-      headers: {
-        ...requestOptions.headers,
-        'Authorization': 'Bearer $token',
-      },
+      headers: {...requestOptions.headers, 'Authorization': 'Bearer $token'},
     );
     return _dio.request(
       requestOptions.path,
@@ -171,22 +185,46 @@ class ApiService {
     );
   }
 
+  Map<String, dynamic> _withDeviceId(
+    String deviceId, [
+    Map<String, dynamic> additional = const {},
+  ]) {
+    return {'device_id': deviceId, ...additional};
+  }
+
   Dio get dio => _dio;
 
   // Auth endpoints
   Future<Response> login(String email, String password) async {
-    return _dio.post('/auth/login', data: {
-      'email': email,
-      'password': password,
-    });
+    return _dio.post(
+      '/auth/login',
+      data: {'email': email, 'password': password},
+    );
   }
 
   Future<Response> register(String name, String email, String password) async {
-    return _dio.post('/auth/register', data: {
-      'name': name,
-      'email': email,
-      'password': password,
-    });
+    final parts =
+        name
+            .trim()
+            .split(RegExp(r'\s+'))
+            .where((part) => part.isNotEmpty)
+            .toList();
+    final firstName = parts.isNotEmpty ? parts.first : name.trim();
+    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : firstName;
+
+    return _dio.post(
+      '/auth/register',
+      data: {
+        'first_name': firstName,
+        'last_name': lastName,
+        'email': email,
+        'password': password,
+      },
+    );
+  }
+
+  Future<Response> getProfile() async {
+    return _dio.get('/users/profile');
   }
 
   Future<Response> logout() async {
@@ -202,60 +240,113 @@ class ApiService {
     return _dio.get('/devices/$deviceId');
   }
 
-  Future<Response> bindDevice(String bindingCode) async {
-    return _dio.post('/devices/bind', data: {'binding_code': bindingCode});
+  Future<Response> bindDevice(
+    String deviceSerial,
+    String bindingCode,
+    String name, {
+    String? location,
+  }) async {
+    return _dio.post(
+      '/devices/bind',
+      data: {
+        'device_serial': deviceSerial,
+        'binding_code': bindingCode,
+        'name': name,
+        if (location != null && location.isNotEmpty) 'location': location,
+      },
+    );
   }
 
   Future<Response> unbindDevice(String deviceId) async {
-    return _dio.delete('/devices/$deviceId/unbind');
+    return _dio.delete('/devices/$deviceId');
   }
 
   // Feeding endpoints
   Future<Response> getSchedules(String deviceId) async {
-    return _dio.get('/devices/$deviceId/schedules');
+    return _dio.get(
+      '/feeding/schedules',
+      queryParameters: _withDeviceId(deviceId),
+    );
   }
 
-  Future<Response> createSchedule(String deviceId, Map<String, dynamic> schedule) async {
-    return _dio.post('/devices/$deviceId/schedules', data: schedule);
+  Future<Response> createSchedule(
+    String deviceId,
+    Map<String, dynamic> schedule,
+  ) async {
+    return _dio.post(
+      '/feeding/schedules',
+      data: {...schedule, 'device_id': deviceId},
+    );
   }
 
-  Future<Response> updateSchedule(String deviceId, String scheduleId, Map<String, dynamic> schedule) async {
-    return _dio.put('/devices/$deviceId/schedules/$scheduleId', data: schedule);
+  Future<Response> updateSchedule(
+    String deviceId,
+    String scheduleId,
+    Map<String, dynamic> schedule,
+  ) async {
+    return _dio.put(
+      '/feeding/schedules/$scheduleId',
+      data: {...schedule, 'device_id': deviceId},
+    );
   }
 
   Future<Response> deleteSchedule(String deviceId, String scheduleId) async {
-    return _dio.delete('/devices/$deviceId/schedules/$scheduleId');
+    return _dio.delete('/feeding/schedules/$scheduleId');
   }
 
   Future<Response> triggerManualFeed(String deviceId, double amount) async {
-    return _dio.post('/devices/$deviceId/feed', data: {'amount': amount});
+    return _dio.post(
+      '/feeding/manual',
+      data: {'device_id': deviceId, 'quantity_grams': amount},
+    );
   }
 
-  Future<Response> getFeedingHistory(String deviceId, {int? limit, int? offset}) async {
-    return _dio.get('/devices/$deviceId/feeding-history', queryParameters: {
-      if (limit != null) 'limit': limit,
-      if (offset != null) 'offset': offset,
-    });
+  Future<Response> getFeedingHistory(
+    String deviceId, {
+    int? limit,
+    int? offset,
+  }) async {
+    return _dio.get(
+      '/feeding/history',
+      queryParameters: {
+        'device_id': deviceId,
+        if (limit != null) 'limit': limit,
+      },
+    );
   }
 
   // Monitoring endpoints
   Future<Response> getSensorData(String deviceId) async {
-    return _dio.get('/devices/$deviceId/sensors');
+    return _dio.get(
+      '/monitoring/sensors',
+      queryParameters: _withDeviceId(deviceId, {'limit': 1}),
+    );
   }
 
-  Future<Response> getSensorHistory(String deviceId, String sensorType, {int? hours}) async {
-    return _dio.get('/devices/$deviceId/sensors/$sensorType/history', queryParameters: {
-      if (hours != null) 'hours': hours,
-    });
+  Future<Response> getSensorHistory(
+    String deviceId,
+    String sensorType, {
+    int? hours,
+  }) async {
+    return _dio.get(
+      '/monitoring/trends',
+      queryParameters: _withDeviceId(deviceId, {
+        'sensor_type': sensorType,
+        if (hours != null) 'hours': hours,
+      }),
+    );
   }
 
   Future<Response> getAlerts(String deviceId) async {
-    return _dio.get('/devices/$deviceId/alerts');
+    return _dio.get(
+      '/monitoring/alerts',
+      queryParameters: _withDeviceId(deviceId),
+    );
   }
 
   // Calculator endpoints
   Future<Response> calculateFeed(Map<String, dynamic> params) async {
-    return _dio.post('/calculator/feed', data: params);
+    return _dio.post('/calculator/recommend', data: params);
   }
 
   Future<Response> getSpecies() async {
@@ -268,25 +359,29 @@ class ApiService {
   }
 
   Future<Response> verifyResetCode(String email, String code) async {
-    return _dio.post('/auth/password-reset/verify', data: {
-      'email': email,
-      'code': code,
-    });
+    return _dio.post(
+      '/auth/password-reset/verify',
+      data: {'email': email, 'code': code},
+    );
   }
 
-  Future<Response> resetPassword(String email, String code, String newPassword) async {
-    return _dio.post('/auth/password-reset/confirm', data: {
-      'email': email,
-      'code': code,
-      'new_password': newPassword,
-    });
+  Future<Response> resetPassword(
+    String email,
+    String code,
+    String newPassword,
+  ) async {
+    return _dio.post(
+      '/auth/password-reset/confirm',
+      data: {'email': email, 'code': code, 'new_password': newPassword},
+    );
   }
 
   // Video verification endpoints
   Future<Response> getVideoClips(String deviceId, {int? limit}) async {
-    return _dio.get('/devices/$deviceId/videos', queryParameters: {
-      if (limit != null) 'limit': limit,
-    });
+    return _dio.get(
+      '/vision/clips/device/$deviceId',
+      queryParameters: {if (limit != null) 'limit': limit},
+    );
   }
 
   Future<Response> getVideoVerification(String feedingEventId) async {
@@ -299,12 +394,35 @@ class ApiService {
 
   // FCR Analytics endpoints
   Future<Response> getFCRAnalytics(String deviceId, {int? days}) async {
-    return _dio.get('/devices/$deviceId/fcr-analytics', queryParameters: {
-      if (days != null) 'days': days,
-    });
+    return _dio.get(
+      '/fcr/$deviceId/analytics',
+      queryParameters: {
+        if (days != null)
+          'start_date':
+              DateTime.now()
+                  .subtract(Duration(days: days))
+                  .toIso8601String()
+                  .split('T')
+                  .first,
+      },
+    );
   }
 
-  Future<Response> getGrowthPrediction(String deviceId) async {
-    return _dio.get('/devices/$deviceId/growth-prediction');
+  Future<Response> getGrowthPrediction(
+    String deviceId, {
+    required String species,
+    required double currentWeight,
+    required double targetWeight,
+    int predictionDays = 30,
+  }) async {
+    return _dio.post(
+      '/fcr/$deviceId/predict',
+      data: {
+        'species': species,
+        'current_weight': currentWeight,
+        'target_weight': targetWeight,
+        'prediction_days': predictionDays,
+      },
+    );
   }
 }

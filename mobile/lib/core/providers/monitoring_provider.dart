@@ -45,7 +45,13 @@ class SensorDataNotifier extends StateNotifier<SensorDataState> {
     try {
       final response = await _apiService.getSensorData(deviceId);
       if (response.statusCode == 200) {
-        final data = SensorData.fromJson(response.data);
+        final body = response.data;
+        final payload = body is Map<String, dynamic> ? (body['data'] ?? body) : body;
+        final latest = payload is List && payload.isNotEmpty ? payload.first : payload;
+        if (latest is! Map) {
+          throw StateError('No sensor data available');
+        }
+        final data = SensorData.fromJson(Map<String, dynamic>.from(latest));
         state = state.copyWith(
           currentData: data,
           isLoading: false,
@@ -183,7 +189,11 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
     try {
       final response = await _apiService.getAlerts(deviceId);
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data['alerts'] ?? response.data ?? [];
+        final body = response.data;
+        final payload = body is Map<String, dynamic>
+            ? (body['data'] ?? body['alerts'] ?? body)
+            : body;
+        final List<dynamic> data = payload is List ? payload : [];
         final alerts = data.map((json) => DeviceAlert.fromJson(json)).toList();
         final unread = alerts.where((a) => !a.isRead).length;
         

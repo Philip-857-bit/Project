@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.smartaqua.app"
     compileSdk = 36
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "27.1.12297006"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

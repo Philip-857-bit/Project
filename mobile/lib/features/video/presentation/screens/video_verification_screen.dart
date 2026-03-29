@@ -6,8 +6,10 @@ import 'package:chewie/chewie.dart';
 
 import '../../../../core/models/device.dart';
 import '../../../../core/models/video_verification.dart';
+import '../../../../core/config/env_config.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/video_provider.dart';
+import '../../../../core/services/storage_service.dart';
 
 class VideoVerificationScreen extends ConsumerStatefulWidget {
   final String? feedingEventId;
@@ -15,10 +17,12 @@ class VideoVerificationScreen extends ConsumerStatefulWidget {
   const VideoVerificationScreen({super.key, this.feedingEventId});
 
   @override
-  ConsumerState<VideoVerificationScreen> createState() => _VideoVerificationScreenState();
+  ConsumerState<VideoVerificationScreen> createState() =>
+      _VideoVerificationScreenState();
 }
 
-class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScreen> {
+class _VideoVerificationScreenState
+    extends ConsumerState<VideoVerificationScreen> {
   String? _selectedDeviceId;
 
   @override
@@ -29,13 +33,17 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
 
   Future<void> _loadData() async {
     if (widget.feedingEventId != null) {
-      await ref.read(videoVerificationProvider.notifier).loadVerification(widget.feedingEventId!);
+      await ref
+          .read(videoVerificationProvider.notifier)
+          .loadVerification(widget.feedingEventId!);
     } else {
       await ref.read(deviceListProvider.notifier).loadDevices();
       final devices = ref.read(devicesProvider);
       if (devices.isNotEmpty && _selectedDeviceId == null) {
         _selectedDeviceId = devices.first.id;
-        await ref.read(videoVerificationProvider.notifier).loadRecentClips(_selectedDeviceId!);
+        await ref
+            .read(videoVerificationProvider.notifier)
+            .loadRecentClips(_selectedDeviceId!);
       }
     }
   }
@@ -47,7 +55,11 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.feedingEventId != null ? 'Feeding Verification' : 'Video Clips'),
+        title: Text(
+          widget.feedingEventId != null
+              ? 'Feeding Verification'
+              : 'Video Clips',
+        ),
         actions: [
           if (_selectedDeviceId != null)
             IconButton(
@@ -59,9 +71,10 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
       ),
       body: RefreshIndicator(
         onRefresh: _loadData,
-        child: videoState.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : widget.feedingEventId != null
+        child:
+            videoState.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : widget.feedingEventId != null
                 ? _buildVerificationView(videoState.verification)
                 : _buildClipsView(videoState.recentClips, deviceState.devices),
       ),
@@ -76,7 +89,10 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
           children: [
             Icon(Icons.videocam_off, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
-            Text('No verification data available', style: TextStyle(color: Colors.grey[600])),
+            Text(
+              'No verification data available',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
           ],
         ),
       );
@@ -94,13 +110,18 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  Text('Feeding Efficiency', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Feeding Efficiency',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     '${(verification.overallEfficiency * 100).toInt()}%',
                     style: Theme.of(context).textTheme.displayMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: _getEfficiencyColor(verification.overallEfficiency),
+                      color: _getEfficiencyColor(
+                        verification.overallEfficiency,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -116,7 +137,12 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
           const SizedBox(height: 24),
 
           // Analysis phases
-          Text('Analysis Phases', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            'Analysis Phases',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
 
           if (verification.preFeedAnalysis != null)
@@ -124,7 +150,10 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
               title: 'Pre-Feed',
               icon: Icons.play_arrow,
               analysis: verification.preFeedAnalysis!,
-              clip: verification.clips.where((c) => c.type == VideoType.preFeed).firstOrNull,
+              clip:
+                  verification.clips
+                      .where((c) => c.type == VideoType.preFeed)
+                      .firstOrNull,
             ),
 
           if (verification.activeFeedAnalysis != null)
@@ -132,7 +161,10 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
               title: 'Active Feeding',
               icon: Icons.restaurant,
               analysis: verification.activeFeedAnalysis!,
-              clip: verification.clips.where((c) => c.type == VideoType.activeFeed).firstOrNull,
+              clip:
+                  verification.clips
+                      .where((c) => c.type == VideoType.activeFeed)
+                      .firstOrNull,
             ),
 
           if (verification.postFeedAnalysis != null)
@@ -140,14 +172,22 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
               title: 'Post-Feed',
               icon: Icons.stop,
               analysis: verification.postFeedAnalysis!,
-              clip: verification.clips.where((c) => c.type == VideoType.postFeed).firstOrNull,
+              clip:
+                  verification.clips
+                      .where((c) => c.type == VideoType.postFeed)
+                      .firstOrNull,
             ),
 
           const SizedBox(height: 24),
 
           // Video clips
           if (verification.clips.isNotEmpty) ...[
-            Text('Video Clips', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              'Video Clips',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 12),
             SizedBox(
               height: 120,
@@ -155,7 +195,9 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
                 scrollDirection: Axis.horizontal,
                 itemCount: verification.clips.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 12),
-                itemBuilder: (context, index) => _VideoThumbnail(clip: verification.clips[index]),
+                itemBuilder:
+                    (context, index) =>
+                        _VideoThumbnail(clip: verification.clips[index]),
               ),
             ),
           ],
@@ -191,7 +233,10 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
                 children: [
                   Icon(Icons.video_library, size: 64, color: Colors.grey[400]),
                   const SizedBox(height: 16),
-                  Text('No video clips yet', style: TextStyle(color: Colors.grey[600])),
+                  Text(
+                    'No video clips yet',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
                   const SizedBox(height: 8),
                   ElevatedButton.icon(
                     onPressed: _requestCapture,
@@ -234,38 +279,54 @@ class _VideoVerificationScreenState extends ConsumerState<VideoVerificationScree
   void _showDeviceSelector(BuildContext context, List<Device> devices) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => ListView(
-        shrinkWrap: true,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Select Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      builder:
+          (ctx) => ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Device',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+              ...devices.map(
+                (device) => ListTile(
+                  leading: Icon(
+                    Icons.router,
+                    color: device.isOnline ? Colors.green : Colors.grey,
+                  ),
+                  title: Text(device.name),
+                  trailing:
+                      _selectedDeviceId == device.id
+                          ? const Icon(Icons.check, color: Colors.green)
+                          : null,
+                  onTap: () {
+                    setState(() => _selectedDeviceId = device.id);
+                    ref
+                        .read(videoVerificationProvider.notifier)
+                        .loadRecentClips(device.id);
+                    Navigator.pop(ctx);
+                  },
+                ),
+              ),
+            ],
           ),
-          ...devices.map((device) => ListTile(
-            leading: Icon(Icons.router, color: device.isOnline ? Colors.green : Colors.grey),
-            title: Text(device.name),
-            trailing: _selectedDeviceId == device.id 
-                ? const Icon(Icons.check, color: Colors.green)
-                : null,
-            onTap: () {
-              setState(() => _selectedDeviceId = device.id);
-              ref.read(videoVerificationProvider.notifier).loadRecentClips(device.id);
-              Navigator.pop(ctx);
-            },
-          )),
-        ],
-      ),
     );
   }
 
   Future<void> _requestCapture() async {
     if (_selectedDeviceId == null) return;
 
-    final success = await ref.read(videoVerificationProvider.notifier).requestVideoCapture(_selectedDeviceId!);
+    final success = await ref
+        .read(videoVerificationProvider.notifier)
+        .requestVideoCapture(_selectedDeviceId!);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Video capture requested' : 'Failed to request capture'),
+          content: Text(
+            success ? 'Video capture requested' : 'Failed to request capture',
+          ),
           backgroundColor: success ? Colors.green : Colors.red,
         ),
       );
@@ -305,12 +366,22 @@ class _AnalysisCard extends StatelessWidget {
               children: [
                 Icon(icon, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
-                Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: _getConfidenceColor(analysis.confidenceScore).withValues(alpha: 0.2),
+                    color: _getConfidenceColor(
+                      analysis.confidenceScore,
+                    ).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -326,21 +397,48 @@ class _AnalysisCard extends StatelessWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _MetricItem(label: 'Boil Index', value: analysis.activityDescription)),
-                Expanded(child: _MetricItem(label: 'Satiety', value: analysis.satietyDescription)),
-                Expanded(child: _MetricItem(label: 'Pellet Coverage', value: '${(analysis.pelletCoverage * 100).toInt()}%')),
+                Expanded(
+                  child: _MetricItem(
+                    label: 'Boil Index',
+                    value: analysis.activityDescription,
+                  ),
+                ),
+                Expanded(
+                  child: _MetricItem(
+                    label: 'Satiety',
+                    value: analysis.satietyDescription,
+                  ),
+                ),
+                Expanded(
+                  child: _MetricItem(
+                    label: 'Pellet Coverage',
+                    value: '${(analysis.pelletCoverage * 100).toInt()}%',
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _MetricItem(label: 'Strike Rate', value: '${analysis.strikeRate.toStringAsFixed(1)}/s')),
-                Expanded(child: _MetricItem(label: 'Optical Flow', value: analysis.opticalFlowMagnitude.toStringAsFixed(2))),
+                Expanded(
+                  child: _MetricItem(
+                    label: 'Strike Rate',
+                    value: '${analysis.strikeRate.toStringAsFixed(1)}/s',
+                  ),
+                ),
+                Expanded(
+                  child: _MetricItem(
+                    label: 'Optical Flow',
+                    value: analysis.opticalFlowMagnitude.toStringAsFixed(2),
+                  ),
+                ),
                 Expanded(
                   child: _MetricItem(
                     label: 'Status',
-                    value: analysis.feedingComplete ? 'Complete' : 'In Progress',
-                    valueColor: analysis.feedingComplete ? Colors.green : Colors.orange,
+                    value:
+                        analysis.feedingComplete ? 'Complete' : 'In Progress',
+                    valueColor:
+                        analysis.feedingComplete ? Colors.green : Colors.orange,
                   ),
                 ),
               ],
@@ -355,9 +453,18 @@ class _AnalysisCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.lightbulb_outline, size: 16, color: Colors.blue),
+                    const Icon(
+                      Icons.lightbulb_outline,
+                      size: 16,
+                      color: Colors.blue,
+                    ),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(analysis.recommendation, style: const TextStyle(fontSize: 12))),
+                    Expanded(
+                      child: Text(
+                        analysis.recommendation,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -380,7 +487,11 @@ class _MetricItem extends StatelessWidget {
   final String value;
   final Color? valueColor;
 
-  const _MetricItem({required this.label, required this.value, this.valueColor});
+  const _MetricItem({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -388,7 +499,10 @@ class _MetricItem extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: valueColor)),
+        Text(
+          value,
+          style: TextStyle(fontWeight: FontWeight.bold, color: valueColor),
+        ),
       ],
     );
   }
@@ -431,14 +545,21 @@ class _VideoThumbnail extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.7),
+                    ],
                   ),
                 ),
               ),
             ),
             const Positioned.fill(
               child: Center(
-                child: Icon(Icons.play_circle_fill, color: Colors.white, size: 40),
+                child: Icon(
+                  Icons.play_circle_fill,
+                  color: Colors.white,
+                  size: 40,
+                ),
               ),
             ),
             Positioned(
@@ -470,26 +591,30 @@ class _VideoThumbnail extends StatelessWidget {
 
   String _getTypeLabel(VideoType type) {
     switch (type) {
-      case VideoType.preFeed: return 'Pre-Feed';
-      case VideoType.activeFeed: return 'Active Feeding';
-      case VideoType.postFeed: return 'Post-Feed';
+      case VideoType.preFeed:
+        return 'Pre-Feed';
+      case VideoType.activeFeed:
+        return 'Active Feeding';
+      case VideoType.postFeed:
+        return 'Post-Feed';
     }
   }
 
   void _playVideo(BuildContext context) {
     if (clip.videoUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Video not available')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Video not available')));
       return;
     }
-    
+
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (ctx) => _VideoPlayerScreen(
-          videoUrl: clip.videoUrl,
-          title: _getTypeLabel(clip.type),
-        ),
+        builder:
+            (ctx) => _VideoPlayerScreen(
+              videoUrl: clip.videoUrl,
+              title: _getTypeLabel(clip.type),
+            ),
       ),
     );
   }
@@ -524,14 +649,21 @@ class _VideoClipCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.8),
+                    ],
                   ),
                 ),
               ),
             ),
             const Positioned.fill(
               child: Center(
-                child: Icon(Icons.play_circle_fill, color: Colors.white, size: 48),
+                child: Icon(
+                  Icons.play_circle_fill,
+                  color: Colors.white,
+                  size: 48,
+                ),
               ),
             ),
             Positioned(
@@ -543,11 +675,17 @@ class _VideoClipCard extends StatelessWidget {
                 children: [
                   Text(
                     _getTypeLabel(clip.type),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   Text(
                     DateFormat('MMM d, h:mm a').format(clip.capturedAt),
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -584,60 +722,78 @@ class _VideoClipCard extends StatelessWidget {
 
   String _getTypeLabel(VideoType type) {
     switch (type) {
-      case VideoType.preFeed: return 'Pre-Feed';
-      case VideoType.activeFeed: return 'Active Feeding';
-      case VideoType.postFeed: return 'Post-Feed';
+      case VideoType.preFeed:
+        return 'Pre-Feed';
+      case VideoType.activeFeed:
+        return 'Active Feeding';
+      case VideoType.postFeed:
+        return 'Post-Feed';
     }
   }
 
   void _showClipDetails(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_getTypeLabel(clip.type), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 8),
-            Text('Captured: ${DateFormat('MMM d, yyyy h:mm a').format(clip.capturedAt)}'),
-            Text('Duration: ${clip.durationSeconds} seconds'),
-            if (clip.analysis != null) ...[
-              const SizedBox(height: 16),
-              const Text('Analysis', style: TextStyle(fontWeight: FontWeight.bold)),
-              Text('Boil Index: ${clip.analysis!.activityDescription}'),
-              Text('Satiety: ${clip.analysis!.satietyDescription}'),
-              Text('Pellet Coverage: ${(clip.analysis!.pelletCoverage * 100).toInt()}%'),
-            ],
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  if (clip.videoUrl.isNotEmpty) {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => _VideoPlayerScreen(
-                          videoUrl: clip.videoUrl,
-                          title: _getTypeLabel(clip.type),
-                        ),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Video not available')),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Play Video'),
-              ),
+      builder:
+          (ctx) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _getTypeLabel(clip.type),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Captured: ${DateFormat('MMM d, yyyy h:mm a').format(clip.capturedAt)}',
+                ),
+                Text('Duration: ${clip.durationSeconds} seconds'),
+                if (clip.analysis != null) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Analysis',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text('Boil Index: ${clip.analysis!.activityDescription}'),
+                  Text('Satiety: ${clip.analysis!.satietyDescription}'),
+                  Text(
+                    'Pellet Coverage: ${(clip.analysis!.pelletCoverage * 100).toInt()}%',
+                  ),
+                ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      if (clip.videoUrl.isNotEmpty) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder:
+                                (_) => _VideoPlayerScreen(
+                                  videoUrl: clip.videoUrl,
+                                  title: _getTypeLabel(clip.type),
+                                ),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Video not available')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Play Video'),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 }
@@ -667,9 +823,23 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
 
   Future<void> _initializePlayer() async {
     try {
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      final uri = Uri.parse(widget.videoUrl);
+      final headers = <String, String>{};
+
+      if (uri.host == EnvConfig.apiDomain &&
+          uri.path.contains('/api/v1/vision/clips/')) {
+        final token = await StorageService.getAccessToken();
+        if (token != null && token.isNotEmpty) {
+          headers['Authorization'] = 'Bearer $token';
+        }
+      }
+
+      _videoController = VideoPlayerController.networkUrl(
+        uri,
+        httpHeaders: headers,
+      );
       await _videoController.initialize();
-      
+
       _chewieController = ChewieController(
         videoPlayerController: _videoController,
         autoPlay: true,
@@ -701,7 +871,7 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
           );
         },
       );
-      
+
       setState(() => _isLoading = false);
     } catch (e) {
       setState(() {
@@ -728,31 +898,35 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
         title: Text(widget.title),
       ),
       body: Center(
-        child: _isLoading
-            ? const CircularProgressIndicator()
-            : _error != null
+        child:
+            _isLoading
+                ? const CircularProgressIndicator()
+                : _error != null
                 ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error, color: Colors.red, size: 64),
-                      const SizedBox(height: 16),
-                      Text(_error!, style: const TextStyle(color: Colors.white)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _isLoading = true;
-                            _error = null;
-                          });
-                          _initializePlayer();
-                        },
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  )
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error, color: Colors.red, size: 64),
+                    const SizedBox(height: 16),
+                    Text(_error!, style: const TextStyle(color: Colors.white)),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _isLoading = true;
+                          _error = null;
+                        });
+                        _initializePlayer();
+                      },
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                )
                 : _chewieController != null
-                    ? Chewie(controller: _chewieController!)
-                    : const Text('Unable to play video', style: TextStyle(color: Colors.white)),
+                ? Chewie(controller: _chewieController!)
+                : const Text(
+                  'Unable to play video',
+                  style: TextStyle(color: Colors.white),
+                ),
       ),
     );
   }

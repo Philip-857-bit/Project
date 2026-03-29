@@ -37,18 +37,31 @@ class VideoVerificationState {
 class VideoVerificationNotifier extends StateNotifier<VideoVerificationState> {
   final ApiService _apiService;
 
-  VideoVerificationNotifier(this._apiService) : super(const VideoVerificationState());
+  VideoVerificationNotifier(this._apiService)
+    : super(const VideoVerificationState());
 
   Future<void> loadVerification(String feedingEventId) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.dio.get('/feeding-events/$feedingEventId/verification');
+      final response = await _apiService.getVideoVerification(feedingEventId);
       if (response.statusCode == 200) {
-        final verification = FeedingVerification.fromJson(response.data);
+        final body = response.data;
+        final verification =
+            body is Map<String, dynamic>
+                ? FeedingVerification.fromJson(body)
+                : FeedingVerification(
+                  feedingEventId: feedingEventId,
+                  clips: const [],
+                  overallEfficiency: 0,
+                  summary: 'Failed to parse verification response.',
+                );
         state = state.copyWith(verification: verification, isLoading: false);
       } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to load verification');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load verification',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -59,12 +72,15 @@ class VideoVerificationNotifier extends StateNotifier<VideoVerificationState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.dio.get(
-        '/devices/$deviceId/video-clips',
-        queryParameters: {'limit': limit},
-      );
+      final response = await _apiService.getVideoClips(deviceId, limit: limit);
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data['clips'] ?? response.data ?? [];
+        final body = response.data;
+        final List<dynamic> data =
+            body is Map<String, dynamic>
+                ? (body['clips'] ?? body['data'] ?? const [])
+                : body is List<dynamic>
+                ? body
+                : const [];
         final clips = data.map((c) => VideoClip.fromJson(c)).toList();
         state = state.copyWith(recentClips: clips, isLoading: false);
       } else {
@@ -76,10 +92,18 @@ class VideoVerificationNotifier extends StateNotifier<VideoVerificationState> {
   }
 
   Future<bool> requestVideoCapture(String deviceId) async {
+    state = state.copyWith(isLoading: true, error: null);
+
     try {
-      final response = await _apiService.dio.post('/devices/$deviceId/capture-video');
-      return response.statusCode == 200;
+      final response = await _apiService.requestVideoCapture(deviceId);
+      final success = response.statusCode == 200 || response.statusCode == 202;
+      state = state.copyWith(
+        isLoading: false,
+        error: success ? null : 'Failed to request video capture',
+      );
+      return success;
     } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
       return false;
     }
   }
@@ -90,10 +114,13 @@ class VideoVerificationNotifier extends StateNotifier<VideoVerificationState> {
 }
 
 // Providers
-final videoVerificationProvider = StateNotifierProvider<VideoVerificationNotifier, VideoVerificationState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return VideoVerificationNotifier(apiService);
-});
+final videoVerificationProvider =
+    StateNotifierProvider<VideoVerificationNotifier, VideoVerificationState>((
+      ref,
+    ) {
+      final apiService = ref.watch(apiServiceProvider);
+      return VideoVerificationNotifier(apiService);
+    });
 
 // Convenience providers
 final currentVerificationProvider = Provider<FeedingVerification?>((ref) {

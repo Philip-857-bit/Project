@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+String _stringValue(dynamic value) => value?.toString() ?? '';
+
 class SensorData extends Equatable {
   final String deviceId;
   final double waterTemperature;
@@ -36,13 +38,17 @@ class SensorData extends Equatable {
       dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
       ph: json['ph']?.toDouble(),
       turbidity: json['turbidity']?.toDouble(),
-      feedLevel: (json['feed_level'] ?? 0).toDouble(),
+      feedLevel: (json['feed_level'] ?? json['weight_percentage'] ?? 0).toDouble(),
       batteryLevel: (json['battery_level'] ?? 0).toDouble(),
       solarVoltage: (json['solar_voltage'] ?? 0).toDouble(),
-      isSolarCharging: json['is_solar_charging'] ?? false,
-      signalStrength: json['signal_strength'] ?? 0,
-      connectionType: json['connection_type'] ?? 'unknown',
-      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
+      isSolarCharging: json['is_solar_charging'] ?? ((json['power_source'] ?? '') == 'SOLAR'),
+      signalStrength: json['signal_strength'] ?? json['cellular_signal'] ?? 0,
+      connectionType: json['connection_type'] ?? json['power_source'] ?? 'unknown',
+      timestamp: DateTime.parse(
+        json['timestamp'] ??
+            json['created_at'] ??
+            DateTime.now().toIso8601String(),
+      ),
     );
   }
 
@@ -131,15 +137,21 @@ class DeviceAlert extends Equatable {
   });
 
   factory DeviceAlert.fromJson(Map<String, dynamic> json) {
+    final alertType = json['alert_type'] ?? json['type'] ?? '';
+
     return DeviceAlert(
-      id: json['id'] ?? '',
+      id: _stringValue(json['id']),
       deviceId: json['device_id'] ?? '',
-      title: json['title'] ?? '',
+      title: json['title'] ?? _humanizeAlertType(alertType),
       message: json['message'] ?? '',
       severity: _parseSeverity(json['severity']),
-      alertType: json['alert_type'] ?? '',
+      alertType: alertType,
       isRead: json['is_read'] ?? false,
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.parse(
+        json['created_at'] ??
+            json['timestamp'] ??
+            DateTime.now().toIso8601String(),
+      ),
     );
   }
 
@@ -149,6 +161,19 @@ class DeviceAlert extends Equatable {
       case 'warning': return AlertSeverity.warning;
       default: return AlertSeverity.info;
     }
+  }
+
+  static String _humanizeAlertType(String alertType) {
+    if (alertType.isEmpty) {
+      return 'Alert';
+    }
+
+    return alertType
+        .split('_')
+        .map((part) => part.isEmpty
+            ? part
+            : '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+        .join(' ');
   }
 
   @override

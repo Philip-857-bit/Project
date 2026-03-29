@@ -2,8 +2,11 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -19,6 +22,15 @@ type AuthService struct {
 	repo   *repository.Repository
 	redis  *redis.Client
 	config *config.Config
+}
+
+const passwordResetExpiration = 15 * time.Minute
+
+type passwordResetSession struct {
+	Email      string    `json:"email"`
+	Code       string    `json:"code"`
+	Verified   bool      `json:"verified"`
+	RequestedAt time.Time `json:"requested_at"`
 }
 
 // NewAuthService creates a new auth service
@@ -162,6 +174,107 @@ func (s *AuthService) LogoutUser(ctx context.Context, userID uint) error {
 	return s.redis.Delete(ctx, refreshKey)
 }
 
+// RequestPasswordReset creates a password reset code for the given email.
+// It returns an empty code when the email does not exist to avoid user enumeration.
+func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+	if s.repo == nil || s.redis == nil {
+		return "", errors.New("password reset is unavailable")
+	}
+
+	normalizedEmail := normalizeEmail(email)
+	if normalizedEmail == "" {
+		return "", errors.New("email is required")
+	}
+
+	user, err := s.repo.User.GetByEmail(normalizedEmail)
+	if err != nil || user == nil {
+		return "", nil
+	}
+
+	code, err := generateResetCode()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate reset code: %w", err)
+	}
+
+	session := &passwordResetSession{
+		Email:       normalizedEmail,
+		Code:        code,
+		Verified:    false,
+		RequestedAt: time.Now().UTC(),
+	}
+
+	if err := s.redis.Set(ctx, passwordResetKey(normalizedEmail), session, passwordResetExpiration); err != nil {
+		return "", fmt.Errorf("failed to store password reset code: %w", err)
+	}
+
+	return code, nil
+}
+
+// VerifyPasswordResetCode verifies a password reset code and marks the session as verified.
+func (s *AuthService) VerifyPasswordResetCode(ctx context.Context, email, code string) error {
+	session, err := s.getPasswordResetSession(ctx, email)
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(code) == "" || session.Code != strings.TrimSpace(code) {
+		return errors.New("invalid or expired reset code")
+	}
+
+	session.Verified = true
+	if err := s.redis.Set(ctx, passwordResetKey(session.Email), session, passwordResetExpiration); err != nil {
+		return fmt.Errorf("failed to update password reset status: %w", err)
+	}
+
+	return nil
+}
+
+// ResetPassword updates a user's password after a successful password reset verification.
+func (s *AuthService) ResetPassword(ctx context.Context, email, code, newPassword string) error {
+	if strings.TrimSpace(newPassword) == "" {
+		return errors.New("new password is required")
+	}
+
+	session, err := s.getPasswordResetSession(ctx, email)
+	if err != nil {
+		return err
+	}
+
+	if session.Code != strings.TrimSpace(code) {
+		return errors.New("invalid or expired reset code")
+	}
+
+	if !session.Verified {
+		return errors.New("reset code has not been verified")
+	}
+
+	user, err := s.repo.User.GetByEmail(session.Email)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	hashedPassword, err := s.hashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	user.PasswordHash = hashedPassword
+	if err := s.repo.User.Update(user); err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	if err := s.redis.Delete(ctx, passwordResetKey(session.Email)); err != nil {
+		return fmt.Errorf("failed to clear password reset session: %w", err)
+	}
+
+	refreshKey := fmt.Sprintf("refresh_token:%d", user.ID)
+	if err := s.redis.Delete(ctx, refreshKey); err != nil {
+		return fmt.Errorf("failed to invalidate refresh token: %w", err)
+	}
+
+	return nil
+}
+
 // ValidateToken validates and parses a JWT token
 func (s *AuthService) ValidateToken(tokenString string) (*JWTClaims, error) {
 	return s.parseToken(tokenString)
@@ -233,4 +346,40 @@ func (s *AuthService) parseToken(tokenString string) (*JWTClaims, error) {
 	}
 
 	return nil, errors.New("invalid token")
+}
+
+func (s *AuthService) getPasswordResetSession(ctx context.Context, email string) (*passwordResetSession, error) {
+	if s.redis == nil {
+		return nil, errors.New("password reset is unavailable")
+	}
+
+	normalizedEmail := normalizeEmail(email)
+	if normalizedEmail == "" {
+		return nil, errors.New("email is required")
+	}
+
+	var session passwordResetSession
+	if err := s.redis.Get(ctx, passwordResetKey(normalizedEmail), &session); err != nil {
+		return nil, errors.New("invalid or expired reset code")
+	}
+
+	return &session, nil
+}
+
+func passwordResetKey(email string) string {
+	return fmt.Sprintf("password_reset:%s", normalizeEmail(email))
+}
+
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func generateResetCode() (string, error) {
+	max := big.NewInt(1000000)
+	value, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%06d", value.Int64()), nil
 }

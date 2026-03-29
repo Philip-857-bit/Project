@@ -17,7 +17,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   final List<OnboardingPage> _pages = [
     OnboardingPage(
-      icon: Icons.pets,
+      assetPath: 'assets/images/logo.png',
       title: 'SmartAqua Feeding',
       description: 'Automate your fish feeding with intelligent scheduling and Q10-based calculations that adapt to water temperature.',
       color: Colors.blue,
@@ -157,7 +157,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               color: page.color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(page.icon, size: 64, color: page.color),
+            child: page.assetPath != null
+                ? Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Image.asset(
+                      page.assetPath!,
+                      fit: BoxFit.contain,
+                    ),
+                  )
+                : Icon(page.icon!, size: 64, color: page.color),
           ),
           const SizedBox(height: 48),
           Text(
@@ -182,15 +190,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 }
 
 class OnboardingPage {
-  final IconData icon;
+  final IconData? icon;
+  final String? assetPath;
   final String title;
   final String description;
   final Color color;
 
   OnboardingPage({
-    required this.icon,
+    this.icon,
+    this.assetPath,
     required this.title,
     required this.description,
     required this.color,
-  });
+  }) : assert(icon != null || assetPath != null);
 }

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"smart-fish-feeder/internal/models"
+	"smart-fish-feeder/internal/mqtt"
+	"smart-fish-feeder/internal/mqtt/protobuf"
 	"smart-fish-feeder/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -14,8 +16,9 @@ import (
 
 // DeviceHandler handles device-related endpoints
 type DeviceHandler struct {
-	services *services.Services
-	logger   *logrus.Logger
+	services   *services.Services
+	logger     *logrus.Logger
+	mqttClient *mqtt.Client
 }
 
 // NewDeviceHandler creates a new device handler
@@ -24,6 +27,11 @@ func NewDeviceHandler(services *services.Services, logger *logrus.Logger) *Devic
 		services: services,
 		logger:   logger,
 	}
+}
+
+// SetMQTTClient attaches the MQTT client used for remote device commands.
+func (h *DeviceHandler) SetMQTTClient(client *mqtt.Client) {
+	h.mqttClient = client
 }
 
 // Register handles Arduino device registration with BLE provisioning support
@@ -377,6 +385,72 @@ func (h *DeviceHandler) Delete(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Device deleted successfully",
+	})
+}
+
+// CaptureVideo requests a remote capture from a device.
+func (h *DeviceHandler) CaptureVideo(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+		})
+		return
+	}
+
+	deviceID := c.Param("id")
+	if deviceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Device ID is required",
+		})
+		return
+	}
+
+	if _, err := h.services.Device.ValidateDeviceOwnership(deviceID, userID.(uint)); err != nil {
+		h.logger.WithError(err).WithField("device_id", deviceID).Warn("Capture request rejected")
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if h.mqttClient == nil || !h.mqttClient.IsConnected() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Device command channel is unavailable",
+		})
+		return
+	}
+
+	command := protobuf.NewDeviceCommand(deviceID, protobuf.CommandTypeCaptureImage)
+	payload, err := command.Marshal()
+	if err != nil {
+		h.logger.WithError(err).WithField("device_id", deviceID).Error("Failed to marshal capture command")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to build capture command",
+		})
+		return
+	}
+
+	if err := h.mqttClient.Publish(
+		c.Request.Context(),
+		mqtt.NewTopicBuilder(deviceID).Command(),
+		payload,
+		1,
+		false,
+	); err != nil {
+		h.logger.WithError(err).WithField("device_id", deviceID).Error("Failed to publish capture command")
+		c.JSON(http.StatusBadGateway, gin.H{
+			"error": "Failed to dispatch capture command",
+		})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message":      "Capture command dispatched successfully",
+		"device_id":    deviceID,
+		"command_id":   command.CommandID,
+		"command_type": "capture_image",
+		"accepted_at":  time.Now().UTC(),
 	})
 }
 

@@ -10,14 +10,14 @@ import (
 	"smart-fish-feeder/internal/services"
 )
 
-// AuthHandler handles authentication endpoints
+// AuthHandler handles authentication endpoints.
 type AuthHandler struct {
 	services  *services.Services
 	logger    *logrus.Logger
 	validator *validator.Validate
 }
 
-// NewAuthHandler creates a new auth handler
+// NewAuthHandler creates a new auth handler.
 func NewAuthHandler(services *services.Services, logger *logrus.Logger) *AuthHandler {
 	return &AuthHandler{
 		services:  services,
@@ -26,11 +26,10 @@ func NewAuthHandler(services *services.Services, logger *logrus.Logger) *AuthHan
 	}
 }
 
-// Register handles user registration
+// Register handles user registration.
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req models.RegisterRequest
 
-	// Bind JSON request
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.WithError(err).Error("Failed to bind registration request")
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -40,7 +39,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
 		h.logger.WithError(err).Error("Registration request validation failed")
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -50,7 +48,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Register user
 	user, err := h.services.Auth.RegisterUser(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.WithError(err).Error("User registration failed")
@@ -67,11 +64,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-// Login handles user login
+// Login handles user login.
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 
-	// Bind JSON request
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.WithError(err).Error("Failed to bind login request")
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -81,7 +77,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
 		h.logger.WithError(err).Error("Login request validation failed")
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -91,7 +86,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Authenticate user
 	tokens, err := h.services.Auth.LoginUser(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.WithError(err).WithField("email", req.Email).Error("User login failed")
@@ -105,13 +99,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, tokens)
 }
 
-// RefreshToken handles token refresh
+// RefreshToken handles token refresh.
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token" validate:"required"`
 	}
 
-	// Bind JSON request
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.WithError(err).Error("Failed to bind refresh token request")
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -121,7 +114,6 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Validate request
 	if err := h.validator.Struct(&req); err != nil {
 		h.logger.WithError(err).Error("Refresh token request validation failed")
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -131,7 +123,6 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Refresh token
 	tokens, err := h.services.Auth.RefreshToken(c.Request.Context(), req.RefreshToken)
 	if err != nil {
 		h.logger.WithError(err).Error("Token refresh failed")
@@ -145,9 +136,8 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	c.JSON(http.StatusOK, tokens)
 }
 
-// Logout handles user logout
+// Logout handles user logout.
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -156,7 +146,6 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	// Logout user
 	if err := h.services.Auth.LogoutUser(c.Request.Context(), userID.(uint)); err != nil {
 		h.logger.WithError(err).WithField("user_id", userID).Error("User logout failed")
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -168,5 +157,120 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	h.logger.WithField("user_id", userID).Info("User logged out successfully")
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Logged out successfully",
+	})
+}
+
+// RequestPasswordReset starts a password reset flow.
+func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" validate:"required,email"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if err := h.validator.Struct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Validation failed",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	code, err := h.services.Auth.RequestPasswordReset(c.Request.Context(), req.Email)
+	if err != nil {
+		h.logger.WithError(err).WithField("email", req.Email).Error("Password reset request failed")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to start password reset",
+		})
+		return
+	}
+
+	response := gin.H{
+		"message": "If the account exists, a reset code has been generated.",
+	}
+
+	// There is no outbound email service yet, so expose the code to the client flow.
+	if code != "" {
+		response["reset_code"] = code
+		response["delivery"] = "api_response"
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// VerifyPasswordResetCode verifies a password reset code.
+func (h *AuthHandler) VerifyPasswordResetCode(c *gin.Context) {
+	var req struct {
+		Email string `json:"email" validate:"required,email"`
+		Code  string `json:"code" validate:"required,len=6"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if err := h.validator.Struct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Validation failed",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if err := h.services.Auth.VerifyPasswordResetCode(c.Request.Context(), req.Email, req.Code); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Reset code verified successfully",
+	})
+}
+
+// ConfirmPasswordReset confirms a password reset by setting a new password.
+func (h *AuthHandler) ConfirmPasswordReset(c *gin.Context) {
+	var req struct {
+		Email       string `json:"email" validate:"required,email"`
+		Code        string `json:"code" validate:"required,len=6"`
+		NewPassword string `json:"new_password" validate:"required,min=8"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if err := h.validator.Struct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Validation failed",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if err := h.services.Auth.ResetPassword(c.Request.Context(), req.Email, req.Code, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Password reset successfully",
 	})
 }

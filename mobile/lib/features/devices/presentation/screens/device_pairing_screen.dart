@@ -131,7 +131,13 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
         
         // Bind device to user account
         if (_bindingCode != null) {
-          final bindSuccess = await ref.read(deviceListProvider.notifier).bindDevice(_bindingCode!);
+          final bindSuccess = await ref.read(deviceListProvider.notifier).bindDevice(
+            _scannedSerialNumber ?? '',
+            _bindingCode!,
+            _deviceNameController.text.trim().isEmpty
+                ? 'My Fish Feeder'
+                : _deviceNameController.text.trim(),
+          );
           if (bindSuccess) {
             setState(() => _currentStep = 3);
           } else {

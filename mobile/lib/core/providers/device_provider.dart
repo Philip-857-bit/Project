@@ -52,9 +52,19 @@ class DeviceListNotifier extends StateNotifier<DeviceListState> {
     }
   }
 
-  Future<bool> bindDevice(String bindingCode) async {
+  Future<bool> bindDevice(
+    String deviceSerial,
+    String bindingCode,
+    String name, {
+    String? location,
+  }) async {
     try {
-      final response = await _apiService.bindDevice(bindingCode);
+      final response = await _apiService.bindDevice(
+        deviceSerial,
+        bindingCode,
+        name,
+        location: location,
+      );
       if (response.statusCode == 200 || response.statusCode == 201) {
         await loadDevices();
         return true;
@@ -118,7 +128,8 @@ class SelectedDeviceNotifier extends StateNotifier<SelectedDeviceState> {
     try {
       final response = await _apiService.getDevice(deviceId);
       if (response.statusCode == 200) {
-        final device = Device.fromJson(response.data);
+        final deviceJson = response.data['device'] ?? response.data;
+        final device = Device.fromJson(deviceJson);
         state = state.copyWith(device: device, isLoading: false);
       } else {
         state = state.copyWith(isLoading: false, error: 'Failed to load device');

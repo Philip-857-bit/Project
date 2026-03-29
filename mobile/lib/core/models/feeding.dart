@@ -1,5 +1,9 @@
 import 'package:equatable/equatable.dart';
 
+String _stringValue(dynamic value) => value?.toString() ?? '';
+
+double _doubleValue(dynamic value) => (value ?? 0).toDouble();
+
 class FeedingSchedule extends Equatable {
   final String id;
   final String deviceId;
@@ -22,26 +26,41 @@ class FeedingSchedule extends Equatable {
   });
 
   factory FeedingSchedule.fromJson(Map<String, dynamic> json) {
+    final hour = json['hour'];
+    final minute = json['minute'];
+    final time = json['time'] ??
+        (hour != null && minute != null
+            ? '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}'
+            : '08:00');
+
     return FeedingSchedule(
-      id: json['id'] ?? '',
+      id: _stringValue(json['id']),
       deviceId: json['device_id'] ?? '',
-      time: json['time'] ?? '08:00',
-      amount: (json['amount'] ?? 0).toDouble(),
+      time: time,
+      amount: _doubleValue(json['amount'] ?? json['quantity_grams']),
       daysOfWeek: List<int>.from(json['days_of_week'] ?? [0, 1, 2, 3, 4, 5, 6]),
-      isEnabled: json['is_enabled'] ?? true,
+      isEnabled: json['is_enabled'] ?? json['is_active'] ?? true,
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
       updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'device_id': deviceId,
-    'time': time,
-    'amount': amount,
-    'days_of_week': daysOfWeek,
-    'is_enabled': isEnabled,
-  };
+  Map<String, dynamic> toJson() {
+    final parts = time.split(':');
+    final hour = parts.isNotEmpty ? int.tryParse(parts.first) ?? 8 : 8;
+    final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+
+    return {
+      if (id.isNotEmpty) 'id': int.tryParse(id) ?? id,
+      'device_id': deviceId,
+      'name': 'Schedule $time',
+      'hour': hour,
+      'minute': minute,
+      'quantity_grams': amount,
+      'duration_seconds': 0,
+      'is_active': isEnabled,
+    };
+  }
 
   FeedingSchedule copyWith({
     String? id,
@@ -110,14 +129,18 @@ class FeedingEvent extends Equatable {
 
   factory FeedingEvent.fromJson(Map<String, dynamic> json) {
     return FeedingEvent(
-      id: json['id'] ?? '',
+      id: _stringValue(json['id']),
       deviceId: json['device_id'] ?? '',
-      amount: (json['amount'] ?? 0).toDouble(),
-      actualAmount: json['actual_amount']?.toDouble(),
-      status: _parseStatus(json['status']),
-      type: json['type'] ?? 'scheduled',
+      amount: _doubleValue(json['amount'] ?? json['quantity_grams']),
+      actualAmount: (json['actual_amount'] ?? json['quantity_grams'])?.toDouble(),
+      status: _parseStatus(json['status'] ?? 'completed'),
+      type: json['type'] ?? json['trigger_type'] ?? 'scheduled',
       errorMessage: json['error_message'],
-      scheduledAt: DateTime.parse(json['scheduled_at'] ?? DateTime.now().toIso8601String()),
+      scheduledAt: DateTime.parse(
+        json['scheduled_at'] ??
+            json['timestamp'] ??
+            DateTime.now().toIso8601String(),
+      ),
       completedAt: json['completed_at'] != null ? DateTime.parse(json['completed_at']) : null,
       waterTemperature: json['water_temperature']?.toDouble(),
       dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
@@ -156,12 +179,36 @@ class FeedCalculationRequest {
   });
 
   Map<String, dynamic> toJson() => {
-    'species_id': speciesId,
-    'fish_count': fishCount,
-    'average_weight': averageWeight,
-    'water_temperature': waterTemperature,
-    if (dissolvedOxygen != null) 'dissolved_oxygen': dissolvedOxygen,
-    if (ph != null) 'ph': ph,
+    'populations': [
+      {
+        'species_id': speciesId,
+        'count': fishCount,
+        'average_weight': averageWeight,
+      },
+    ],
+    'environmental': {
+      'water_temperature': waterTemperature,
+      'season': 'summer',
+      'weather_condition': 'sunny',
+    },
+    'use_q10_algorithm': true,
+    if (dissolvedOxygen != null || ph != null)
+      'sensor_data': [
+        if (dissolvedOxygen != null)
+          {
+            'type': 'dissolved_oxygen',
+            'value': dissolvedOxygen,
+            'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            'quality': 1.0,
+          },
+        if (ph != null)
+          {
+            'type': 'ph',
+            'value': ph,
+            'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            'quality': 1.0,
+          },
+      ],
   };
 }
 
@@ -185,14 +232,33 @@ class FeedCalculationResult {
   });
 
   factory FeedCalculationResult.fromJson(Map<String, dynamic> json) {
+    final recommendation = json['recommendation'] ?? json;
+    final basicRecommendation = recommendation['basic_recommendation'] ?? const {};
+
     return FeedCalculationResult(
-      recommendedAmount: (json['recommended_amount'] ?? 0).toDouble(),
-      biomass: (json['biomass'] ?? 0).toDouble(),
-      feedingRate: (json['feeding_rate'] ?? 0).toDouble(),
-      q10Factor: (json['q10_factor'] ?? 1).toDouble(),
-      obmSafetyFactor: json['obm_safety_factor']?.toDouble(),
-      recommendation: json['recommendation'] ?? '',
-      suggestedFeedings: json['suggested_feedings'] ?? 3,
+      recommendedAmount: _doubleValue(
+        recommendation['final_daily_amount'] ?? json['recommended_amount'],
+      ),
+      biomass: _doubleValue(
+        basicRecommendation['species_breakdown'] is List &&
+                (basicRecommendation['species_breakdown'] as List).isNotEmpty
+            ? basicRecommendation['species_breakdown'][0]['daily_amount']
+            : json['biomass'],
+      ),
+      feedingRate: _doubleValue(
+        basicRecommendation['adjustments']?['total_adjustment'] ?? json['feeding_rate'],
+      ),
+      q10Factor: _doubleValue(
+        recommendation['q10_recommendation']?['biological_factors']?['q10_factor'] ??
+            json['q10_factor'] ??
+            1,
+      ),
+      obmSafetyFactor: recommendation['q10_recommendation']?['biological_factors']?['obm_safety_factor']
+          ?.toDouble(),
+      recommendation: recommendation['basic_recommendation']?['environmental_note'] ??
+          json['recommendation'] ??
+          '',
+      suggestedFeedings: recommendation['final_feeding_frequency'] ?? json['suggested_feedings'] ?? 3,
     );
   }
 }
@@ -225,12 +291,12 @@ class FishSpecies {
       id: json['id'] ?? '',
       name: json['name'] ?? '',
       q10Coefficient: (json['q10_coefficient'] ?? 2.0).toDouble(),
-      referenceTemperature: (json['reference_temperature'] ?? 25).toDouble(),
+      referenceTemperature: (json['reference_temperature'] ?? json['optimal_temp_min'] ?? 25).toDouble(),
       optimalTempMin: (json['optimal_temp_min'] ?? 24).toDouble(),
       optimalTempMax: (json['optimal_temp_max'] ?? 30).toDouble(),
-      fingerlingFeedRate: (json['fingerling_feed_rate'] ?? 8).toDouble(),
-      juvenileFeedRate: (json['juvenile_feed_rate'] ?? 4).toDouble(),
-      adultFeedRate: (json['adult_feed_rate'] ?? 1.5).toDouble(),
+      fingerlingFeedRate: (json['fingerling_feed_rate'] ?? json['feeding_rate_percentage'] ?? 8).toDouble(),
+      juvenileFeedRate: (json['juvenile_feed_rate'] ?? json['feeding_rate_percentage'] ?? 4).toDouble(),
+      adultFeedRate: (json['adult_feed_rate'] ?? json['feeding_rate_percentage'] ?? 1.5).toDouble(),
     );
   }
 }
