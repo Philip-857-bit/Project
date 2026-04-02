@@ -39,7 +39,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           );
 
       if (success && mounted) {
-        context.go('/dashboard');
+        context.go('/login');
       }
     }
   }
@@ -158,6 +158,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     authState.error!,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                if (authState.statusMessage != null) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    authState.statusMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                     textAlign: TextAlign.center,
                   ),

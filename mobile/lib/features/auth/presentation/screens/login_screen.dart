@@ -314,6 +314,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                 ],
+                if (authState.statusMessage != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    authState.statusMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: authState.isLoading ? null : _login,

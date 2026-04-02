@@ -21,25 +21,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   Future<void> _checkAuth() async {
     await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
 
     // Check if onboarding is complete
     final onboardingComplete = StorageService.isOnboardingComplete();
     if (!onboardingComplete) {
-      if (mounted) {
-        context.go('/onboarding');
-      }
+      context.go('/onboarding');
       return;
     }
 
     await ref.read(authStateProvider.notifier).checkAuthStatus();
+    if (!mounted) return;
 
-    if (mounted) {
-      final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
-      if (isAuthenticated) {
-        context.go('/dashboard');
-      } else {
-        context.go('/login');
-      }
+    final isAuthenticated = ref.read(authStateProvider).isAuthenticated;
+    if (isAuthenticated) {
+      context.go('/dashboard');
+    } else {
+      context.go('/login');
     }
   }
 

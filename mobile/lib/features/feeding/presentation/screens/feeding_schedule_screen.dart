@@ -45,6 +45,11 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
         title: const Text('Feeding Schedules'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.calculate_outlined),
+            tooltip: 'Feed Calculator',
+            onPressed: () => context.go('/calculator'),
+          ),
+          IconButton(
             icon: const Icon(Icons.history),
             onPressed: () => context.go('/feeding/history'),
           ),

@@ -18,6 +18,12 @@ class StorageService {
   static const String _biometricEnabledKey = 'biometric_enabled';
   static const String _themeKey = 'theme_mode';
   static const String _notificationsEnabledKey = 'notifications_enabled';
+  static const String _alertNotificationsEnabledKey =
+      'alert_notifications_enabled';
+  static const String _feedingRemindersEnabledKey =
+      'feeding_reminders_enabled';
+  static const String _temperatureUnitKey = 'temperature_unit';
+  static const String _weightUnitKey = 'weight_unit';
   static const String _onboardingCompleteKey = 'onboarding_complete';
 
   static Future<void> init() async {
@@ -60,12 +66,20 @@ class StorageService {
     return _prefs.getString(_userIdKey);
   }
 
+  static Future<void> clearUserId() async {
+    await _prefs.remove(_userIdKey);
+  }
+
   static Future<void> setDeviceId(String deviceId) async {
     await _prefs.setString(_deviceIdKey, deviceId);
   }
 
   static String? getDeviceId() {
     return _prefs.getString(_deviceIdKey);
+  }
+
+  static Future<void> clearDeviceId() async {
+    await _prefs.remove(_deviceIdKey);
   }
 
   static Future<void> setMqttHost(String host) async {
@@ -106,6 +120,38 @@ class StorageService {
 
   static bool getNotificationsEnabled() {
     return _prefs.getBool(_notificationsEnabledKey) ?? true;
+  }
+
+  static Future<void> setAlertNotificationsEnabled(bool enabled) async {
+    await _prefs.setBool(_alertNotificationsEnabledKey, enabled);
+  }
+
+  static bool getAlertNotificationsEnabled() {
+    return _prefs.getBool(_alertNotificationsEnabledKey) ?? true;
+  }
+
+  static Future<void> setFeedingRemindersEnabled(bool enabled) async {
+    await _prefs.setBool(_feedingRemindersEnabledKey, enabled);
+  }
+
+  static bool getFeedingRemindersEnabled() {
+    return _prefs.getBool(_feedingRemindersEnabledKey) ?? true;
+  }
+
+  static Future<void> setTemperatureUnit(String unit) async {
+    await _prefs.setString(_temperatureUnitKey, unit);
+  }
+
+  static String getTemperatureUnit() {
+    return _prefs.getString(_temperatureUnitKey) ?? 'celsius';
+  }
+
+  static Future<void> setWeightUnit(String unit) async {
+    await _prefs.setString(_weightUnitKey, unit);
+  }
+
+  static String getWeightUnit() {
+    return _prefs.getString(_weightUnitKey) ?? 'grams';
   }
 
   // Onboarding

@@ -20,6 +20,8 @@ class ApiService {
 
   late final Dio _dio;
   final Logger _logger = Logger();
+  String? _accessTokenCache;
+  String? _refreshTokenCache;
 
   ApiService() {
     _dio = Dio(
@@ -109,7 +111,7 @@ class ApiService {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final token = await StorageService.getAccessToken();
+    final token = _accessTokenCache ?? await StorageService.getAccessToken();
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
     }
@@ -148,7 +150,8 @@ class ApiService {
 
   Future<bool> _refreshToken() async {
     try {
-      final refreshToken = await StorageService.getRefreshToken();
+      final refreshToken =
+          _refreshTokenCache ?? await StorageService.getRefreshToken();
       if (refreshToken == null) return false;
 
       final response = await Dio().post(
@@ -160,8 +163,10 @@ class ApiService {
         final newAccessToken = response.data['access_token'];
         final newRefreshToken = response.data['refresh_token'];
 
-        await StorageService.setAccessToken(newAccessToken);
-        await StorageService.setRefreshToken(newRefreshToken);
+        await setAuthTokens(
+          newAccessToken.toString(),
+          newRefreshToken.toString(),
+        );
 
         return true;
       }
@@ -172,7 +177,7 @@ class ApiService {
   }
 
   Future<Response> _retry(RequestOptions requestOptions) async {
-    final token = await StorageService.getAccessToken();
+    final token = _accessTokenCache ?? await StorageService.getAccessToken();
     final options = Options(
       method: requestOptions.method,
       headers: {...requestOptions.headers, 'Authorization': 'Bearer $token'},
@@ -190,6 +195,20 @@ class ApiService {
     Map<String, dynamic> additional = const {},
   ]) {
     return {'device_id': deviceId, ...additional};
+  }
+
+  Future<void> setAuthTokens(String accessToken, String refreshToken) async {
+    _accessTokenCache = accessToken;
+    _refreshTokenCache = refreshToken;
+    await StorageService.setAccessToken(accessToken);
+    await StorageService.setRefreshToken(refreshToken);
+  }
+
+  Future<void> clearAuthTokens() async {
+    _accessTokenCache = null;
+    _refreshTokenCache = null;
+    await StorageService.clearTokens();
+    await StorageService.clearUserId();
   }
 
   Dio get dio => _dio;
@@ -225,6 +244,25 @@ class ApiService {
 
   Future<Response> getProfile() async {
     return _dio.get('/users/profile');
+  }
+
+  Future<Response> updateProfile({
+    required String firstName,
+    required String lastName,
+    String? phoneNumber,
+  }) async {
+    final normalizedPhone = phoneNumber?.trim();
+    return _dio.put(
+      '/users/profile',
+      data: {
+        'first_name': firstName,
+        'last_name': lastName,
+        'phone_number':
+            normalizedPhone == null || normalizedPhone.isEmpty
+                ? null
+                : normalizedPhone,
+      },
+    );
   }
 
   Future<Response> logout() async {

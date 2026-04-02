@@ -20,12 +20,18 @@ import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../providers/auth_provider.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final refreshListenable = ValueNotifier<int>(0);
+  ref.onDispose(refreshListenable.dispose);
+  ref.listen<AuthState>(authStateProvider, (_, __) {
+    refreshListenable.value++;
+  });
 
   return GoRouter(
     initialLocation: '/splash',
     debugLogDiagnostics: true,
+    refreshListenable: refreshListenable,
     redirect: (context, state) {
+      final authState = ref.read(authStateProvider);
       final isLoggedIn = authState.isAuthenticated;
       final isLoggingIn = state.matchedLocation == '/login';
       final isRegistering = state.matchedLocation == '/register';
@@ -193,7 +199,9 @@ class MainShell extends StatelessWidget {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith('/dashboard')) return 0;
     if (location.startsWith('/devices')) return 1;
-    if (location.startsWith('/feeding')) return 2;
+    if (location.startsWith('/feeding') || location.startsWith('/calculator')) {
+      return 2;
+    }
     if (location.startsWith('/monitoring')) return 3;
     if (location.startsWith('/settings')) return 4;
     return 0;
