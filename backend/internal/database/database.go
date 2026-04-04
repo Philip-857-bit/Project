@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"smart-fish-feeder/internal/models"
@@ -12,10 +13,10 @@ import (
 )
 
 // New creates a new database connection
-func New(dsn string) (*gorm.DB, error) {
+func New(dsn string, debug bool, appLogLevel string) (*gorm.DB, error) {
 	// Configure GORM
 	config := &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(resolveGormLogLevel(debug, appLogLevel)),
 		NowFunc: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -75,6 +76,31 @@ func autoMigrate(db *gorm.DB) error {
 		&models.BLEProvisioningSession{},
 		&models.OfflineDataBuffer{},
 	)
+}
+
+func resolveGormLogLevel(debug bool, appLogLevel string) logger.LogLevel {
+	level := strings.ToLower(strings.TrimSpace(appLogLevel))
+
+	switch level {
+	case "trace", "debug":
+		return logger.Info
+	case "warn", "warning":
+		return logger.Warn
+	case "error":
+		return logger.Error
+	case "silent":
+		return logger.Silent
+	case "info":
+		if debug {
+			return logger.Info
+		}
+		return logger.Warn
+	default:
+		if debug {
+			return logger.Info
+		}
+		return logger.Warn
+	}
 }
 
 // HealthCheck checks if the database is accessible

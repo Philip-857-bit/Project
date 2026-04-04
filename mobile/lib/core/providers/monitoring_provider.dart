@@ -43,7 +43,9 @@ class SensorDataNotifier extends StateNotifier<SensorDataState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.getSensorData(deviceId);
+      final response = await _apiService
+          .getSensorData(deviceId)
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         final body = response.data;
         final payload =
@@ -66,7 +68,13 @@ class SensorDataNotifier extends StateNotifier<SensorDataState> {
         );
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: ApiService.describeError(
+          e,
+          fallback: 'Failed to load sensor data.',
+        ),
+      );
     }
   }
 
@@ -114,11 +122,9 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.getSensorHistory(
-        deviceId,
-        sensorType,
-        hours: hours,
-      );
+      final response = await _apiService
+          .getSensorHistory(deviceId, sensorType, hours: hours)
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         final history = SensorHistory.fromJson(response.data);
         state = state.copyWith(
@@ -132,7 +138,13 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
         );
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: ApiService.describeError(
+          e,
+          fallback: 'Failed to load monitoring history.',
+        ),
+      );
     }
   }
 
@@ -150,11 +162,9 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
 
       for (final type in sensorTypes) {
         try {
-          final response = await _apiService.getSensorHistory(
-            deviceId,
-            type,
-            hours: hours,
-          );
+          final response = await _apiService
+              .getSensorHistory(deviceId, type, hours: hours)
+              .timeout(const Duration(seconds: 20));
           if (response.statusCode == 200) {
             histories[type] = SensorHistory.fromJson(response.data);
           }
@@ -165,7 +175,13 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
 
       state = state.copyWith(histories: histories, isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: ApiService.describeError(
+          e,
+          fallback: 'Failed to load monitoring history.',
+        ),
+      );
     }
   }
 }
@@ -209,7 +225,9 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.getAlerts(deviceId);
+      final response = await _apiService
+          .getAlerts(deviceId)
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         final body = response.data;
         final payload =
@@ -232,7 +250,10 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
         );
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: ApiService.describeError(e, fallback: 'Failed to load alerts.'),
+      );
     }
   }
 

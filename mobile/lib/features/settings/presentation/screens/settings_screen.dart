@@ -23,8 +23,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     Future.microtask(
-      () => ref.read(authStateProvider.notifier).loadProfile(showLoading: false),
+      () =>
+          ref.read(authStateProvider.notifier).loadProfile(showLoading: false),
     );
+  }
+
+  Future<void> _applySettingChange(
+    Future<void> Function() action,
+    String successMessage,
+  ) async {
+    await action();
+    if (!mounted) return;
+    _showSnack(successMessage);
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -38,6 +54,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         children: [
           if (auth.isLoading) const LinearProgressIndicator(),
+          if (auth.error != null)
+            _StatusBanner(
+              message: auth.error!,
+              isError: true,
+              actionLabel: 'Reload profile',
+              onAction: () {
+                ref
+                    .read(authStateProvider.notifier)
+                    .loadProfile(showLoading: true);
+              },
+            ),
+          if (auth.statusMessage != null)
+            _StatusBanner(message: auth.statusMessage!, isError: false),
           _Header(auth: auth),
           _Section(
             title: 'Connection',
@@ -109,9 +138,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 subtitle: const Text('Receive alerts and updates'),
                 value: prefs.notificationsEnabled,
                 onChanged:
-                    (v) => ref
-                        .read(appPreferencesProvider.notifier)
-                        .setNotificationsEnabled(v),
+                    (v) => _applySettingChange(
+                      () => ref
+                          .read(appPreferencesProvider.notifier)
+                          .setNotificationsEnabled(v),
+                      'Push notifications updated.',
+                    ),
               ),
               SwitchListTile(
                 secondary: const Icon(Icons.warning),
@@ -122,9 +154,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     prefs.alertNotificationsEnabled,
                 onChanged:
                     prefs.notificationsEnabled
-                        ? (v) => ref
-                            .read(appPreferencesProvider.notifier)
-                            .setAlertNotificationsEnabled(v)
+                        ? (v) => _applySettingChange(
+                          () => ref
+                              .read(appPreferencesProvider.notifier)
+                              .setAlertNotificationsEnabled(v),
+                          'Alert notifications updated.',
+                        )
                         : null,
               ),
               SwitchListTile(
@@ -132,13 +167,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Feeding Reminders'),
                 subtitle: const Text('Notify before scheduled feeds'),
                 value:
-                    prefs.notificationsEnabled &&
-                    prefs.feedingRemindersEnabled,
+                    prefs.notificationsEnabled && prefs.feedingRemindersEnabled,
                 onChanged:
                     prefs.notificationsEnabled
-                        ? (v) => ref
-                            .read(appPreferencesProvider.notifier)
-                            .setFeedingRemindersEnabled(v)
+                        ? (v) => _applySettingChange(
+                          () => ref
+                              .read(appPreferencesProvider.notifier)
+                              .setFeedingRemindersEnabled(v),
+                          'Feeding reminders updated.',
+                        )
                         : null,
               ),
             ],
@@ -224,6 +261,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Export Settings Summary'),
                 subtitle: const Text('Copy a diagnostic summary to clipboard'),
                 onTap: () => _exportSummary(context, auth, prefs, realtime),
+              ),
+            ],
+          ),
+          _Section(
+            title: 'Diagnostics',
+            children: [
+              ListTile(
+                leading: const Icon(Icons.cloud_outlined),
+                title: const Text('Backend URL'),
+                subtitle: Text(EnvConfig.apiBaseUrl),
+              ),
+              ListTile(
+                leading: const Icon(Icons.badge_outlined),
+                title: const Text('Authenticated User'),
+                subtitle: Text(auth.email ?? 'No authenticated user'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.perm_identity_outlined),
+                title: const Text('User ID'),
+                subtitle: Text(auth.userId ?? 'Not loaded'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.bug_report_outlined),
+                title: const Text('Reload Profile'),
+                subtitle: const Text('Force a fresh /users/profile request'),
+                trailing: const Icon(Icons.refresh),
+                onTap: () async {
+                  final ok = await ref
+                      .read(authStateProvider.notifier)
+                      .loadProfile(showLoading: true);
+                  if (!mounted) return;
+                  _showSnack(
+                    ok ? 'Profile reloaded.' : 'Profile reload failed.',
+                  );
+                },
               ),
             ],
           ),
@@ -389,33 +461,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               : () async {
                                 if (first.text.trim().isEmpty ||
                                     last.text.trim().isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'First and last name are required.',
-                                      ),
-                                    ),
-                                  );
+                                  if (mounted) {
+                                    _showSnack(
+                                      'First and last name are required.',
+                                    );
+                                  }
                                   return;
                                 }
                                 setState(() => saving = true);
-                                final ok =
-                                    await ref
-                                        .read(authStateProvider.notifier)
-                                        .updateProfile(
-                                          firstName: first.text.trim(),
-                                          lastName: last.text.trim(),
-                                          phoneNumber: phone.text.trim(),
-                                        );
+                                final ok = await ref
+                                    .read(authStateProvider.notifier)
+                                    .updateProfile(
+                                      firstName: first.text.trim(),
+                                      lastName: last.text.trim(),
+                                      phoneNumber: phone.text.trim(),
+                                    );
                                 if (!ctx.mounted) return;
                                 setState(() => saving = false);
                                 if (ok) {
                                   Navigator.pop(ctx);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Profile updated.'),
-                                    ),
-                                  );
+                                  if (mounted) {
+                                    _showSnack('Profile updated.');
+                                  }
                                 }
                               },
                       child:
@@ -423,7 +490,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                               : const Text('Save'),
                     ),
@@ -447,7 +516,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Security', style: Theme.of(context).textTheme.titleLarge),
+                Text('Security', style: Theme.of(ctx).textTheme.titleLarge),
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   secondary: Icon(
@@ -464,9 +533,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   value: auth.biometricAvailable && auth.biometricEnabled,
                   onChanged:
                       auth.biometricAvailable
-                          ? (v) => ref
-                              .read(authStateProvider.notifier)
-                              .setBiometricEnabled(v)
+                          ? (v) async {
+                            await ref
+                                .read(authStateProvider.notifier)
+                                .setBiometricEnabled(v);
+                            if (!mounted) return;
+                            _showSnack(
+                              v
+                                  ? 'Biometric sign-in enabled.'
+                                  : 'Biometric sign-in disabled.',
+                            );
+                          }
                           : null,
                 ),
                 ListTile(
@@ -485,14 +562,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  void _showPicker<T>(
+  Future<void> _showPicker<T>(
     BuildContext context, {
     required String title,
     required T current,
     required Map<T, String> options,
     required Future<void> Function(T value) onSelected,
-  }) {
-    showModalBottomSheet<void>(
+  }) async {
+    final selected = await showModalBottomSheet<T>(
       context: context,
       showDragHandle: true,
       builder:
@@ -516,16 +593,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       entry.key == current
                           ? const Icon(Icons.check, color: Colors.green)
                           : null,
-                  onTap: () async {
-                    await onSelected(entry.key);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                  },
+                  onTap: () => Navigator.pop(ctx, entry.key),
                 ),
               ),
               const SizedBox(height: 16),
             ],
           ),
     );
+
+    if (selected == null) return;
+    await onSelected(selected);
+    if (!mounted) return;
+    _showSnack('$title updated.');
   }
 
   void _showClearCacheDialog(BuildContext context) {
@@ -549,9 +628,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   PaintingBinding.instance.imageCache.clearLiveImages();
                   if (!ctx.mounted) return;
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('App cache cleared.')),
-                  );
+                  if (mounted) {
+                    _showSnack('App cache cleared.');
+                  }
                 },
                 child: const Text('Clear'),
               ),
@@ -566,23 +645,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AppPreferencesState prefs,
     RealtimeState realtime,
   ) async {
-    final text = StringBuffer()
-      ..writeln('SmartAqua Settings Summary')
-      ..writeln('Account: ${auth.email ?? 'Unknown'}')
-      ..writeln('Name: ${auth.userName ?? 'Unknown'}')
-      ..writeln('Theme: ${_themeLabel(prefs.themeMode)}')
-      ..writeln('Temperature Unit: ${_temperatureLabel(prefs.temperatureUnit)}')
-      ..writeln('Weight Unit: ${_weightLabel(prefs.weightUnit)}')
-      ..writeln('Push Notifications: ${prefs.notificationsEnabled}')
-      ..writeln('Alert Notifications: ${prefs.alertNotificationsEnabled}')
-      ..writeln('Feeding Reminders: ${prefs.feedingRemindersEnabled}')
-      ..writeln('Realtime Connection: ${_status(realtime.connectionState)}')
-      ..writeln('API Base URL: ${EnvConfig.apiBaseUrl}');
+    final text =
+        StringBuffer()
+          ..writeln('SmartAqua Settings Summary')
+          ..writeln('Account: ${auth.email ?? 'Unknown'}')
+          ..writeln('Name: ${auth.userName ?? 'Unknown'}')
+          ..writeln('Theme: ${_themeLabel(prefs.themeMode)}')
+          ..writeln(
+            'Temperature Unit: ${_temperatureLabel(prefs.temperatureUnit)}',
+          )
+          ..writeln('Weight Unit: ${_weightLabel(prefs.weightUnit)}')
+          ..writeln('Push Notifications: ${prefs.notificationsEnabled}')
+          ..writeln('Alert Notifications: ${prefs.alertNotificationsEnabled}')
+          ..writeln('Feeding Reminders: ${prefs.feedingRemindersEnabled}')
+          ..writeln('Realtime Connection: ${_status(realtime.connectionState)}')
+          ..writeln('API Base URL: ${EnvConfig.apiBaseUrl}')
+          ..writeln('Auth Error: ${auth.error ?? 'None'}')
+          ..writeln('Status Message: ${auth.statusMessage ?? 'None'}')
+          ..writeln('Mobile Debug Mode: ${EnvConfig.debugMode}');
     await Clipboard.setData(ClipboardData(text: text.toString()));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings summary copied to clipboard.')),
-    );
+    _showSnack('Settings summary copied to clipboard.');
   }
 
   void _showSupport(
@@ -603,7 +686,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 Text(
                   'Help & Support',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(ctx).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 12),
                 Text('Backend: ${EnvConfig.apiBaseUrl}'),
@@ -611,7 +694,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Text('Realtime: ${_status(realtime.connectionState)}'),
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: () => _exportSummary(context, auth, prefs, realtime),
+                  onPressed:
+                      () => _exportSummary(context, auth, prefs, realtime),
                   icon: const Icon(Icons.copy),
                   label: const Text('Copy Diagnostic Summary'),
                 ),
@@ -687,7 +771,8 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final label = auth.userName ?? auth.email ?? 'SmartAqua User';
-    final parts = label.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts =
+        label.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     final initials =
         parts.isEmpty
             ? 'SA'
@@ -737,6 +822,59 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusBanner extends StatelessWidget {
+  final String message;
+  final bool isError;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _StatusBanner({
+    required this.message,
+    required this.isError,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final background =
+        isError
+            ? theme.colorScheme.errorContainer
+            : theme.colorScheme.primaryContainer;
+    final foreground =
+        isError
+            ? theme.colorScheme.onErrorContainer
+            : theme.colorScheme.onPrimaryContainer;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isError ? Icons.error_outline : Icons.info_outline,
+            color: foreground,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: foreground, fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (actionLabel != null && onAction != null)
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
         ],
       ),
     );

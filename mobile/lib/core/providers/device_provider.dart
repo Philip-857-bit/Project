@@ -39,7 +39,9 @@ class DeviceListNotifier extends StateNotifier<DeviceListState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.getDevices();
+      final response = await _apiService.getDevices().timeout(
+        const Duration(seconds: 20),
+      );
       if (response.statusCode == 200) {
         final List<dynamic> data =
             response.data['devices'] ?? response.data ?? [];
@@ -52,7 +54,10 @@ class DeviceListNotifier extends StateNotifier<DeviceListState> {
         );
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: ApiService.describeError(e, fallback: 'Failed to load devices.'),
+      );
     }
   }
 
@@ -126,7 +131,9 @@ class SelectedDeviceNotifier extends StateNotifier<SelectedDeviceState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.getDevice(deviceId);
+      final response = await _apiService
+          .getDevice(deviceId)
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         final deviceJson = response.data['device'] ?? response.data;
         final device = Device.fromJson(deviceJson);
@@ -138,7 +145,10 @@ class SelectedDeviceNotifier extends StateNotifier<SelectedDeviceState> {
         );
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: ApiService.describeError(e, fallback: 'Failed to load device.'),
+      );
     }
   }
 

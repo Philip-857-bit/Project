@@ -9,6 +9,16 @@ import '../config/env_config.dart';
 import 'storage_service.dart';
 
 class ApiService {
+  static const _redacted = '***';
+  static const _sensitiveKeys = {
+    'password',
+    'new_password',
+    'refresh_token',
+    'access_token',
+    'authorization',
+    'token',
+  };
+
   /// API base URL from environment configuration
   static String get baseUrl => EnvConfig.apiBaseUrl;
 
@@ -115,13 +125,19 @@ class ApiService {
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
     }
-    _logger.d('REQUEST[${options.method}] => PATH: ${options.path}');
+    _logger.d(
+      'REQUEST[${options.method}] => PATH: ${options.path} '
+      'QUERY: ${_stringifyForLog(options.queryParameters)} '
+      'DATA: ${_stringifyForLog(options.data)} '
+      'AUTH: ${token != null && token.isNotEmpty}',
+    );
     handler.next(options);
   }
 
   void _onResponse(Response response, ResponseInterceptorHandler handler) {
     _logger.d(
-      'RESPONSE[${response.statusCode}] => PATH: ${response.requestOptions.path}',
+      'RESPONSE[${response.statusCode}] => PATH: ${response.requestOptions.path} '
+      'DATA: ${_stringifyForLog(response.data)}',
     );
     handler.next(response);
   }
@@ -131,7 +147,10 @@ class ApiService {
     ErrorInterceptorHandler handler,
   ) async {
     _logger.e(
-      'ERROR[${err.response?.statusCode}] => PATH: ${err.requestOptions.path}',
+      'ERROR[${err.response?.statusCode}] => PATH: ${err.requestOptions.path} '
+      'TYPE: ${err.type.name} '
+      'MESSAGE: ${err.message ?? 'Unknown error'} '
+      'DATA: ${_stringifyForLog(err.response?.data)}',
     );
 
     if (err.response?.statusCode == 401) {
@@ -146,6 +165,80 @@ class ApiService {
     }
 
     handler.next(err);
+  }
+
+  static String describeError(Object error, {String? fallback}) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic>) {
+        final message = data['error'] ?? data['message'] ?? data['details'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+
+      switch (error.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          return 'Request timed out while contacting ${error.requestOptions.path}.';
+        case DioExceptionType.connectionError:
+          return 'Could not reach the backend. Check the API URL and network.';
+        case DioExceptionType.badCertificate:
+          return 'TLS certificate validation failed for the backend.';
+        case DioExceptionType.cancel:
+          return 'Request was cancelled.';
+        case DioExceptionType.badResponse:
+          final status = error.response?.statusCode;
+          if (status == 401) {
+            return 'Unauthorized (401). Sign in again and retry.';
+          }
+          if (status != null) {
+            return 'Request failed with status $status on ${error.requestOptions.path}.';
+          }
+          break;
+        case DioExceptionType.unknown:
+          break;
+      }
+
+      if (error.message != null && error.message!.trim().isNotEmpty) {
+        return error.message!.trim();
+      }
+    }
+
+    final message = error.toString().trim();
+    if (message.isNotEmpty && message != 'Exception') {
+      return message;
+    }
+
+    return fallback ?? 'An unexpected error occurred.';
+  }
+
+  String _stringifyForLog(dynamic value) {
+    final sanitized = _sanitizeForLog(value);
+    final text = sanitized == null ? 'null' : sanitized.toString();
+    if (text.length <= 400) {
+      return text;
+    }
+    return '${text.substring(0, 400)}...';
+  }
+
+  dynamic _sanitizeForLog(dynamic value) {
+    if (value is Map) {
+      return value.map((key, dynamic nestedValue) {
+        final normalizedKey = key.toString().toLowerCase();
+        if (_sensitiveKeys.contains(normalizedKey)) {
+          return MapEntry(key, _redacted);
+        }
+        return MapEntry(key, _sanitizeForLog(nestedValue));
+      });
+    }
+
+    if (value is List) {
+      return value.map(_sanitizeForLog).toList();
+    }
+
+    return value;
   }
 
   Future<bool> _refreshToken() async {

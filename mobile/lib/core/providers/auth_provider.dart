@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equatable/equatable.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:dio/dio.dart';
 
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
@@ -61,8 +60,7 @@ class AuthState extends Equatable {
           identical(userName, _authFieldUnset)
               ? this.userName
               : userName as String?,
-      email:
-          identical(email, _authFieldUnset) ? this.email : email as String?,
+      email: identical(email, _authFieldUnset) ? this.email : email as String?,
       firstName:
           identical(firstName, _authFieldUnset)
               ? this.firstName
@@ -75,8 +73,7 @@ class AuthState extends Equatable {
           identical(phoneNumber, _authFieldUnset)
               ? this.phoneNumber
               : phoneNumber as String?,
-      error:
-          identical(error, _authFieldUnset) ? this.error : error as String?,
+      error: identical(error, _authFieldUnset) ? this.error : error as String?,
       statusMessage:
           identical(statusMessage, _authFieldUnset)
               ? this.statusMessage
@@ -333,8 +330,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         const Duration(seconds: 10),
       );
       final data = profileResponse.data;
-      final user =
-          data is Map<String, dynamic> ? (data['user'] ?? data) : null;
+      final user = data is Map<String, dynamic> ? (data['user'] ?? data) : null;
 
       if (user is! Map<String, dynamic>) {
         state = state.copyWith(
@@ -382,8 +378,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
 
       final data = response.data;
-      final user =
-          data is Map<String, dynamic> ? (data['user'] ?? data) : null;
+      final user = data is Map<String, dynamic> ? (data['user'] ?? data) : null;
 
       if (user is Map<String, dynamic>) {
         await _applyProfile(user);
@@ -504,25 +499,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   String _extractErrorMessage(Object error, {required String fallback}) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic>) {
-        final message = data['error'] ?? data['message'] ?? data['details'];
-        if (message is String && message.isNotEmpty) {
-          return message;
-        }
-      }
-      if (error.message != null && error.message!.isNotEmpty) {
-        return error.message!;
-      }
-    }
-
-    final message = error.toString();
-    if (message.isNotEmpty && message != 'Exception') {
-      return message;
-    }
-
-    return fallback;
+    return ApiService.describeError(error, fallback: fallback);
   }
 
   Future<void> _applyProfile(Map<String, dynamic> user) async {

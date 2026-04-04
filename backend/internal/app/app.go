@@ -41,7 +41,11 @@ func New(cfg *config.Config) *App {
 // Run starts the application
 func (a *App) Run() error {
 	// Initialize database
-	db, err := database.New(a.config.Database.GetDSN())
+	db, err := database.New(
+		a.config.Database.GetDSN(),
+		a.config.Server.Debug,
+		a.config.Logging.Level,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
@@ -213,9 +217,13 @@ func (a *App) setupMQTTHandlers() {
 
 // setupRouter configures the Gin router with all routes and middleware
 func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
-	// Set Gin mode based on debug setting
-	if !a.config.Server.Debug {
+	// Allow explicit GIN_MODE override, otherwise derive from server debug flag.
+	if mode := os.Getenv("GIN_MODE"); mode != "" {
+		gin.SetMode(mode)
+	} else if !a.config.Server.Debug {
 		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
 	}
 
 	router := gin.New()

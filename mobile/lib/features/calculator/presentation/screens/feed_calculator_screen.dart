@@ -28,6 +28,8 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
 
   Future<void> _loadData() async {
     await ref.read(speciesListProvider.notifier).loadSpecies();
+    if (!mounted) return;
+
     final species = ref.read(speciesProvider);
     if (species.isNotEmpty && _selectedSpeciesId == null) {
       setState(() => _selectedSpeciesId = species.first.id);
@@ -84,6 +86,41 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                     const SizedBox(height: 8),
                     speciesState.isLoading
                         ? const Center(child: CircularProgressIndicator())
+                        : speciesState.error != null
+                        ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              speciesState.error!,
+                              style: TextStyle(color: Colors.red.shade700),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.tonalIcon(
+                              onPressed: () {
+                                _loadData();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry species load'),
+                            ),
+                          ],
+                        )
+                        : speciesState.species.isEmpty
+                        ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'No fish species are available from the backend yet.',
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.tonalIcon(
+                              onPressed: () {
+                                _loadData();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Reload species'),
+                            ),
+                          ],
+                        )
                         : DropdownButtonFormField<String>(
                           value: _selectedSpeciesId,
                           items:

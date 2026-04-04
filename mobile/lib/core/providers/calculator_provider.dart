@@ -39,7 +39,9 @@ class SpeciesListNotifier extends StateNotifier<SpeciesListState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.getSpecies();
+      final response = await _apiService.getSpecies().timeout(
+        const Duration(seconds: 20),
+      );
       if (response.statusCode == 200) {
         final List<dynamic> data =
             response.data['species'] ?? response.data ?? [];
@@ -52,7 +54,10 @@ class SpeciesListNotifier extends StateNotifier<SpeciesListState> {
         );
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: ApiService.describeError(e, fallback: 'Failed to load species.'),
+      );
     }
   }
 }
@@ -98,7 +103,9 @@ class CalculatorNotifier extends StateNotifier<CalculatorState> {
     state = state.copyWith(isCalculating: true, error: null);
 
     try {
-      final response = await _apiService.calculateFeed(request.toJson());
+      final response = await _apiService
+          .calculateFeed(request.toJson())
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         final result = FeedCalculationResult.fromJson(response.data);
         state = state.copyWith(
@@ -115,7 +122,10 @@ class CalculatorNotifier extends StateNotifier<CalculatorState> {
         return null;
       }
     } catch (e) {
-      state = state.copyWith(isCalculating: false, error: e.toString());
+      state = state.copyWith(
+        isCalculating: false,
+        error: ApiService.describeError(e, fallback: 'Calculation failed.'),
+      );
       return null;
     }
   }

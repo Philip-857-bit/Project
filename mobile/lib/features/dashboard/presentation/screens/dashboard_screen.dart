@@ -41,6 +41,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final feedingState = ref.watch(feedingHistoryProvider);
     final alertsState = ref.watch(alertsProvider);
     final todayFeedings = ref.watch(todayFeedingsProvider);
+    final issues = [
+      if (deviceState.error != null) 'Devices: ${deviceState.error}',
+      if (feedingState.error != null) 'Feeding: ${feedingState.error}',
+      if (alertsState.error != null) 'Alerts: ${alertsState.error}',
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -83,6 +88,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (issues.isNotEmpty) ...[
+                        _LoadIssueCard(
+                          title: 'Some dashboard data failed to load',
+                          issues: issues,
+                          onRetry: _loadData,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       Text(
                         'Overview',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -313,6 +326,59 @@ class _ActivityData {
     required this.timestamp,
     this.isAlert = false,
   });
+}
+
+class _LoadIssueCard extends StatelessWidget {
+  final String title;
+  final List<String> issues;
+  final Future<void> Function() onRetry;
+
+  const _LoadIssueCard({
+    required this.title,
+    required this.issues,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.errorContainer.withValues(alpha: 0.5),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...issues.map(
+              (issue) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  issue,
+                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: () {
+                onRetry();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _StatCard extends StatelessWidget {

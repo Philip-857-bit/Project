@@ -40,7 +40,9 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _apiService.getSchedules(deviceId);
+      final response = await _apiService
+          .getSchedules(deviceId)
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         final List<dynamic> data =
             response.data['schedules'] ?? response.data ?? [];
@@ -54,7 +56,13 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
         );
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: ApiService.describeError(
+          e,
+          fallback: 'Failed to load feeding schedules.',
+        ),
+      );
     }
   }
 
@@ -156,11 +164,9 @@ class FeedingHistoryNotifier extends StateNotifier<FeedingHistoryState> {
 
     try {
       final offset = refresh ? 0 : state.events.length;
-      final response = await _apiService.getFeedingHistory(
-        deviceId,
-        limit: 20,
-        offset: offset,
-      );
+      final response = await _apiService
+          .getFeedingHistory(deviceId, limit: 20, offset: offset)
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         final List<dynamic> data =
@@ -179,7 +185,13 @@ class FeedingHistoryNotifier extends StateNotifier<FeedingHistoryState> {
         );
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: ApiService.describeError(
+          e,
+          fallback: 'Failed to load feeding history.',
+        ),
+      );
     }
   }
 }
@@ -219,7 +231,9 @@ class ManualFeedNotifier extends StateNotifier<ManualFeedState> {
     state = state.copyWith(isFeeding: true, error: null, successMessage: null);
 
     try {
-      final response = await _apiService.triggerManualFeed(deviceId, amount);
+      final response = await _apiService
+          .triggerManualFeed(deviceId, amount)
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
         state = state.copyWith(
           isFeeding: false,
@@ -234,7 +248,10 @@ class ManualFeedNotifier extends StateNotifier<ManualFeedState> {
         return false;
       }
     } catch (e) {
-      state = state.copyWith(isFeeding: false, error: e.toString());
+      state = state.copyWith(
+        isFeeding: false,
+        error: ApiService.describeError(e, fallback: 'Failed to trigger feed.'),
+      );
       return false;
     }
   }
