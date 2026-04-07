@@ -19,9 +19,10 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
+  @override
   void initState() {
     super.initState();
-    _loadData();
+    Future.microtask(_loadData);
   }
 
   Future<void> _loadData() async {

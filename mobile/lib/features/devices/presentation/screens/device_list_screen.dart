@@ -11,6 +11,7 @@ import '../../../../core/services/api_service.dart';
 class DeviceListScreen extends ConsumerStatefulWidget {
   const DeviceListScreen({super.key});
 
+
   @override
   ConsumerState<DeviceListScreen> createState() => _DeviceListScreenState();
 }
@@ -19,7 +20,7 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
   @override
   void initState() {
     super.initState();
-    ref.read(deviceListProvider.notifier).loadDevices();
+    Future.microtask(() => ref.read(deviceListProvider.notifier).loadDevices());
   }
 
   @override

@@ -22,7 +22,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    Future.microtask(_loadData);
   }
 
   Future<void> _loadData() async {

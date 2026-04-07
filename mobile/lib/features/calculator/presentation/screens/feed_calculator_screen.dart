@@ -25,7 +25,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    Future.microtask(_loadData);
   }
 
   Future<void> _loadData() async {

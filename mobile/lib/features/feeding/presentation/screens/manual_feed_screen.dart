@@ -19,7 +19,7 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDevices();
+    Future.microtask(_loadDevices);
   }
 
   Future<void> _loadDevices() async {

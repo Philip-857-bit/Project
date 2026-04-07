@@ -21,7 +21,7 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    Future.microtask(_loadData);
   }
 
   Future<void> _loadData() async {
