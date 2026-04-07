@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 
@@ -59,9 +62,16 @@ class SpeciesListNotifier extends StateNotifier<SpeciesListState> {
     _logger.i('Species load start @ ${startedAt.toIso8601String()}');
 
     try {
-      final response = await _apiService.getSpecies().timeout(
-        const Duration(seconds: 20),
-      );
+      final cancelToken = CancelToken();
+      final response = await _apiService
+          .getSpecies(cancelToken: cancelToken)
+          .timeout(
+            const Duration(seconds: 20),
+            onTimeout: () {
+              cancelToken.cancel('timeout');
+              throw TimeoutException('Species request timed out');
+            },
+          );
       final status = response.statusCode ?? 0;
       if (status == 200) {
         final List<dynamic> data =

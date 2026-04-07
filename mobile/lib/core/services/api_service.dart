@@ -9,6 +9,8 @@ import '../config/env_config.dart';
 import 'storage_service.dart';
 
 class ApiService {
+  static final ValueNotifier<ApiDebugInfo> debugNotifier =
+      ValueNotifier(ApiDebugInfo.initial());
   static const _redacted = '***';
   static const _sensitiveKeys = {
     'password',
@@ -125,6 +127,16 @@ class ApiService {
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
     }
+    debugNotifier.value = debugNotifier.value.copyWith(
+      inFlight: true,
+      method: options.method,
+      path: options.path,
+      startedAt: DateTime.now(),
+      statusCode: null,
+      errorType: null,
+      errorMessage: null,
+      finishedAt: null,
+    );
     _logger.d(
       'REQUEST[${options.method}] => PATH: ${options.path} '
       'QUERY: ${_stringifyForLog(options.queryParameters)} '
@@ -136,6 +148,11 @@ class ApiService {
   }
 
   void _onResponse(Response response, ResponseInterceptorHandler handler) {
+    debugNotifier.value = debugNotifier.value.copyWith(
+      inFlight: false,
+      statusCode: response.statusCode,
+      finishedAt: DateTime.now(),
+    );
     _logger.d(
       'RESPONSE[${response.statusCode}] => PATH: ${response.requestOptions.path} '
       'DATA: ${_stringifyForLog(response.data)}',
@@ -147,6 +164,13 @@ class ApiService {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
+    debugNotifier.value = debugNotifier.value.copyWith(
+      inFlight: false,
+      statusCode: err.response?.statusCode,
+      errorType: err.type.name,
+      errorMessage: err.message ?? 'Unknown error',
+      finishedAt: DateTime.now(),
+    );
     _logger.e(
       'ERROR[${err.response?.statusCode}] => PATH: ${err.requestOptions.path} '
       'TYPE: ${err.type.name} '
@@ -368,8 +392,8 @@ class ApiService {
   }
 
   // Device endpoints
-  Future<Response> getDevices() async {
-    return _dio.get('/devices');
+  Future<Response> getDevices({CancelToken? cancelToken}) async {
+    return _dio.get('/devices', cancelToken: cancelToken);
   }
 
   Future<Response> getDevice(String deviceId) async {
@@ -485,8 +509,8 @@ class ApiService {
     return _dio.post('/calculator/recommend', data: params);
   }
 
-  Future<Response> getSpecies() async {
-    return _dio.get('/calculator/species');
+  Future<Response> getSpecies({CancelToken? cancelToken}) async {
+    return _dio.get('/calculator/species', cancelToken: cancelToken);
   }
 
   // Password reset endpoints
@@ -559,6 +583,52 @@ class ApiService {
         'target_weight': targetWeight,
         'prediction_days': predictionDays,
       },
+    );
+  }
+}
+
+class ApiDebugInfo {
+  final bool inFlight;
+  final String? method;
+  final String? path;
+  final int? statusCode;
+  final String? errorType;
+  final String? errorMessage;
+  final DateTime? startedAt;
+  final DateTime? finishedAt;
+
+  const ApiDebugInfo({
+    required this.inFlight,
+    this.method,
+    this.path,
+    this.statusCode,
+    this.errorType,
+    this.errorMessage,
+    this.startedAt,
+    this.finishedAt,
+  });
+
+  factory ApiDebugInfo.initial() => const ApiDebugInfo(inFlight: false);
+
+  ApiDebugInfo copyWith({
+    bool? inFlight,
+    String? method,
+    String? path,
+    int? statusCode,
+    String? errorType,
+    String? errorMessage,
+    DateTime? startedAt,
+    DateTime? finishedAt,
+  }) {
+    return ApiDebugInfo(
+      inFlight: inFlight ?? this.inFlight,
+      method: method ?? this.method,
+      path: path ?? this.path,
+      statusCode: statusCode ?? this.statusCode,
+      errorType: errorType ?? this.errorType,
+      errorMessage: errorMessage ?? this.errorMessage,
+      startedAt: startedAt ?? this.startedAt,
+      finishedAt: finishedAt ?? this.finishedAt,
     );
   }
 }

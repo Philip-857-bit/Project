@@ -5,6 +5,7 @@ import '../../../../core/config/env_config.dart';
 import '../../../../core/models/feeding.dart';
 import '../../../../core/providers/calculator_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
+import '../../../../core/services/api_service.dart';
 
 class FeedCalculatorScreen extends ConsumerStatefulWidget {
   const FeedCalculatorScreen({super.key});
@@ -75,18 +76,28 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (showDebug) ...[
-              _DebugPanel(
-                lines: [
-                  'API: ${EnvConfig.apiBaseUrl}',
-                  'Species loading: ${speciesState.isLoading}',
-                  'Species count: ${speciesState.species.length}',
-                  'Species error: ${speciesState.error ?? '-'}',
-                  'Species last request: ${_formatDebugTime(speciesState.lastRequestAt)}',
-                  'Species last success: ${_formatDebugTime(speciesState.lastSuccessAt)}',
-                  'Species status: ${speciesState.lastStatusCode?.toString() ?? '-'}',
-                ],
+              ValueListenableBuilder<ApiDebugInfo>(
+                valueListenable: ApiService.debugNotifier,
+                builder: (context, info, _) {
+                  return Column(
+                    children: [
+                      _DebugPanel(
+                        lines: [
+                          'API: ${EnvConfig.apiBaseUrl}',
+                          'Species loading: ${speciesState.isLoading}',
+                          'Species count: ${speciesState.species.length}',
+                          'Species error: ${speciesState.error ?? '-'}',
+                          'Species last request: ${_formatDebugTime(speciesState.lastRequestAt)}',
+                          'Species last success: ${_formatDebugTime(speciesState.lastSuccessAt)}',
+                          'Species status: ${speciesState.lastStatusCode?.toString() ?? '-'}',
+                          'Last API: ${_formatApiLine(info)}',
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  );
+                },
               ),
-              const SizedBox(height: 16),
             ],
             // Species selector
             Card(
@@ -347,6 +358,22 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     return '${time.hour.toString().padLeft(2, '0')}:'
         '${time.minute.toString().padLeft(2, '0')}:'
         '${time.second.toString().padLeft(2, '0')}';
+  }
+
+  String _formatApiLine(ApiDebugInfo info) {
+    final method = info.method ?? '-';
+    final path = info.path ?? '-';
+    final status = info.statusCode?.toString() ?? '-';
+    final error = info.errorType ?? '-';
+    final duration = _formatDebugDuration(info.startedAt, info.finishedAt);
+    return '$method $path status=$status error=$error duration=$duration';
+  }
+
+  String _formatDebugDuration(DateTime? startedAt, DateTime? finishedAt) {
+    if (startedAt == null) return '-';
+    final end = finishedAt ?? DateTime.now();
+    final ms = end.difference(startedAt).inMilliseconds;
+    return '${(ms / 1000).toStringAsFixed(1)}s';
   }
 
   Widget _buildInfoChip(String label, String value) {

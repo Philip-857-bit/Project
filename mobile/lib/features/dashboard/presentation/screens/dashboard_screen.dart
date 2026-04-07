@@ -8,6 +8,7 @@ import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/feeding_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
 import '../../../../core/providers/auth_provider.dart';
+import '../../../../core/services/api_service.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -92,18 +93,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       const CircularProgressIndicator(),
                       if (showDebug) ...[
                         const SizedBox(height: 16),
-                        _DebugPanel(
-                          title: 'Dashboard debug',
-                          lines: [
-                            'API: ${EnvConfig.apiBaseUrl}',
-                            'Auth: ${authState.isAuthenticated} (userId=${authState.userId ?? '-'})',
-                            'Devices loading: ${deviceState.isLoading}',
-                            'Devices count: ${deviceState.devices.length}',
-                            'Devices error: ${deviceState.error ?? '-'}',
-                            'Devices last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
-                            'Devices last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
-                            'Devices status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
-                          ],
+                        ValueListenableBuilder<ApiDebugInfo>(
+                          valueListenable: ApiService.debugNotifier,
+                          builder: (context, info, _) {
+                            return _DebugPanel(
+                              title: 'Dashboard debug',
+                              lines: [
+                                'API: ${EnvConfig.apiBaseUrl}',
+                                'Auth: ${authState.isAuthenticated} (userId=${authState.userId ?? '-'})',
+                                'Devices loading: ${deviceState.isLoading}',
+                                'Devices count: ${deviceState.devices.length}',
+                                'Devices error: ${deviceState.error ?? '-'}',
+                                'Devices last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
+                                'Devices last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
+                                'Devices status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
+                                'Last API: ${_formatApiLine(info)}',
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ],
@@ -116,26 +123,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (showDebug) ...[
-                        _DebugPanel(
-                          title: 'Dashboard debug',
-                          lines: [
-                            'API: ${EnvConfig.apiBaseUrl}',
-                            'Auth: ${authState.isAuthenticated} (userId=${authState.userId ?? '-'})',
-                            'Devices loading: ${deviceState.isLoading}',
-                            'Devices count: ${deviceState.devices.length}',
-                            'Devices error: ${deviceState.error ?? '-'}',
-                            'Devices last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
-                            'Devices last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
-                            'Devices status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
-                            'Feed history loading: ${feedingState.isLoading}',
-                            'Feed history count: ${feedingState.events.length}',
-                            'Feed history error: ${feedingState.error ?? '-'}',
-                            'Alerts loading: ${alertsState.isLoading}',
-                            'Alerts count: ${alertsState.alerts.length}',
-                            'Alerts error: ${alertsState.error ?? '-'}',
-                          ],
+                        ValueListenableBuilder<ApiDebugInfo>(
+                          valueListenable: ApiService.debugNotifier,
+                          builder: (context, info, _) {
+                            return Column(
+                              children: [
+                                _DebugPanel(
+                                  title: 'Dashboard debug',
+                                  lines: [
+                                    'API: ${EnvConfig.apiBaseUrl}',
+                                    'Auth: ${authState.isAuthenticated} (userId=${authState.userId ?? '-'})',
+                                    'Devices loading: ${deviceState.isLoading}',
+                                    'Devices count: ${deviceState.devices.length}',
+                                    'Devices error: ${deviceState.error ?? '-'}',
+                                    'Devices last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
+                                    'Devices last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
+                                    'Devices status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
+                                    'Feed history loading: ${feedingState.isLoading}',
+                                    'Feed history count: ${feedingState.events.length}',
+                                    'Feed history error: ${feedingState.error ?? '-'}',
+                                    'Alerts loading: ${alertsState.isLoading}',
+                                    'Alerts count: ${alertsState.alerts.length}',
+                                    'Alerts error: ${alertsState.error ?? '-'}',
+                                    'Last API: ${_formatApiLine(info)}',
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            );
+                          },
                         ),
-                        const SizedBox(height: 16),
                       ],
                       if (issues.isNotEmpty) ...[
                         _LoadIssueCard(
@@ -287,6 +304,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return '${time.hour.toString().padLeft(2, '0')}:'
         '${time.minute.toString().padLeft(2, '0')}:'
         '${time.second.toString().padLeft(2, '0')}';
+  }
+
+  String _formatApiLine(ApiDebugInfo info) {
+    final method = info.method ?? '-';
+    final path = info.path ?? '-';
+    final status = info.statusCode?.toString() ?? '-';
+    final error = info.errorType ?? '-';
+    final duration = _formatDebugDuration(info.startedAt, info.finishedAt);
+    return '$method $path status=$status error=$error duration=$duration';
+  }
+
+  String _formatDebugDuration(DateTime? startedAt, DateTime? finishedAt) {
+    if (startedAt == null) return '-';
+    final end = finishedAt ?? DateTime.now();
+    final ms = end.difference(startedAt).inMilliseconds;
+    return '${(ms / 1000).toStringAsFixed(1)}s';
   }
 
   List<Widget> _buildActivityItems(

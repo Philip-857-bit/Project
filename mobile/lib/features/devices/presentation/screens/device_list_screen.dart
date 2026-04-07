@@ -6,6 +6,7 @@ import '../../../../core/config/env_config.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/models/device.dart';
+import '../../../../core/services/api_service.dart';
 
 class DeviceListScreen extends ConsumerStatefulWidget {
   const DeviceListScreen({super.key});
@@ -47,16 +48,22 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
                       const CircularProgressIndicator(),
                       if (showDebug) ...[
                         const SizedBox(height: 16),
-                        _DebugPanel(
-                          lines: [
-                            'API: ${EnvConfig.apiBaseUrl}',
-                            'Loading: ${deviceState.isLoading}',
-                            'Count: ${deviceState.devices.length}',
-                            'Error: ${deviceState.error ?? '-'}',
-                            'Last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
-                            'Last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
-                            'Status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
-                          ],
+                        ValueListenableBuilder<ApiDebugInfo>(
+                          valueListenable: ApiService.debugNotifier,
+                          builder: (context, info, _) {
+                            return _DebugPanel(
+                              lines: [
+                                'API: ${EnvConfig.apiBaseUrl}',
+                                'Loading: ${deviceState.isLoading}',
+                                'Count: ${deviceState.devices.length}',
+                                'Error: ${deviceState.error ?? '-'}',
+                                'Last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
+                                'Last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
+                                'Status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
+                                'Last API: ${_formatApiLine(info)}',
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ],
@@ -88,16 +95,22 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
                         ),
                         if (showDebug) ...[
                           const SizedBox(height: 16),
-                          _DebugPanel(
-                            lines: [
-                              'API: ${EnvConfig.apiBaseUrl}',
-                              'Loading: ${deviceState.isLoading}',
-                              'Count: ${deviceState.devices.length}',
-                              'Error: ${deviceState.error ?? '-'}',
-                              'Last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
-                              'Last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
-                              'Status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
-                            ],
+                          ValueListenableBuilder<ApiDebugInfo>(
+                            valueListenable: ApiService.debugNotifier,
+                            builder: (context, info, _) {
+                              return _DebugPanel(
+                                lines: [
+                                  'API: ${EnvConfig.apiBaseUrl}',
+                                  'Loading: ${deviceState.isLoading}',
+                                  'Count: ${deviceState.devices.length}',
+                                  'Error: ${deviceState.error ?? '-'}',
+                                  'Last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
+                                  'Last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
+                                  'Status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
+                                  'Last API: ${_formatApiLine(info)}',
+                                ],
+                              );
+                            },
                           ),
                         ],
                     ],
@@ -131,6 +144,22 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
     return '${time.hour.toString().padLeft(2, '0')}:'
         '${time.minute.toString().padLeft(2, '0')}:'
         '${time.second.toString().padLeft(2, '0')}';
+  }
+
+  String _formatApiLine(ApiDebugInfo info) {
+    final method = info.method ?? '-';
+    final path = info.path ?? '-';
+    final status = info.statusCode?.toString() ?? '-';
+    final error = info.errorType ?? '-';
+    final duration = _formatDebugDuration(info.startedAt, info.finishedAt);
+    return '$method $path status=$status error=$error duration=$duration';
+  }
+
+  String _formatDebugDuration(DateTime? startedAt, DateTime? finishedAt) {
+    if (startedAt == null) return '-';
+    final end = finishedAt ?? DateTime.now();
+    final ms = end.difference(startedAt).inMilliseconds;
+    return '${(ms / 1000).toStringAsFixed(1)}s';
   }
 
   Widget _buildEmptyState(BuildContext context) {
