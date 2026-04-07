@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
