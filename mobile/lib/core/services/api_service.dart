@@ -129,7 +129,8 @@ class ApiService {
       'REQUEST[${options.method}] => PATH: ${options.path} '
       'QUERY: ${_stringifyForLog(options.queryParameters)} '
       'DATA: ${_stringifyForLog(options.data)} '
-      'AUTH: ${token != null && token.isNotEmpty}',
+      'AUTH: ${token != null && token.isNotEmpty} '
+      'TOKEN_LEN: ${token?.length ?? 0}',
     );
     handler.next(options);
   }
@@ -259,6 +260,10 @@ class ApiService {
         await setAuthTokens(
           newAccessToken.toString(),
           newRefreshToken.toString(),
+        );
+        _logger.i(
+          'Token refresh applied. ACCESS_LEN=${newAccessToken.toString().length} '
+          'REFRESH_LEN=${newRefreshToken.toString().length}',
         );
 
         return true;

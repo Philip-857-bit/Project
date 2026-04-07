@@ -18,6 +18,7 @@ func AuthMiddleware(authService *services.AuthService) gin.HandlerFunc {
 		// Get the Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			c.Error(errors.New("missing Authorization header"))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Authorization header required",
 			})
@@ -28,6 +29,7 @@ func AuthMiddleware(authService *services.AuthService) gin.HandlerFunc {
 		// Check if it's a Bearer token
 		tokenParts := strings.Split(authHeader, " ")
 		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			c.Error(errors.New("invalid Authorization header format"))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid authorization header format",
 			})
@@ -37,6 +39,7 @@ func AuthMiddleware(authService *services.AuthService) gin.HandlerFunc {
 
 		token := tokenParts[1]
 		if token == "" {
+			c.Error(errors.New("empty bearer token"))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Token required",
 			})
@@ -47,6 +50,7 @@ func AuthMiddleware(authService *services.AuthService) gin.HandlerFunc {
 		// Validate JWT token
 		claims, err := authService.ValidateToken(token)
 		if err != nil {
+			c.Error(err)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid or expired token",
 			})
@@ -69,6 +73,7 @@ func AuthRequired() gin.HandlerFunc {
 		// Get the Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			c.Error(errors.New("missing Authorization header"))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Authorization header required",
 			})
@@ -79,6 +84,7 @@ func AuthRequired() gin.HandlerFunc {
 		// Check if it's a Bearer token
 		tokenParts := strings.Split(authHeader, " ")
 		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			c.Error(errors.New("invalid Authorization header format"))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid authorization header format",
 			})
@@ -88,6 +94,7 @@ func AuthRequired() gin.HandlerFunc {
 
 		token := tokenParts[1]
 		if token == "" {
+			c.Error(errors.New("empty bearer token"))
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Token required",
 			})
@@ -99,6 +106,7 @@ func AuthRequired() gin.HandlerFunc {
 		// This is for backward compatibility - use AuthMiddleware for full validation
 		userID, err := extractUserIDFromToken(token)
 		if err != nil {
+			c.Error(err)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid token format",
 			})
