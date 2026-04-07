@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/config/env_config.dart';
 import '../../../../core/models/feeding.dart';
 import '../../../../core/providers/calculator_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
@@ -64,6 +65,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     final speciesState = ref.watch(speciesListProvider);
     final calcState = ref.watch(calculatorProvider);
     final result = calcState.result;
+    final showDebug = EnvConfig.isDevelopment || EnvConfig.debugMode;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Feed Calculator')),
@@ -72,6 +74,20 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (showDebug) ...[
+              _DebugPanel(
+                lines: [
+                  'API: ${EnvConfig.apiBaseUrl}',
+                  'Species loading: ${speciesState.isLoading}',
+                  'Species count: ${speciesState.species.length}',
+                  'Species error: ${speciesState.error ?? '-'}',
+                  'Species last request: ${_formatDebugTime(speciesState.lastRequestAt)}',
+                  'Species last success: ${_formatDebugTime(speciesState.lastSuccessAt)}',
+                  'Species status: ${speciesState.lastStatusCode?.toString() ?? '-'}',
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
             // Species selector
             Card(
               child: Padding(
@@ -326,6 +342,13 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     );
   }
 
+  String _formatDebugTime(DateTime? time) {
+    if (time == null) return '-';
+    return '${time.hour.toString().padLeft(2, '0')}:'
+        '${time.minute.toString().padLeft(2, '0')}:'
+        '${time.second.toString().padLeft(2, '0')}';
+  }
+
   Widget _buildInfoChip(String label, String value) {
     return Column(
       children: [
@@ -377,6 +400,44 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
           Text(label, style: TextStyle(color: Colors.grey[600])),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
+      ),
+    );
+  }
+}
+
+class _DebugPanel extends StatelessWidget {
+  final List<String> lines;
+
+  const _DebugPanel({required this.lines});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Calculator debug',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ...lines.map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  line,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logger/logger.dart';
 
 import '../models/device.dart';
 import '../services/api_service.dart';
@@ -9,22 +10,34 @@ class DeviceListState {
   final List<Device> devices;
   final bool isLoading;
   final String? error;
+  final DateTime? lastRequestAt;
+  final DateTime? lastSuccessAt;
+  final int? lastStatusCode;
 
   const DeviceListState({
     this.devices = const [],
     this.isLoading = false,
     this.error,
+    this.lastRequestAt,
+    this.lastSuccessAt,
+    this.lastStatusCode,
   });
 
   DeviceListState copyWith({
     List<Device>? devices,
     bool? isLoading,
     String? error,
+    DateTime? lastRequestAt,
+    DateTime? lastSuccessAt,
+    int? lastStatusCode,
   }) {
     return DeviceListState(
       devices: devices ?? this.devices,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      lastRequestAt: lastRequestAt ?? this.lastRequestAt,
+      lastSuccessAt: lastSuccessAt ?? this.lastSuccessAt,
+      lastStatusCode: lastStatusCode ?? this.lastStatusCode,
     );
   }
 }
@@ -32,32 +45,49 @@ class DeviceListState {
 // Device List Notifier
 class DeviceListNotifier extends StateNotifier<DeviceListState> {
   final ApiService _apiService;
+  final Logger _logger = Logger();
 
   DeviceListNotifier(this._apiService) : super(const DeviceListState());
 
   Future<void> loadDevices() async {
-    state = state.copyWith(isLoading: true, error: null);
+    final startedAt = DateTime.now();
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+      lastRequestAt: startedAt,
+    );
+    _logger.i('DeviceList load start @ ${startedAt.toIso8601String()}');
 
     try {
       final response = await _apiService.getDevices().timeout(
         const Duration(seconds: 20),
       );
-      if (response.statusCode == 200) {
+      final status = response.statusCode ?? 0;
+      if (status == 200) {
         final List<dynamic> data =
             response.data['devices'] ?? response.data ?? [];
         final devices = data.map((json) => Device.fromJson(json)).toList();
-        state = state.copyWith(devices: devices, isLoading: false);
+        state = state.copyWith(
+          devices: devices,
+          isLoading: false,
+          lastSuccessAt: DateTime.now(),
+          lastStatusCode: status,
+        );
+        _logger.i('DeviceList load success (count=${devices.length})');
       } else {
         state = state.copyWith(
           isLoading: false,
           error: 'Failed to load devices',
+          lastStatusCode: status,
         );
+        _logger.w('DeviceList load failed (status=$status)');
       }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         error: ApiService.describeError(e, fallback: 'Failed to load devices.'),
       );
+      _logger.e('DeviceList load error: $e');
     }
   }
 

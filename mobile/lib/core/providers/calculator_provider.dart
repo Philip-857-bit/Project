@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logger/logger.dart';
 
 import '../models/feeding.dart';
 import '../services/api_service.dart';
@@ -9,22 +10,34 @@ class SpeciesListState {
   final List<FishSpecies> species;
   final bool isLoading;
   final String? error;
+  final DateTime? lastRequestAt;
+  final DateTime? lastSuccessAt;
+  final int? lastStatusCode;
 
   const SpeciesListState({
     this.species = const [],
     this.isLoading = false,
     this.error,
+    this.lastRequestAt,
+    this.lastSuccessAt,
+    this.lastStatusCode,
   });
 
   SpeciesListState copyWith({
     List<FishSpecies>? species,
     bool? isLoading,
     String? error,
+    DateTime? lastRequestAt,
+    DateTime? lastSuccessAt,
+    int? lastStatusCode,
   }) {
     return SpeciesListState(
       species: species ?? this.species,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      lastRequestAt: lastRequestAt ?? this.lastRequestAt,
+      lastSuccessAt: lastSuccessAt ?? this.lastSuccessAt,
+      lastStatusCode: lastStatusCode ?? this.lastStatusCode,
     );
   }
 }
@@ -32,32 +45,49 @@ class SpeciesListState {
 // Species List Notifier
 class SpeciesListNotifier extends StateNotifier<SpeciesListState> {
   final ApiService _apiService;
+  final Logger _logger = Logger();
 
   SpeciesListNotifier(this._apiService) : super(const SpeciesListState());
 
   Future<void> loadSpecies() async {
-    state = state.copyWith(isLoading: true, error: null);
+    final startedAt = DateTime.now();
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+      lastRequestAt: startedAt,
+    );
+    _logger.i('Species load start @ ${startedAt.toIso8601String()}');
 
     try {
       final response = await _apiService.getSpecies().timeout(
         const Duration(seconds: 20),
       );
-      if (response.statusCode == 200) {
+      final status = response.statusCode ?? 0;
+      if (status == 200) {
         final List<dynamic> data =
             response.data['species'] ?? response.data ?? [];
         final species = data.map((json) => FishSpecies.fromJson(json)).toList();
-        state = state.copyWith(species: species, isLoading: false);
+        state = state.copyWith(
+          species: species,
+          isLoading: false,
+          lastSuccessAt: DateTime.now(),
+          lastStatusCode: status,
+        );
+        _logger.i('Species load success (count=${species.length})');
       } else {
         state = state.copyWith(
           isLoading: false,
           error: 'Failed to load species',
+          lastStatusCode: status,
         );
+        _logger.w('Species load failed (status=$status)');
       }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         error: ApiService.describeError(e, fallback: 'Failed to load species.'),
       );
+      _logger.e('Species load error: $e');
     }
   }
 }
