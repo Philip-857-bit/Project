@@ -65,52 +65,60 @@ class ApiService {
     );
   }
 
-  /// Configure certificate pinning for enhanced security
+  /// Configure certificate pinning for enhanced security.
+  ///
+  /// Creates a single [HttpClient] that is reused across all requests so that
+  /// TLS sessions are shared. Previously a *new* HttpClient was created on
+  /// every request, which forced a fresh TLS handshake each time. On Render's
+  /// free tier this caused connection stalls after a cold start because
+  /// multiple simultaneous TLS negotiations overwhelmed the waking proxy.
   void _configureCertificatePinning() {
-    (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
-      final client = HttpClient();
-      client.badCertificateCallback = (
-        X509Certificate cert,
-        String host,
-        int port,
-      ) {
-        // Only validate certificates for our domain
-        if (!host.contains(_apiDomain)) {
-          return false;
-        }
+    // Create ONE HttpClient and reuse it for every request.
+    final sharedClient = HttpClient();
+    sharedClient.badCertificateCallback = (
+      X509Certificate cert,
+      String host,
+      int port,
+    ) {
+      // Only validate certificates for our domain
+      if (!host.contains(_apiDomain)) {
+        return false;
+      }
 
-        // Skip pinning if no certificates configured
-        if (_pinnedCertificates.isEmpty) {
-          if (EnvConfig.isDevelopment) {
-            _logger.w(
-              'No certificate fingerprints configured - skipping pinning in dev mode',
-            );
-            return true;
-          }
-          _logger.e('No certificate fingerprints configured!');
-          return false;
-        }
-
-        // Compute SHA256 fingerprint of the certificate
-        final fingerprint = _computeCertificateFingerprint(cert);
-
-        // Check if fingerprint matches any pinned certificate
-        for (final pinned in _pinnedCertificates) {
-          if (pinned.contains(fingerprint)) {
-            return true;
-          }
-        }
-
-        // In development mode, allow self-signed certificates
-        if (EnvConfig.isDevelopment || EnvConfig.debugMode) {
-          _logger.w('Certificate pinning bypassed in development mode');
+      // Skip pinning if no certificates configured
+      if (_pinnedCertificates.isEmpty) {
+        if (EnvConfig.isDevelopment) {
+          _logger.w(
+            'No certificate fingerprints configured - skipping pinning in dev mode',
+          );
           return true;
         }
-
-        _logger.e('Certificate pinning failed for $host');
+        _logger.e('No certificate fingerprints configured!');
         return false;
-      };
-      return client;
+      }
+
+      // Compute SHA256 fingerprint of the certificate
+      final fingerprint = _computeCertificateFingerprint(cert);
+
+      // Check if fingerprint matches any pinned certificate
+      for (final pinned in _pinnedCertificates) {
+        if (pinned.contains(fingerprint)) {
+          return true;
+        }
+      }
+
+      // In development mode, allow self-signed certificates
+      if (EnvConfig.isDevelopment || EnvConfig.debugMode) {
+        _logger.w('Certificate pinning bypassed in development mode');
+        return true;
+      }
+
+      _logger.e('Certificate pinning failed for $host');
+      return false;
+    };
+
+    (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+      return sharedClient;
     };
   }
 
