@@ -49,17 +49,48 @@ class DeviceListState {
 class DeviceListNotifier extends StateNotifier<DeviceListState> {
   final ApiService _apiService;
   final Logger _logger = Logger();
+  int _requestId = 0;
+  Future<void>? _activeLoad;
 
   DeviceListNotifier(this._apiService) : super(const DeviceListState());
 
-  Future<void> loadDevices() async {
+  Future<void> loadDevices({bool force = false}) async {
+    if (!force && _activeLoad != null) {
+      await _activeLoad;
+      return;
+    }
+
+    final activeLoad = _loadDevicesInternal();
+    _activeLoad = activeLoad;
+    try {
+      await activeLoad;
+    } finally {
+      if (identical(_activeLoad, activeLoad)) {
+        _activeLoad = null;
+      }
+    }
+  }
+
+  Future<void> _loadDevicesInternal() async {
     final startedAt = DateTime.now();
+    final requestId = ++_requestId;
     state = state.copyWith(
       isLoading: true,
       error: null,
       lastRequestAt: startedAt,
     );
     _logger.i('DeviceList load start @ ${startedAt.toIso8601String()}');
+    Timer(const Duration(seconds: 25), () {
+      if (_requestId != requestId) return;
+      if (state.isLoading) {
+        state = state.copyWith(
+          isLoading: false,
+          error:
+              'Request stuck for more than 25s. Check network or TLS pinning.',
+        );
+        _logger.w('DeviceList load stuck >25s');
+      }
+    });
 
     try {
       final cancelToken = CancelToken();

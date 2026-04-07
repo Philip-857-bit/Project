@@ -49,17 +49,48 @@ class SpeciesListState {
 class SpeciesListNotifier extends StateNotifier<SpeciesListState> {
   final ApiService _apiService;
   final Logger _logger = Logger();
+  int _requestId = 0;
+  Future<void>? _activeLoad;
 
   SpeciesListNotifier(this._apiService) : super(const SpeciesListState());
 
-  Future<void> loadSpecies() async {
+  Future<void> loadSpecies({bool force = false}) async {
+    if (!force && _activeLoad != null) {
+      await _activeLoad;
+      return;
+    }
+
+    final activeLoad = _loadSpeciesInternal();
+    _activeLoad = activeLoad;
+    try {
+      await activeLoad;
+    } finally {
+      if (identical(_activeLoad, activeLoad)) {
+        _activeLoad = null;
+      }
+    }
+  }
+
+  Future<void> _loadSpeciesInternal() async {
     final startedAt = DateTime.now();
+    final requestId = ++_requestId;
     state = state.copyWith(
       isLoading: true,
       error: null,
       lastRequestAt: startedAt,
     );
     _logger.i('Species load start @ ${startedAt.toIso8601String()}');
+    Timer(const Duration(seconds: 25), () {
+      if (_requestId != requestId) return;
+      if (state.isLoading) {
+        state = state.copyWith(
+          isLoading: false,
+          error:
+              'Request stuck for more than 25s. Check network or TLS pinning.',
+        );
+        _logger.w('Species load stuck >25s');
+      }
+    });
 
     try {
       final cancelToken = CancelToken();

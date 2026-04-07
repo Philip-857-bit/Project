@@ -36,6 +36,9 @@ class ApiService {
   final Logger _logger = Logger();
   String? _accessTokenCache;
   String? _refreshTokenCache;
+  Future<String?>? _loadingAccessToken;
+  Future<String?>? _loadingRefreshToken;
+  static const Duration _tokenReadTimeout = Duration(seconds: 4);
 
   ApiService() {
     _dio = Dio(
@@ -125,10 +128,6 @@ class ApiService {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final token = _accessTokenCache ?? await StorageService.getAccessToken();
-    if (token != null) {
-      options.headers['Authorization'] = 'Bearer $token';
-    }
     debugNotifier.value = debugNotifier.value.copyWith(
       inFlight: true,
       method: options.method,
@@ -139,6 +138,35 @@ class ApiService {
       errorMessage: null,
       finishedAt: null,
     );
+
+    String? token;
+    try {
+      token = await _getAccessToken();
+    } catch (e) {
+      final message = 'Failed to read auth token from secure storage.';
+      debugNotifier.value = debugNotifier.value.copyWith(
+        inFlight: false,
+        errorType: 'token_read',
+        errorMessage: '$message ${e.toString()}',
+        finishedAt: DateTime.now(),
+      );
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.unknown,
+          error: e,
+          message: message,
+        ),
+      );
+      return;
+    }
+
+    if (token != null && token.isNotEmpty) {
+      options.headers['Authorization'] = 'Bearer $token';
+    } else {
+      options.headers.remove('Authorization');
+    }
+
     _logger.d(
       'REQUEST[${options.method}] => PATH: ${options.path} '
       'QUERY: ${_stringifyForLog(options.queryParameters)} '
@@ -147,6 +175,46 @@ class ApiService {
       'TOKEN_LEN: ${token?.length ?? 0}',
     );
     handler.next(options);
+  }
+
+  Future<String?> _getAccessToken() async {
+    if (_accessTokenCache != null && _accessTokenCache!.isNotEmpty) {
+      return _accessTokenCache;
+    }
+
+    _loadingAccessToken ??= StorageService.getAccessToken().timeout(
+      _tokenReadTimeout,
+    );
+
+    try {
+      final token = await _loadingAccessToken;
+      if (token != null && token.isNotEmpty) {
+        _accessTokenCache = token;
+      }
+      return token;
+    } finally {
+      _loadingAccessToken = null;
+    }
+  }
+
+  Future<String?> _getRefreshToken() async {
+    if (_refreshTokenCache != null && _refreshTokenCache!.isNotEmpty) {
+      return _refreshTokenCache;
+    }
+
+    _loadingRefreshToken ??= StorageService.getRefreshToken().timeout(
+      _tokenReadTimeout,
+    );
+
+    try {
+      final token = await _loadingRefreshToken;
+      if (token != null && token.isNotEmpty) {
+        _refreshTokenCache = token;
+      }
+      return token;
+    } finally {
+      _loadingRefreshToken = null;
+    }
   }
 
   void _onResponse(Response response, ResponseInterceptorHandler handler) {
@@ -270,9 +338,8 @@ class ApiService {
 
   Future<bool> _refreshToken() async {
     try {
-      final refreshToken =
-          _refreshTokenCache ?? await StorageService.getRefreshToken();
-      if (refreshToken == null) return false;
+      final refreshToken = await _getRefreshToken();
+      if (refreshToken == null || refreshToken.isEmpty) return false;
 
       final response = await Dio().post(
         '$baseUrl/auth/refresh',
@@ -331,6 +398,8 @@ class ApiService {
   Future<void> clearAuthTokens() async {
     _accessTokenCache = null;
     _refreshTokenCache = null;
+    _loadingAccessToken = null;
+    _loadingRefreshToken = null;
     await StorageService.clearTokens();
     await StorageService.clearUserId();
   }

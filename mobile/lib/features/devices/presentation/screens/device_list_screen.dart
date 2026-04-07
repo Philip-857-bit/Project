@@ -152,7 +152,8 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
     final status = info.statusCode?.toString() ?? '-';
     final error = info.errorType ?? '-';
     final duration = _formatDebugDuration(info.startedAt, info.finishedAt);
-    return '$method $path status=$status error=$error duration=$duration';
+    final inFlight = info.inFlight ? 'in_flight' : 'idle';
+    return '$method $path status=$status error=$error duration=$duration $inFlight';
   }
 
   String _formatDebugDuration(DateTime? startedAt, DateTime? finishedAt) {
