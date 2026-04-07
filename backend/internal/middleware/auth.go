@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -149,8 +150,8 @@ func extractUserIDFromToken(token string) (uint, error) {
 
 	// Parse JSON payload
 	var claims struct {
-		UserID uint `json:"user_id"`
-		Sub    uint `json:"sub"`
+		UserID uint   `json:"user_id"`
+		Sub    string `json:"sub"`
 	}
 	if err := json.Unmarshal(decoded, &claims); err != nil {
 		return 0, fmt.Errorf("failed to parse token claims: %w", err)
@@ -160,8 +161,14 @@ func extractUserIDFromToken(token string) (uint, error) {
 	if claims.UserID > 0 {
 		return claims.UserID, nil
 	}
-	if claims.Sub > 0 {
-		return claims.Sub, nil
+	if claims.Sub != "" {
+		parsed, err := strconv.ParseUint(claims.Sub, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse token sub: %w", err)
+		}
+		if parsed > 0 {
+			return uint(parsed), nil
+		}
 	}
 
 	return 0, errors.New("no user ID found in token")
