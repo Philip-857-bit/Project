@@ -178,7 +178,23 @@ class CalculatorNotifier extends StateNotifier<CalculatorState> {
           .calculateFeed(request.toJson())
           .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
-        final result = FeedCalculationResult.fromJson(response.data);
+        final parsedResult = FeedCalculationResult.fromJson(response.data);
+        final totalBiomassKg =
+            (request.fishCount * request.averageWeight) / 1000.0;
+        final totalBiomassGrams = totalBiomassKg * 1000.0;
+        final effectiveFeedingRate =
+            totalBiomassGrams > 0
+                ? parsedResult.recommendedAmount / totalBiomassGrams
+                : 0.0;
+
+        final result = parsedResult.copyWith(
+          biomass: totalBiomassKg,
+          feedingRate:
+              effectiveFeedingRate.isFinite && effectiveFeedingRate > 0
+                  ? effectiveFeedingRate
+                  : parsedResult.feedingRate,
+        );
+
         state = state.copyWith(
           result: result,
           isCalculating: false,

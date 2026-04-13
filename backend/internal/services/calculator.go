@@ -207,8 +207,10 @@ func (s *CalculatorService) getGrowthStageMultiplier(growthStagesJSON string, we
 		return 1.0, err
 	}
 
-	for _, stage := range stages {
-		if weight >= stage.MinWeight && weight <= stage.MaxWeight {
+	for i, stage := range stages {
+		isLast := i == len(stages)-1
+		inRange := weight >= stage.MinWeight && (weight < stage.MaxWeight || (isLast && weight <= stage.MaxWeight))
+		if inRange {
 			return stage.Multiplier, nil
 		}
 	}
@@ -295,14 +297,14 @@ func (s *CalculatorService) getWeatherMultiplier(weather string) float64 {
 
 // calculateOptimalFeedingFrequency determines optimal feeding frequency based on daily amount
 func (s *CalculatorService) calculateOptimalFeedingFrequency(dailyAmount float64) int {
-	// Base frequency on total daily amount
-	// More frequent feeding for larger amounts to improve digestion
+	// Base frequency on total daily amount.
+	// Keep smaller operations at lower frequency to avoid over-feeding cycles.
 	switch {
-	case dailyAmount <= 100: // Small amounts
+	case dailyAmount <= 250: // Small amounts
 		return 2
-	case dailyAmount <= 500: // Medium amounts
+	case dailyAmount <= 1500: // Medium amounts
 		return 3
-	case dailyAmount <= 1000: // Large amounts
+	case dailyAmount <= 4000: // Large amounts
 		return 4
 	default: // Very large amounts
 		return 5

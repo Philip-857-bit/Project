@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/config/env_config.dart';
 import '../../../../core/models/feeding.dart';
 import '../../../../core/providers/calculator_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
-import '../../../../core/services/api_service.dart';
 
 class FeedCalculatorScreen extends ConsumerStatefulWidget {
   const FeedCalculatorScreen({super.key});
@@ -50,6 +48,8 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   Future<void> _calculate() async {
     if (_selectedSpeciesId == null) return;
 
+    FocusScope.of(context).unfocus();
+
     final request = FeedCalculationRequest(
       speciesId: _selectedSpeciesId!,
       fishCount: _fishCount.round(),
@@ -61,12 +61,16 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     await ref.read(calculatorProvider.notifier).calculate(request);
   }
 
+  void _updateInput(VoidCallback updater) {
+    setState(updater);
+    ref.read(calculatorProvider.notifier).clearResult();
+  }
+
   @override
   Widget build(BuildContext context) {
     final speciesState = ref.watch(speciesListProvider);
     final calcState = ref.watch(calculatorProvider);
     final result = calcState.result;
-    final showDebug = EnvConfig.isDevelopment || EnvConfig.debugMode;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Feed Calculator')),
@@ -75,30 +79,6 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (showDebug) ...[
-              ValueListenableBuilder<ApiDebugInfo>(
-                valueListenable: ApiService.debugNotifier,
-                builder: (context, info, _) {
-                  return Column(
-                    children: [
-                      _DebugPanel(
-                        lines: [
-                          'API: ${EnvConfig.apiBaseUrl}',
-                          'Species loading: ${speciesState.isLoading}',
-                          'Species count: ${speciesState.species.length}',
-                          'Species error: ${speciesState.error ?? '-'}',
-                          'Species last request: ${_formatDebugTime(speciesState.lastRequestAt)}',
-                          'Species last success: ${_formatDebugTime(speciesState.lastSuccessAt)}',
-                          'Species status: ${speciesState.lastStatusCode?.toString() ?? '-'}',
-                          'Last API: ${_formatApiLine(info)}',
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                  );
-                },
-              ),
-            ],
             // Species selector
             Card(
               child: Padding(
@@ -149,7 +129,8 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                           ],
                         )
                         : DropdownButtonFormField<String>(
-                          value: _selectedSpeciesId,
+                          key: ValueKey(_selectedSpeciesId),
+                          initialValue: _selectedSpeciesId,
                           items:
                               speciesState.species
                                   .map(
@@ -160,7 +141,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                                   )
                                   .toList(),
                           onChanged:
-                              (v) => setState(() => _selectedSpeciesId = v),
+                              (v) => _updateInput(() => _selectedSpeciesId = v),
                           decoration: const InputDecoration(
                             border: OutlineInputBorder(),
                           ),
@@ -190,7 +171,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                       divisions: 200,
                       suffix: ' fish',
                       isInteger: true,
-                      onChanged: (v) => setState(() => _fishCount = v),
+                      onChanged: (v) => _updateInput(() => _fishCount = v),
                     ),
                     const SizedBox(height: 16),
                     _buildSlider(
@@ -200,7 +181,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                       max: 1000,
                       divisions: 200,
                       suffix: 'g',
-                      onChanged: (v) => setState(() => _avgWeight = v),
+                      onChanged: (v) => _updateInput(() => _avgWeight = v),
                     ),
                     const SizedBox(height: 16),
                     _buildSlider(
@@ -210,7 +191,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                       max: 35,
                       divisions: 70,
                       suffix: '°C',
-                      onChanged: (v) => setState(() => _waterTemp = v),
+                      onChanged: (v) => _updateInput(() => _waterTemp = v),
                     ),
                     const SizedBox(height: 16),
                     _buildSlider(
@@ -220,7 +201,8 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                       max: 15,
                       divisions: 60,
                       suffix: ' mg/L',
-                      onChanged: (v) => setState(() => _dissolvedOxygen = v),
+                      onChanged:
+                          (v) => _updateInput(() => _dissolvedOxygen = v),
                     ),
                   ],
                 ),
@@ -289,8 +271,8 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                         '${result.biomass.toStringAsFixed(1)} kg',
                       ),
                       _buildResultRow(
-                        'Feeding Rate',
-                        '${(result.feedingRate * 100).toStringAsFixed(1)}%',
+                        'Feeding Rate (BW/day)',
+                        '${(result.feedingRate * 100).toStringAsFixed(2)}%',
                       ),
                       _buildResultRow(
                         'Q10 Factor',
@@ -338,6 +320,10 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
+          _buildInfoChip(
+            'Base BW%',
+            '${selected.feedingRatePercentage.toStringAsFixed(1)}%',
+          ),
           _buildInfoChip('Q10', selected.q10Coefficient.toString()),
           _buildInfoChip(
             'Optimal',
@@ -350,30 +336,6 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
         ],
       ),
     );
-  }
-
-  String _formatDebugTime(DateTime? time) {
-    if (time == null) return '-';
-    return '${time.hour.toString().padLeft(2, '0')}:'
-        '${time.minute.toString().padLeft(2, '0')}:'
-        '${time.second.toString().padLeft(2, '0')}';
-  }
-
-  String _formatApiLine(ApiDebugInfo info) {
-    final method = info.method ?? '-';
-    final path = info.path ?? '-';
-    final status = info.statusCode?.toString() ?? '-';
-    final error = info.errorType ?? '-';
-    final duration = _formatDebugDuration(info.startedAt, info.finishedAt);
-    final inFlight = info.inFlight ? 'in_flight' : 'idle';
-    return '$method $path status=$status error=$error duration=$duration $inFlight';
-  }
-
-  String _formatDebugDuration(DateTime? startedAt, DateTime? finishedAt) {
-    if (startedAt == null) return '-';
-    final end = finishedAt ?? DateTime.now();
-    final ms = end.difference(startedAt).inMilliseconds;
-    return '${(ms / 1000).toStringAsFixed(1)}s';
   }
 
   Widget _buildInfoChip(String label, String value) {
@@ -405,6 +367,9 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
             SizedBox(
               width: 110,
               child: TextFormField(
+                key: ValueKey(
+                  '$label:${isInteger ? value.round() : value.toStringAsFixed(1)}',
+                ),
                 initialValue:
                     isInteger
                         ? value.round().toString()
@@ -418,6 +383,12 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                   suffixText: suffix.trim(),
                   border: const OutlineInputBorder(),
                 ),
+                onChanged: (text) {
+                  final parsed = double.tryParse(text.trim());
+                  if (parsed == null) return;
+                  final clamped = parsed.clamp(min, max).toDouble();
+                  onChanged(isInteger ? clamped.roundToDouble() : clamped);
+                },
                 onFieldSubmitted: (text) {
                   final parsed = double.tryParse(text.trim());
                   if (parsed == null) return;
@@ -449,44 +420,6 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
           Text(label, style: TextStyle(color: Colors.grey[600])),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
-      ),
-    );
-  }
-}
-
-class _DebugPanel extends StatelessWidget {
-  final List<String> lines;
-
-  const _DebugPanel({required this.lines});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Calculator debug',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            ...lines.map(
-              (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  line,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

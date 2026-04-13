@@ -328,6 +328,13 @@ stepper driver part as a **DM542 signal-level stand-in** (Step/Dir/EN behavior).
 1. Select environment: `t-a7670-wokwi`
 2. Build project
 3. Run command: **Wokwi: Start Simulator**
+4. Open the simulator serial monitor (or PlatformIO serial monitor) to view logs
+
+Expected runtime log in simulation:
+
+- `[SIM] uptime=... temp=... do=... feed=... battery=... mqtt=... buffered=...`
+
+This line prints every ~5 seconds and confirms the firmware loop is running.
 
 ### Run with CLI
 
