@@ -278,6 +278,43 @@ Update `MODEM_APN` in `include/config.h`:
 | 24V Battery | For motor | 1 |
 | 18650 Battery | For ESP32 (built-in) | 1 |
 
+## Wokwi Setup (PlatformIO)
+
+This repository is now configured for Wokwi simulation with PlatformIO.
+
+### Files added for Wokwi
+
+- `wokwi.toml` - points Wokwi to the PlatformIO firmware output
+- `diagram.json` - Wokwi circuit (ESP32 + HC-SR04 + DS18B20 + stepper driver)
+- `platformio.ini` environment: `t-a7670-wokwi`
+
+### Simulation profile
+
+- Battery is simulated as fixed **24V**
+- Solar input is disabled in simulation (`NO_SOLAR_INPUT`)
+- Driver is configured as **DM542 (Step/Dir/EN)**
+- Schematic pin map is enabled (`SCHEMATIC_PINMAP`):
+        - MOTOR_STEP  -> GPIO25
+        - MOTOR_STEP2 -> GPIO19
+        - TRIG        -> GPIO12
+        - ECHO_S      -> GPIO13
+        - DATA        -> GPIO14
+
+Note: Wokwi does not provide a native DM542 model, so the diagram uses a compatible
+stepper driver part as a **DM542 signal-level stand-in** (Step/Dir/EN behavior).
+
+### Run with PlatformIO extension
+
+1. Select environment: `t-a7670-wokwi`
+2. Build project
+3. Run command: **Wokwi: Start Simulator**
+
+### Run with CLI
+
+```bash
+pio run -e t-a7670-wokwi
+```
+
 ## License
 
 Proprietary - Smart Fish Feeder Project

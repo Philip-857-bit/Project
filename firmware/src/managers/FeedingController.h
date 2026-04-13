@@ -14,6 +14,7 @@
 #define FEEDING_CONTROLLER_H
 
 #include <Arduino.h>
+#include "../../include/config.h"
 #include "SensorManager.h"
 #include "../storage/NVSStorage.h"
 

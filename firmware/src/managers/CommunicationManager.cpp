@@ -8,8 +8,13 @@
 #include "../../include/config.h"
 
 // TinyGSM configuration - must be before include
-#define TINY_GSM_MODEM_A7670
 #define TINY_GSM_RX_BUFFER 1024
+
+// TinyGSM 0.11.x does not provide an A7670-specific profile.
+// Use the SIM7600 profile, which is compatible with A7670 AT command set.
+#if defined(TINY_GSM_MODEM_A7670) && !defined(TINY_GSM_MODEM_SIM7600)
+#define TINY_GSM_MODEM_SIM7600
+#endif
 
 #include <TinyGsmClient.h>
 

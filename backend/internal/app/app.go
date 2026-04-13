@@ -98,6 +98,11 @@ func (a *App) Run() error {
 	// Initialize services
 	services := services.New(repos, redisClient, a.config, a.logger)
 
+	// Seed default reference data (idempotent) after migrations are applied.
+	if err := services.Calculator.SeedDefaultSpecies(); err != nil {
+		return fmt.Errorf("failed to seed default fish species: %w", err)
+	}
+
 	// Initialize handlers
 	handlers := handlers.New(services, a.logger)
 	handlers.Device.SetMQTTClient(a.mqttClient)

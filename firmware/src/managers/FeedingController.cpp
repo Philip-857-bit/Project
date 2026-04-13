@@ -26,6 +26,7 @@ FeedingController::FeedingController()
     , _dispensedGrams(0)
     , _feedingStartTime(0)
     , _gramsPerRevolution(GRAMS_PER_REVOLUTION)
+    , _microSteps(MOTOR_MICROSTEPS)
     , _stepDelayUs(1000)
     , _scheduleCount(0)
     , _scheduleEnabled(true)
@@ -88,11 +89,14 @@ bool FeedingController::initMotor() {
     _driver->pwm_autograd(true);
     pinMode(PIN_DIAG, INPUT);
     return true;
-#else
+#elif defined(USE_A4988)
     pinMode(PIN_MS1, OUTPUT);
     pinMode(PIN_MS2, OUTPUT);
     pinMode(PIN_MS3, OUTPUT);
     setMicrostepPins();
+    return true;
+#else
+    // DM542/TB6600 only need STEP/DIR/ENABLE pins.
     return true;
 #endif
 }
@@ -188,7 +192,17 @@ FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
 #else
     if (!completed) result = FeedingResult::PARTIAL;
 #endif
-    _lastEvent = {millis(), grams, _dispensedGrams, (uint32_t)(millis() - _feedingStartTime), trigger, result, temperature, 0, q10Factor, 1.0f, ""};
+    _lastEvent.timestamp = millis();
+    _lastEvent.quantityGrams = grams;
+    _lastEvent.actualDispensed = _dispensedGrams;
+    _lastEvent.durationMs = (uint32_t)(millis() - _feedingStartTime);
+    _lastEvent.trigger = trigger;
+    _lastEvent.result = result;
+    _lastEvent.temperature = temperature;
+    _lastEvent.dissolvedOxygen = 0;
+    _lastEvent.q10Factor = q10Factor;
+    _lastEvent.obmSafetyFactor = 1.0f;
+    _lastEvent.errorMessage = "";
     logEvent(_lastEvent);
     return result;
 }
@@ -196,7 +210,7 @@ FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
 bool FeedingController::moveSteps(long steps, bool direction) {
     digitalWrite(PIN_DIR, direction ? HIGH : LOW);
     delayMicroseconds(5);
-    unsigned long stepDelay = 1000000 / MOTOR_MAX_SPEED;
+    unsigned long stepDelay = _stepDelayUs;
     for (long i = 0; i < steps; i++) {
         stepPulse();
         delayMicroseconds(stepDelay);
@@ -232,11 +246,23 @@ long FeedingController::gramsToSteps(float grams) {
 #ifdef USE_TMC2209
     return (long)(revolutions * MOTOR_STEPS_PER_REV * MOTOR_MICROSTEPS);
 #else
-    return (long)(revolutions * MOTOR_STEPS_PER_REV * (int)_microstepMode);
+    return (long)(revolutions * MOTOR_STEPS_PER_REV * _microSteps);
 #endif
 }
 
 void FeedingController::calibrateGramsPerRev(float grams) { _gramsPerRevolution = grams; _storage->putFloat("grams_per_rev", grams); }
+void FeedingController::setMicrosteps(int microsteps) {
+    if (microsteps < 1) {
+        microsteps = 1;
+    }
+    _microSteps = microsteps;
+}
+void FeedingController::setMaxSpeed(int stepsPerSecond) {
+    if (stepsPerSecond < 1) {
+        stepsPerSecond = 1;
+    }
+    _stepDelayUs = 1000000UL / (unsigned long)stepsPerSecond;
+}
 bool FeedingController::setSchedule(ScheduleEntry* entries, int count) {
     if (count > SCHEDULE_MAX_ENTRIES) count = SCHEDULE_MAX_ENTRIES;
     memcpy(_schedule, entries, count * sizeof(ScheduleEntry));
