@@ -42,7 +42,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     if (sensorData != null) {
       setState(() {
         _waterTemp = sensorData.waterTemperature;
-        _dissolvedOxygen = sensorData.dissolvedOxygen;
+        _dissolvedOxygen = sensorData.dissolvedOxygen ?? _dissolvedOxygen;
       });
     }
   }
