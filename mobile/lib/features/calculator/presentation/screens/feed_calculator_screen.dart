@@ -20,7 +20,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   double _fishCount = 1000;
   double _avgWeight = 200;
   double _waterTemp = 28;
-  double? _dissolvedOxygen;
+  double _dissolvedOxygen = 6.0;
 
   @override
   void initState() {
@@ -52,7 +52,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
 
     final request = FeedCalculationRequest(
       speciesId: _selectedSpeciesId!,
-      fishCount: _fishCount.toInt(),
+      fishCount: _fishCount.round(),
       averageWeight: _avgWeight,
       waterTemperature: _waterTemp,
       dissolvedOxygen: _dissolvedOxygen,
@@ -185,19 +185,20 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                     _buildSlider(
                       label: 'Fish Count',
                       value: _fishCount,
-                      min: 100,
+                      min: 1,
                       max: 10000,
-                      divisions: 99,
+                      divisions: 200,
                       suffix: ' fish',
+                      isInteger: true,
                       onChanged: (v) => setState(() => _fishCount = v),
                     ),
                     const SizedBox(height: 16),
                     _buildSlider(
                       label: 'Average Weight',
                       value: _avgWeight,
-                      min: 10,
+                      min: 1,
                       max: 1000,
-                      divisions: 99,
+                      divisions: 200,
                       suffix: 'g',
                       onChanged: (v) => setState(() => _avgWeight = v),
                     ),
@@ -205,24 +206,22 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                     _buildSlider(
                       label: 'Water Temperature',
                       value: _waterTemp,
-                      min: 15,
+                      min: 0,
                       max: 35,
-                      divisions: 20,
+                      divisions: 70,
                       suffix: '°C',
                       onChanged: (v) => setState(() => _waterTemp = v),
                     ),
-                    if (_dissolvedOxygen != null) ...[
-                      const SizedBox(height: 16),
-                      _buildSlider(
-                        label: 'Dissolved Oxygen',
-                        value: _dissolvedOxygen!,
-                        min: 0,
-                        max: 15,
-                        divisions: 30,
-                        suffix: ' mg/L',
-                        onChanged: (v) => setState(() => _dissolvedOxygen = v),
-                      ),
-                    ],
+                    const SizedBox(height: 16),
+                    _buildSlider(
+                      label: 'Dissolved Oxygen',
+                      value: _dissolvedOxygen,
+                      min: 0,
+                      max: 15,
+                      divisions: 60,
+                      suffix: ' mg/L',
+                      onChanged: (v) => setState(() => _dissolvedOxygen = v),
+                    ),
                   ],
                 ),
               ),
@@ -393,6 +392,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     required double max,
     required int divisions,
     required String suffix,
+    bool isInteger = false,
     required ValueChanged<double> onChanged,
   }) {
     return Column(
@@ -402,12 +402,33 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label, style: Theme.of(context).textTheme.titleMedium),
-            Text(
-              '${value.round()}$suffix',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            SizedBox(
+              width: 110,
+              child: TextFormField(
+                initialValue:
+                    isInteger
+                        ? value.round().toString()
+                        : value.toStringAsFixed(1),
+                textAlign: TextAlign.right,
+                keyboardType: TextInputType.numberWithOptions(
+                  decimal: !isInteger,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  suffixText: suffix.trim(),
+                  border: const OutlineInputBorder(),
+                ),
+                onFieldSubmitted: (text) {
+                  final parsed = double.tryParse(text.trim());
+                  if (parsed == null) return;
+                  final clamped = parsed.clamp(min, max).toDouble();
+                  onChanged(isInteger ? clamped.roundToDouble() : clamped);
+                },
+              ),
             ),
           ],
         ),
+        const SizedBox(height: 8),
         Slider(
           value: value,
           min: min,

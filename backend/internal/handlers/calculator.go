@@ -135,6 +135,7 @@ func (h *CalculatorHandler) CalculateRecommendation(c *gin.Context) {
 	if req.UseQ10Algorithm || (response.FusedSensorData != nil && response.FusedSensorData.DissolvedOxygen > 0) {
 		q10Env := services.Q10EnvironmentalFactors{
 			WaterTemperature: req.Environmental.WaterTemperature,
+			DissolvedOxygen:  6.0, // Sensible default when sensor DO is not provided.
 			Season:           req.Environmental.Season,
 			WeatherCondition: req.Environmental.WeatherCondition,
 			PH:               7.0, // Default pH

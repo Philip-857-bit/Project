@@ -10,8 +10,10 @@
 /// # Or individual defines
 /// flutter build apk \
 ///   --dart-define=API_BASE_URL=https://smartaqua.onrender.com/api/v1 \
-///   --dart-define=MQTT_HOST=mqtt.smartfishfeeder.com \
-///   --dart-define=MQTT_PORT=8883
+///   --dart-define=MQTT_HOST=your-broker-host \
+///   --dart-define=MQTT_PORT=8883 \
+///   --dart-define=MQTT_USERNAME=your-broker-username \
+///   --dart-define=MQTT_PASSWORD=your-broker-password
 /// ```
 class EnvConfig {
   // Private constructor
@@ -26,13 +28,25 @@ class EnvConfig {
   /// MQTT broker host
   static const String mqttHost = String.fromEnvironment(
     'MQTT_HOST',
-    defaultValue: 'mqtt.smartfishfeeder.com',
+    defaultValue: '',
   );
 
   /// MQTT broker port
   static const int mqttPort = int.fromEnvironment(
     'MQTT_PORT',
     defaultValue: 8883,
+  );
+
+  /// Optional MQTT username for brokers that do not use JWT auth
+  static const String mqttUsername = String.fromEnvironment(
+    'MQTT_USERNAME',
+    defaultValue: '',
+  );
+
+  /// Optional MQTT password for brokers that do not use JWT auth
+  static const String mqttPassword = String.fromEnvironment(
+    'MQTT_PASSWORD',
+    defaultValue: '',
   );
 
   /// Primary certificate fingerprint for TLS pinning

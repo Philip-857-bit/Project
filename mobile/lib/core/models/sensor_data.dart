@@ -2,6 +2,50 @@ import 'package:equatable/equatable.dart';
 
 String _stringValue(dynamic value) => value?.toString() ?? '';
 
+double _doubleValue(dynamic value, [double fallback = 0]) {
+  if (value == null) {
+    return fallback;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value.toString()) ?? fallback;
+}
+
+DateTime _parseTimestamp(dynamic raw) {
+  if (raw == null) {
+    return DateTime.now();
+  }
+
+  if (raw is DateTime) {
+    return raw;
+  }
+
+  if (raw is num) {
+    final value = raw.toInt();
+    // Treat 10-digit values as seconds and 13-digit values as milliseconds.
+    if (value < 100000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+
+  final text = raw.toString().trim();
+  if (text.isEmpty) {
+    return DateTime.now();
+  }
+
+  final numeric = int.tryParse(text);
+  if (numeric != null) {
+    if (numeric < 100000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(numeric * 1000);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(numeric);
+  }
+
+  return DateTime.tryParse(text) ?? DateTime.now();
+}
+
 class SensorData extends Equatable {
   final String deviceId;
   final double waterTemperature;
@@ -32,27 +76,30 @@ class SensorData extends Equatable {
   });
 
   factory SensorData.fromJson(Map<String, dynamic> json) {
+    final timestampRaw = json['timestamp'] ?? json['created_at'];
     return SensorData(
       deviceId: json['device_id'] ?? '',
-      waterTemperature: (json['water_temperature'] ?? 0).toDouble(),
-      dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
-      ph: json['ph']?.toDouble(),
-      turbidity: json['turbidity']?.toDouble(),
+      waterTemperature: _doubleValue(
+        json['water_temperature'] ?? json['temperature'],
+      ),
+      dissolvedOxygen:
+          json['dissolved_oxygen'] == null
+              ? null
+              : _doubleValue(json['dissolved_oxygen']),
+      ph: json['ph'] == null ? null : _doubleValue(json['ph']),
+      turbidity:
+          json['turbidity'] == null ? null : _doubleValue(json['turbidity']),
       feedLevel:
-          (json['feed_level'] ?? json['weight_percentage'] ?? 0).toDouble(),
-      batteryLevel: (json['battery_level'] ?? 0).toDouble(),
-      solarVoltage: (json['solar_voltage'] ?? 0).toDouble(),
+          _doubleValue(json['feed_level'] ?? json['weight_percentage'] ?? 0),
+      batteryLevel: _doubleValue(json['battery_level']),
+      solarVoltage: _doubleValue(json['solar_voltage']),
       isSolarCharging:
           json['is_solar_charging'] ??
           ((json['power_source'] ?? '') == 'SOLAR'),
       signalStrength: json['signal_strength'] ?? json['cellular_signal'] ?? 0,
       connectionType:
           json['connection_type'] ?? json['power_source'] ?? 'unknown',
-      timestamp: DateTime.parse(
-        json['timestamp'] ??
-            json['created_at'] ??
-            DateTime.now().toIso8601String(),
-      ),
+      timestamp: _parseTimestamp(timestampRaw),
     );
   }
 

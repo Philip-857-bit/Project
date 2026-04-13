@@ -8,6 +8,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include "DeviceManager.h"
@@ -182,6 +183,7 @@ private:
     NVSStorage* _storage;
     
     WiFiClient _wifiClient;
+    WiFiClientSecure _wifiSecureClient;
     PubSubClient _mqttClient;
     
     ConnectionState _state;

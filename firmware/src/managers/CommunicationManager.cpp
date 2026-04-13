@@ -18,6 +18,68 @@
 
 #include <TinyGsmClient.h>
 
+static bool isDigitsOnly(const String& value) {
+    if (value.isEmpty()) {
+        return false;
+    }
+    for (size_t i = 0; i < value.length(); i++) {
+        char c = value.charAt(i);
+        if (c < '0' || c > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void parseBrokerEndpoint(const String& rawEndpoint, String& hostOut, uint16_t& portOut, bool& useTLSOut) {
+    String endpoint = rawEndpoint;
+    endpoint.trim();
+
+    bool explicitPort = false;
+    bool useTLS = MQTT_USE_TLS != 0;
+    uint16_t port = useTLS ? MQTT_PORT_TLS : MQTT_PORT;
+
+    if (endpoint.startsWith("ssl://") || endpoint.startsWith("mqtts://")) {
+        useTLS = true;
+        endpoint = endpoint.substring(endpoint.indexOf("://") + 3);
+    } else if (endpoint.startsWith("tcp://") || endpoint.startsWith("mqtt://")) {
+        useTLS = false;
+        endpoint = endpoint.substring(endpoint.indexOf("://") + 3);
+    }
+
+    int slashIndex = endpoint.indexOf('/');
+    if (slashIndex >= 0) {
+        endpoint = endpoint.substring(0, slashIndex);
+    }
+
+    int colonIndex = endpoint.lastIndexOf(':');
+    if (colonIndex > 0 && endpoint.indexOf(']') == -1) {
+        String portString = endpoint.substring(colonIndex + 1);
+        portString.trim();
+
+        if (isDigitsOnly(portString)) {
+            long parsedPort = portString.toInt();
+            if (parsedPort > 0 && parsedPort <= 65535) {
+                port = (uint16_t)parsedPort;
+                endpoint = endpoint.substring(0, colonIndex);
+                explicitPort = true;
+            }
+        }
+    }
+
+    if (endpoint.endsWith(".hivemq.cloud") && !explicitPort) {
+        useTLS = true;
+        port = MQTT_PORT_TLS;
+    } else if (useTLS && !explicitPort && port == MQTT_PORT) {
+        port = MQTT_PORT_TLS;
+    }
+
+    endpoint.trim();
+    hostOut = endpoint;
+    portOut = port;
+    useTLSOut = useTLS;
+}
+
 // Static instance for callback
 CommunicationManager* CommunicationManager::_instance = nullptr;
 
@@ -291,14 +353,43 @@ bool CommunicationManager::connectGSM() {
 bool CommunicationManager::connectMQTT() {
     _state = ConnectionState::CONNECTING_MQTT;
     
-    String host = _deviceManager->getMQTTHost();
+    String endpoint = _deviceManager->getMQTTHost();
     String username = _deviceManager->getMQTTUsername();
     String password = _deviceManager->getMQTTPassword();
     String clientID = _deviceManager->getDeviceID();
+
+    String host;
+    uint16_t port = MQTT_PORT;
+    bool useTLS = false;
+    parseBrokerEndpoint(endpoint, host, port, useTLS);
+
+    if (host.isEmpty()) {
+        Serial.println("[CommManager] MQTT host is empty");
+        return false;
+    }
+
+    if (_useGSM) {
+        if (useTLS) {
+            Serial.println("[CommManager] TLS over GSM is not configured in this build, falling back to plaintext MQTT over GSM");
+        }
+        _mqttClient.setClient(*gsmClient);
+    } else {
+        if (useTLS) {
+#if MQTT_SKIP_CERT_VERIFY
+            _wifiSecureClient.setInsecure();
+#endif
+            _mqttClient.setClient(_wifiSecureClient);
+        } else {
+            _mqttClient.setClient(_wifiClient);
+        }
+    }
     
-    Serial.printf("[CommManager] Connecting to MQTT: %s\n", host.c_str());
+    Serial.printf("[CommManager] Connecting to MQTT: %s:%u (TLS=%s)\n",
+                  host.c_str(),
+                  (unsigned int)port,
+                  useTLS ? "Yes" : "No");
     
-    _mqttClient.setServer(host.c_str(), MQTT_PORT);
+    _mqttClient.setServer(host.c_str(), port);
     
     bool connected;
     if (username.isEmpty()) {

@@ -287,6 +287,26 @@ This repository is now configured for Wokwi simulation with PlatformIO.
 - `wokwi.toml` - points Wokwi to the PlatformIO firmware output
 - `diagram.json` - Wokwi circuit (ESP32 + HC-SR04 + DS18B20 + stepper driver)
 - `platformio.ini` environment: `t-a7670-wokwi`
+- `scripts/load_wokwi_env.py` - loads `.env` / `.env.local` values into build flags
+- `.env.example` - template for local simulation credentials
+
+### Configure MQTT credentials for Wokwi
+
+1. Copy `.env.example` to `.env` inside `firmware/`.
+2. Set your MQTT values in `.env`.
+3. Build `t-a7670-wokwi`.
+
+Supported `.env` keys:
+
+- `WOKWI_DEFAULT_WIFI_SSID`
+- `WOKWI_DEFAULT_WIFI_PASS`
+- `WOKWI_DEFAULT_MQTT_HOST`
+- `WOKWI_DEFAULT_MQTT_USER`
+- `WOKWI_DEFAULT_MQTT_PASS`
+- `MQTT_USE_TLS` (`1` or `0`)
+- `MQTT_SKIP_CERT_VERIFY` (`1` or `0`)
+- `MQTT_PORT` (optional)
+- `MQTT_PORT_TLS` (optional)
 
 ### Simulation profile
 

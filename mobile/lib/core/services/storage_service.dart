@@ -1,6 +1,8 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/env_config.dart';
+
 class StorageService {
   static late SharedPreferences _prefs;
   static const _secureStorage = FlutterSecureStorage(
@@ -87,7 +89,7 @@ class StorageService {
   }
 
   static String getMqttHost() {
-    return _prefs.getString(_mqttHostKey) ?? 'mqtt.smartfishfeeder.com';
+    return _prefs.getString(_mqttHostKey) ?? EnvConfig.mqttHost;
   }
 
   static Future<void> setMqttPort(int port) async {
@@ -95,7 +97,7 @@ class StorageService {
   }
 
   static int getMqttPort() {
-    return _prefs.getInt(_mqttPortKey) ?? 8883;
+    return _prefs.getInt(_mqttPortKey) ?? EnvConfig.mqttPort;
   }
 
   static Future<void> setBiometricEnabled(bool enabled) async {

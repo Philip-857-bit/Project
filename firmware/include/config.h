@@ -310,18 +310,47 @@
 #ifdef MQTT_KEEPALIVE
 #undef MQTT_KEEPALIVE
 #endif
+#ifndef MQTT_PORT
 #define MQTT_PORT               1883
+#endif
+#ifndef MQTT_PORT_TLS
 #define MQTT_PORT_TLS           8883
+#endif
 #define MQTT_KEEPALIVE          60
 #define MQTT_QOS                1
 #define MQTT_BUFFER_SIZE        2048
 #define MQTT_RECONNECT_DELAY_MS 5000
+#ifndef MQTT_USE_TLS
+#define MQTT_USE_TLS            0
+#endif
+#ifndef MQTT_SKIP_CERT_VERIFY
+#define MQTT_SKIP_CERT_VERIFY   1
+#endif
 
 // Cellular (A7670G 4G LTE Cat1)
 #define MODEM_BAUD_RATE         115200
 #define MODEM_TIMEOUT_MS        30000
 #define MODEM_APN               "internet"
 #define MODEM_MODEL             "A7670"
+
+#ifdef WOKWI_SIM
+// Wokwi has built-in guest WiFi and works best with a non-TLS test broker.
+#ifndef WOKWI_DEFAULT_WIFI_SSID
+#define WOKWI_DEFAULT_WIFI_SSID "Wokwi-GUEST"
+#endif
+#ifndef WOKWI_DEFAULT_WIFI_PASS
+#define WOKWI_DEFAULT_WIFI_PASS ""
+#endif
+#ifndef WOKWI_DEFAULT_MQTT_HOST
+#define WOKWI_DEFAULT_MQTT_HOST "test.mosquitto.org"
+#endif
+#ifndef WOKWI_DEFAULT_MQTT_USER
+#define WOKWI_DEFAULT_MQTT_USER ""
+#endif
+#ifndef WOKWI_DEFAULT_MQTT_PASS
+#define WOKWI_DEFAULT_MQTT_PASS ""
+#endif
+#endif
 
 // GPS Configuration (A7670G only)
 #define GPS_BAUD_RATE           9600
