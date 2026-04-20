@@ -261,6 +261,18 @@ class FeedCalculationResult {
   factory FeedCalculationResult.fromJson(Map<String, dynamic> json) {
     final recommendation = json['recommendation'] ?? json;
     final basicRecommendation = recommendation['basic_recommendation'] ?? const {};
+    final suggestedFeedingsRaw =
+        recommendation['final_feeding_frequency'] ?? json['suggested_feedings'];
+    final parsedSuggestedFeedings =
+        suggestedFeedingsRaw is num
+            ? suggestedFeedingsRaw.toInt()
+            : int.tryParse(suggestedFeedingsRaw?.toString() ?? '') ?? 2;
+    final normalizedSuggestedFeedings =
+        parsedSuggestedFeedings <= 0
+            ? 2
+            : parsedSuggestedFeedings > 2
+            ? 2
+            : parsedSuggestedFeedings;
 
     return FeedCalculationResult(
       recommendedAmount: _doubleValue(
@@ -287,10 +299,7 @@ class FeedCalculationResult {
           recommendation['basic_recommendation']?['environmental_note'] ??
           json['recommendation'] ??
           '',
-      suggestedFeedings:
-          recommendation['final_feeding_frequency'] ??
-          json['suggested_feedings'] ??
-          3,
+        suggestedFeedings: normalizedSuggestedFeedings,
     );
   }
 

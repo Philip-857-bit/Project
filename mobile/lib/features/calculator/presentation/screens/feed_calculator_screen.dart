@@ -19,11 +19,24 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   double _avgWeight = 200;
   double _waterTemp = 28;
   double _dissolvedOxygen = 6.0;
+  final Map<String, TextEditingController> _inputControllers = {};
+  final Map<String, FocusNode> _inputFocusNodes = {};
 
   @override
   void initState() {
     super.initState();
     Future.microtask(_loadData);
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _inputControllers.values) {
+      controller.dispose();
+    }
+    for (final focusNode in _inputFocusNodes.values) {
+      focusNode.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -64,6 +77,32 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   void _updateInput(VoidCallback updater) {
     setState(updater);
     ref.read(calculatorProvider.notifier).clearResult();
+  }
+
+  String _formatFieldValue(double value, {required bool isInteger}) {
+    return isInteger ? value.round().toString() : value.toStringAsFixed(1);
+  }
+
+  TextEditingController _getInputController(String fieldId, String text) {
+    return _inputControllers.putIfAbsent(
+      fieldId,
+      () => TextEditingController(text: text),
+    );
+  }
+
+  FocusNode _getInputFocusNode(String fieldId) {
+    return _inputFocusNodes.putIfAbsent(fieldId, FocusNode.new);
+  }
+
+  void _syncInputText({required String fieldId, required String text}) {
+    final controller = _getInputController(fieldId, text);
+    final focusNode = _getInputFocusNode(fieldId);
+    if (focusNode.hasFocus || controller.text == text) return;
+    controller.value = controller.value.copyWith(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+      composing: TextRange.empty,
+    );
   }
 
   @override
@@ -164,6 +203,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSlider(
+                      fieldId: 'fishCount',
                       label: 'Fish Count',
                       value: _fishCount,
                       min: 1,
@@ -175,6 +215,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildSlider(
+                      fieldId: 'averageWeight',
                       label: 'Average Weight',
                       value: _avgWeight,
                       min: 1,
@@ -185,6 +226,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildSlider(
+                      fieldId: 'waterTemperature',
                       label: 'Water Temperature',
                       value: _waterTemp,
                       min: 0,
@@ -195,6 +237,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildSlider(
+                      fieldId: 'dissolvedOxygen',
                       label: 'Dissolved Oxygen',
                       value: _dissolvedOxygen,
                       min: 0,
@@ -348,6 +391,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   }
 
   Widget _buildSlider({
+    required String fieldId,
     required String label,
     required double value,
     required double min,
@@ -357,6 +401,11 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     bool isInteger = false,
     required ValueChanged<double> onChanged,
   }) {
+    final displayValue = _formatFieldValue(value, isInteger: isInteger);
+    _syncInputText(fieldId: fieldId, text: displayValue);
+    final controller = _getInputController(fieldId, displayValue);
+    final focusNode = _getInputFocusNode(fieldId);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -367,15 +416,10 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
             SizedBox(
               width: 110,
               child: TextFormField(
-                key: ValueKey(
-                  '$label:${isInteger ? value.round() : value.toStringAsFixed(1)}',
-                ),
-                initialValue:
-                    isInteger
-                        ? value.round().toString()
-                        : value.toStringAsFixed(1),
+                controller: controller,
+                focusNode: focusNode,
                 textAlign: TextAlign.right,
-                keyboardType: TextInputType.numberWithOptions(
+                keyboardType: const TextInputType.numberWithOptions(
                   decimal: !isInteger,
                 ),
                 decoration: InputDecoration(
@@ -387,7 +431,10 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                   final parsed = double.tryParse(text.trim());
                   if (parsed == null) return;
                   final clamped = parsed.clamp(min, max).toDouble();
-                  onChanged(isInteger ? clamped.roundToDouble() : clamped);
+                  final nextValue =
+                      isInteger ? clamped.roundToDouble() : clamped;
+                  if (nextValue == value) return;
+                  onChanged(nextValue);
                 },
                 onFieldSubmitted: (text) {
                   final parsed = double.tryParse(text.trim());
