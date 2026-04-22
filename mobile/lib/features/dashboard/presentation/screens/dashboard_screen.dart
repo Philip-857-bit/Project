@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/config/env_config.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/feeding_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
 import '../../../../core/providers/auth_provider.dart';
-import '../../../../core/services/api_service.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -18,7 +16,6 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  @override
   @override
   void initState() {
     super.initState();
@@ -45,13 +42,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final feedingState = ref.watch(feedingHistoryProvider);
     final alertsState = ref.watch(alertsProvider);
     final todayFeedings = ref.watch(todayFeedingsProvider);
-    final authState = ref.watch(authStateProvider);
     final issues = [
       if (deviceState.error != null) 'Devices: ${deviceState.error}',
       if (feedingState.error != null) 'Feeding: ${feedingState.error}',
       if (alertsState.error != null) 'Alerts: ${alertsState.error}',
     ];
-    final showDebug = EnvConfig.isDevelopment || EnvConfig.debugMode;
 
     return Scaffold(
       appBar: AppBar(
@@ -92,28 +87,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const CircularProgressIndicator(),
-                      if (showDebug) ...[
-                        const SizedBox(height: 16),
-                        ValueListenableBuilder<ApiDebugInfo>(
-                          valueListenable: ApiService.debugNotifier,
-                          builder: (context, info, _) {
-                            return _DebugPanel(
-                              title: 'Dashboard debug',
-                              lines: [
-                                'API: ${EnvConfig.apiBaseUrl}',
-                                'Auth: ${authState.isAuthenticated} (userId=${authState.userId ?? '-'})',
-                                'Devices loading: ${deviceState.isLoading}',
-                                'Devices count: ${deviceState.devices.length}',
-                                'Devices error: ${deviceState.error ?? '-'}',
-                                'Devices last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
-                                'Devices last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
-                                'Devices status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
-                                'Last API: ${_formatApiLine(info)}',
-                              ],
-                            );
-                          },
-                        ),
-                      ],
                     ],
                   ),
                 )
@@ -123,38 +96,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (showDebug) ...[
-                        ValueListenableBuilder<ApiDebugInfo>(
-                          valueListenable: ApiService.debugNotifier,
-                          builder: (context, info, _) {
-                            return Column(
-                              children: [
-                                _DebugPanel(
-                                  title: 'Dashboard debug',
-                                  lines: [
-                                    'API: ${EnvConfig.apiBaseUrl}',
-                                    'Auth: ${authState.isAuthenticated} (userId=${authState.userId ?? '-'})',
-                                    'Devices loading: ${deviceState.isLoading}',
-                                    'Devices count: ${deviceState.devices.length}',
-                                    'Devices error: ${deviceState.error ?? '-'}',
-                                    'Devices last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
-                                    'Devices last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
-                                    'Devices status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
-                                    'Feed history loading: ${feedingState.isLoading}',
-                                    'Feed history count: ${feedingState.events.length}',
-                                    'Feed history error: ${feedingState.error ?? '-'}',
-                                    'Alerts loading: ${alertsState.isLoading}',
-                                    'Alerts count: ${alertsState.alerts.length}',
-                                    'Alerts error: ${alertsState.error ?? '-'}',
-                                    'Last API: ${_formatApiLine(info)}',
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                              ],
-                            );
-                          },
-                        ),
-                      ],
                       if (issues.isNotEmpty) ...[
                         _LoadIssueCard(
                           title: 'Some dashboard data failed to load',
@@ -300,30 +241,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  String _formatDebugTime(DateTime? time) {
-    if (time == null) return '-';
-    return '${time.hour.toString().padLeft(2, '0')}:'
-        '${time.minute.toString().padLeft(2, '0')}:'
-        '${time.second.toString().padLeft(2, '0')}';
-  }
-
-  String _formatApiLine(ApiDebugInfo info) {
-    final method = info.method ?? '-';
-    final path = info.path ?? '-';
-    final status = info.statusCode?.toString() ?? '-';
-    final error = info.errorType ?? '-';
-    final duration = _formatDebugDuration(info.startedAt, info.finishedAt);
-    final inFlight = info.inFlight ? 'in_flight' : 'idle';
-    return '$method $path status=$status error=$error duration=$duration $inFlight';
-  }
-
-  String _formatDebugDuration(DateTime? startedAt, DateTime? finishedAt) {
-    if (startedAt == null) return '-';
-    final end = finishedAt ?? DateTime.now();
-    final ms = end.difference(startedAt).inMilliseconds;
-    return '${(ms / 1000).toStringAsFixed(1)}s';
-  }
-
   List<Widget> _buildActivityItems(
     List<dynamic> feedings,
     List<dynamic> alerts,
@@ -464,45 +381,6 @@ class _LoadIssueCard extends StatelessWidget {
               },
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DebugPanel extends StatelessWidget {
-  final String title;
-  final List<String> lines;
-
-  const _DebugPanel({required this.title, required this.lines});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            ...lines.map(
-              (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  line,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
             ),
           ],
         ),

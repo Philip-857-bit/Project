@@ -485,7 +485,7 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
                   final success = await ref
                       .read(deviceListProvider.notifier)
                       .unbindDevice(widget.deviceId);
-                  if (success && mounted) {
+                  if (success && context.mounted) {
                     context.go('/devices');
                   }
                 },

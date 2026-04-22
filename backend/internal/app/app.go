@@ -98,6 +98,13 @@ func (a *App) Run() error {
 	// Initialize services
 	services := services.New(repos, redisClient, a.config, a.logger)
 
+	// Ensure calculator species exist for mobile feed calculator dropdown.
+	if err := services.Calculator.SeedDefaultSpecies(); err != nil {
+		a.logger.WithError(err).Warn("Failed to seed default calculator species")
+	} else {
+		a.logger.Info("Calculator species seed check completed")
+	}
+
 	// Initialize handlers
 	handlers := handlers.New(services, a.logger)
 	handlers.Device.SetMQTTClient(a.mqttClient)

@@ -2,15 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/config/env_config.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/models/device.dart';
-import '../../../../core/services/api_service.dart';
 
 class DeviceListScreen extends ConsumerStatefulWidget {
   const DeviceListScreen({super.key});
-
 
   @override
   ConsumerState<DeviceListScreen> createState() => _DeviceListScreenState();
@@ -26,7 +23,6 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
   @override
   Widget build(BuildContext context) {
     final deviceState = ref.watch(deviceListProvider);
-    final showDebug = EnvConfig.isDevelopment || EnvConfig.debugMode;
 
     return Scaffold(
       appBar: AppBar(
@@ -47,26 +43,6 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const CircularProgressIndicator(),
-                      if (showDebug) ...[
-                        const SizedBox(height: 16),
-                        ValueListenableBuilder<ApiDebugInfo>(
-                          valueListenable: ApiService.debugNotifier,
-                          builder: (context, info, _) {
-                            return _DebugPanel(
-                              lines: [
-                                'API: ${EnvConfig.apiBaseUrl}',
-                                'Loading: ${deviceState.isLoading}',
-                                'Count: ${deviceState.devices.length}',
-                                'Error: ${deviceState.error ?? '-'}',
-                                'Last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
-                                'Last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
-                                'Status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
-                                'Last API: ${_formatApiLine(info)}',
-                              ],
-                            );
-                          },
-                        ),
-                      ],
                     ],
                   ),
                 )
@@ -86,34 +62,14 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
                         style: TextStyle(color: Colors.grey[600]),
                       ),
                       const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed:
-                              () =>
-                                  ref
-                                      .read(deviceListProvider.notifier)
-                                      .loadDevices(),
-                          child: const Text('Retry'),
-                        ),
-                        if (showDebug) ...[
-                          const SizedBox(height: 16),
-                          ValueListenableBuilder<ApiDebugInfo>(
-                            valueListenable: ApiService.debugNotifier,
-                            builder: (context, info, _) {
-                              return _DebugPanel(
-                                lines: [
-                                  'API: ${EnvConfig.apiBaseUrl}',
-                                  'Loading: ${deviceState.isLoading}',
-                                  'Count: ${deviceState.devices.length}',
-                                  'Error: ${deviceState.error ?? '-'}',
-                                  'Last request: ${_formatDebugTime(deviceState.lastRequestAt)}',
-                                  'Last success: ${_formatDebugTime(deviceState.lastSuccessAt)}',
-                                  'Status: ${deviceState.lastStatusCode?.toString() ?? '-'}',
-                                  'Last API: ${_formatApiLine(info)}',
-                                ],
-                              );
-                            },
-                          ),
-                        ],
+                      ElevatedButton(
+                        onPressed:
+                            () =>
+                                ref
+                                    .read(deviceListProvider.notifier)
+                                    .loadDevices(),
+                        child: const Text('Retry'),
+                      ),
                     ],
                   ),
                 )
@@ -138,30 +94,6 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
         label: const Text('Add Device'),
       ),
     );
-  }
-
-  String _formatDebugTime(DateTime? time) {
-    if (time == null) return '-';
-    return '${time.hour.toString().padLeft(2, '0')}:'
-        '${time.minute.toString().padLeft(2, '0')}:'
-        '${time.second.toString().padLeft(2, '0')}';
-  }
-
-  String _formatApiLine(ApiDebugInfo info) {
-    final method = info.method ?? '-';
-    final path = info.path ?? '-';
-    final status = info.statusCode?.toString() ?? '-';
-    final error = info.errorType ?? '-';
-    final duration = _formatDebugDuration(info.startedAt, info.finishedAt);
-    final inFlight = info.inFlight ? 'in_flight' : 'idle';
-    return '$method $path status=$status error=$error duration=$duration $inFlight';
-  }
-
-  String _formatDebugDuration(DateTime? startedAt, DateTime? finishedAt) {
-    if (startedAt == null) return '-';
-    final end = finishedAt ?? DateTime.now();
-    final ms = end.difference(startedAt).inMilliseconds;
-    return '${(ms / 1000).toStringAsFixed(1)}s';
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -190,44 +122,6 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
               onPressed: () => context.go('/devices/pair'),
               icon: const Icon(Icons.add),
               label: const Text('Add Device'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DebugPanel extends StatelessWidget {
-  final List<String> lines;
-
-  const _DebugPanel({required this.lines});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Devices debug',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            ...lines.map(
-              (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  line,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
             ),
           ],
         ),

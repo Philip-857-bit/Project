@@ -172,7 +172,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       codeController.text,
                                       newPasswordController.text,
                                     );
-                                if (success && ctx.mounted) {
+                                if (success) {
+                                  if (!ctx.mounted || !context.mounted) {
+                                    return;
+                                  }
                                   Navigator.pop(ctx);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -353,7 +356,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               await ref
                                   .read(authStateProvider.notifier)
                                   .authenticateWithBiometrics();
-                          if (success && mounted) {
+                          if (success && context.mounted) {
                             context.go('/dashboard');
                           }
                         },

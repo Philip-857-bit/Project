@@ -22,7 +22,7 @@ import '../providers/auth_provider.dart';
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshListenable = ValueNotifier<int>(0);
   ref.onDispose(refreshListenable.dispose);
-  ref.listen<AuthState>(authStateProvider, (_, __) {
+  ref.listen<AuthState>(authStateProvider, (_, _) {
     refreshListenable.value++;
   });
 
