@@ -39,12 +39,7 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
         child:
             deviceState.isLoading
                 ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(),
-                    ],
-                  ),
+                  child: const CircularProgressIndicator(),
                 )
                 : deviceState.error != null
                 ? Center(

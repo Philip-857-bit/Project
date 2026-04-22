@@ -66,6 +66,8 @@ type EnhancedFeedRecommendation struct {
 	FinalDailyAmount      float64  `json:"final_daily_amount"`
 	FinalFeedingFrequency int      `json:"final_feeding_frequency"`
 	FinalAmountPerFeeding float64  `json:"final_amount_per_feeding"`
+	TotalBiomassKg        float64  `json:"total_biomass_kg"`
+	EffectiveFeedingRate  float64  `json:"effective_feeding_rate"`
 	ConfidenceScore       float64  `json:"confidence_score"`
 	AlgorithmsUsed        []string `json:"algorithms_used"`
 	Warnings              []string `json:"warnings,omitempty"`
@@ -89,6 +91,14 @@ func (h *CalculatorHandler) CalculateRecommendation(c *gin.Context) {
 	response := &EnhancedFeedRecommendation{
 		AlgorithmsUsed: []string{},
 		Warnings:       []string{},
+	}
+
+	totalBiomassGrams := 0.0
+	for _, pop := range req.Populations {
+		totalBiomassGrams += float64(pop.Count) * pop.AverageWeight
+	}
+	if totalBiomassGrams > 0 {
+		response.TotalBiomassKg = totalBiomassGrams / 1000.0
 	}
 
 	// Always calculate basic recommendation
@@ -135,6 +145,7 @@ func (h *CalculatorHandler) CalculateRecommendation(c *gin.Context) {
 	if req.UseQ10Algorithm || (response.FusedSensorData != nil && response.FusedSensorData.DissolvedOxygen > 0) {
 		q10Env := services.Q10EnvironmentalFactors{
 			WaterTemperature: req.Environmental.WaterTemperature,
+			DissolvedOxygen:  6.0, // Sensible default when sensor DO is not provided.
 			Season:           req.Environmental.Season,
 			WeatherCondition: req.Environmental.WeatherCondition,
 			PH:               7.0, // Default pH
@@ -299,6 +310,10 @@ func (h *CalculatorHandler) CalculateRecommendation(c *gin.Context) {
 	// Cap confidence score at 1.0
 	if response.ConfidenceScore > 1.0 {
 		response.ConfidenceScore = 1.0
+	}
+
+	if totalBiomassGrams > 0 {
+		response.EffectiveFeedingRate = response.FinalDailyAmount / totalBiomassGrams
 	}
 
 	response.ProcessingTimeMs = time.Since(startTime).Milliseconds()

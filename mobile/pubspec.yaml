@@ -27,9 +27,6 @@ dependencies:
   # BLE Communication
   flutter_blue_plus: 1.32.12
 
-  # MQTT Client
-  mqtt_client: ^10.2.1
-
   # Local Storage
   flutter_secure_storage: ^10.0.0
   shared_preferences: ^2.2.3

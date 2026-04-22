@@ -167,6 +167,34 @@
 #define PIN_CAM_TX          GPIO_NUM_17     // TX to CAM RX
 #define PIN_CAM_RX          GPIO_NUM_16     // RX from CAM TX
 
+// Optional pin remap for schematic-aligned simulation wiring
+#ifdef SCHEMATIC_PINMAP
+#undef PIN_STEP
+#undef PIN_DIR
+#undef PIN_ENABLE
+#undef PIN_ULTRASONIC_TRIG
+#undef PIN_ULTRASONIC_ECHO
+#undef PIN_ONEWIRE
+#undef PIN_CAM_TX
+#undef PIN_CAM_RX
+
+// Schematic net mapping:
+// MOTOR_STEP  -> GPIO25
+// MOTOR_STEP2 -> GPIO19
+// TRIG        -> GPIO12
+// ECHO_S      -> GPIO13
+// DATA        -> GPIO14
+// CAM_TX/CAM_RX retained on GPIO17/GPIO16
+#define PIN_STEP            GPIO_NUM_25
+#define PIN_DIR             GPIO_NUM_19
+#define PIN_ENABLE          GPIO_NUM_0
+#define PIN_ULTRASONIC_TRIG GPIO_NUM_12
+#define PIN_ULTRASONIC_ECHO GPIO_NUM_13
+#define PIN_ONEWIRE         GPIO_NUM_14
+#define PIN_CAM_TX          GPIO_NUM_17
+#define PIN_CAM_RX          GPIO_NUM_16
+#endif
+
 #endif // LILYGO_T_A7670
 
 // =============================================================================
@@ -282,18 +310,47 @@
 #ifdef MQTT_KEEPALIVE
 #undef MQTT_KEEPALIVE
 #endif
+#ifndef MQTT_PORT
 #define MQTT_PORT               1883
+#endif
+#ifndef MQTT_PORT_TLS
 #define MQTT_PORT_TLS           8883
+#endif
 #define MQTT_KEEPALIVE          60
 #define MQTT_QOS                1
 #define MQTT_BUFFER_SIZE        2048
 #define MQTT_RECONNECT_DELAY_MS 5000
+#ifndef MQTT_USE_TLS
+#define MQTT_USE_TLS            0
+#endif
+#ifndef MQTT_SKIP_CERT_VERIFY
+#define MQTT_SKIP_CERT_VERIFY   1
+#endif
 
 // Cellular (A7670G 4G LTE Cat1)
 #define MODEM_BAUD_RATE         115200
 #define MODEM_TIMEOUT_MS        30000
 #define MODEM_APN               "internet"
 #define MODEM_MODEL             "A7670"
+
+#ifdef WOKWI_SIM
+// Wokwi has built-in guest WiFi and works best with a non-TLS test broker.
+#ifndef WOKWI_DEFAULT_WIFI_SSID
+#define WOKWI_DEFAULT_WIFI_SSID "Wokwi-GUEST"
+#endif
+#ifndef WOKWI_DEFAULT_WIFI_PASS
+#define WOKWI_DEFAULT_WIFI_PASS ""
+#endif
+#ifndef WOKWI_DEFAULT_MQTT_HOST
+#define WOKWI_DEFAULT_MQTT_HOST "test.mosquitto.org"
+#endif
+#ifndef WOKWI_DEFAULT_MQTT_USER
+#define WOKWI_DEFAULT_MQTT_USER ""
+#endif
+#ifndef WOKWI_DEFAULT_MQTT_PASS
+#define WOKWI_DEFAULT_MQTT_PASS ""
+#endif
+#endif
 
 // GPS Configuration (A7670G only)
 #define GPS_BAUD_RATE           9600

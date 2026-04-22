@@ -16,6 +16,12 @@
 #include "PowerManager.h"
 #include "../../include/config.h"
 
+#ifdef WOKWI_SIM
+#ifndef SIM_BATTERY_VOLTAGE
+#define SIM_BATTERY_VOLTAGE 24.0f
+#endif
+#endif
+
 PowerManager::PowerManager()
     : _deepSleepEnabled(true)  // Enable deep sleep by default for solar systems
     , _lastReadTime(0)
@@ -33,7 +39,9 @@ bool PowerManager::begin() {
     
     // Configure pins
     pinMode(PIN_BATTERY_ADC, INPUT);
+#ifndef NO_SOLAR_INPUT
     pinMode(PIN_SOLAR_ADC, INPUT);
+#endif
     
 #ifdef PIN_VBUS
     pinMode(PIN_VBUS, INPUT);
@@ -82,6 +90,9 @@ void PowerManager::update() {
 }
 
 float PowerManager::readBatteryVoltage() {
+#ifdef WOKWI_SIM
+    return SIM_BATTERY_VOLTAGE;
+#else
     // Read ADC value (multiple samples for stability)
     long total = 0;
     for (int i = 0; i < 10; i++) {
@@ -97,9 +108,13 @@ float PowerManager::readBatteryVoltage() {
     float batteryVoltage = adcVoltage * BATTERY_DIVIDER_RATIO;
     
     return batteryVoltage;
+#endif
 }
 
 float PowerManager::readSolarVoltage() {
+#ifdef NO_SOLAR_INPUT
+    return 0.0f;
+#else
     long total = 0;
     for (int i = 0; i < 10; i++) {
         total += analogRead(PIN_SOLAR_ADC);
@@ -114,9 +129,10 @@ float PowerManager::readSolarVoltage() {
     float solarVoltage = adcVoltage * SOLAR_DIVIDER_RATIO;
     
     return solarVoltage;
+#endif
 }
 
-bool PowerManager::isUSBConnected() {
+bool PowerManager::isUSBConnected() const {
 #ifdef PIN_VBUS
     return digitalRead(PIN_VBUS) == HIGH;
 #else
@@ -124,7 +140,7 @@ bool PowerManager::isUSBConnected() {
 #endif
 }
 
-bool PowerManager::isCharging() {
+bool PowerManager::isCharging() const {
     // Charging if:
     // 1. USB is connected, OR
     // 2. Solar voltage is above minimum and higher than battery
@@ -132,25 +148,33 @@ bool PowerManager::isCharging() {
         return true;
     }
     
+#ifndef NO_SOLAR_INPUT
     if (_status.solarVoltage > SOLAR_MIN_VOLTAGE) {
         // Solar is providing power
         return true;
     }
+#endif
     
     return false;
 }
 
-bool PowerManager::isSolarAvailable() {
+bool PowerManager::isSolarAvailable() const {
+#ifdef NO_SOLAR_INPUT
+    return false;
+#else
     return _status.solarVoltage > SOLAR_MIN_VOLTAGE;
+#endif
 }
 
 PowerSource PowerManager::determinePowerSource() {
     // Priority: Solar > USB > Battery
     
     // Check solar first (primary for this system)
+#ifndef NO_SOLAR_INPUT
     if (_status.solarVoltage > SOLAR_MIN_VOLTAGE) {
         return PowerSource::SOLAR;
     }
+#endif
     
     // Check USB
     if (isUSBConnected()) {
@@ -249,7 +273,9 @@ void PowerManager::printStatus() const {
     }
     
     if (!isSolarAvailable()) {
+#ifndef NO_SOLAR_INPUT
         Serial.println("  WARNING: No solar power detected!");
+#endif
     }
 }
 
@@ -310,6 +336,9 @@ bool PowerManager::canFeed() const {
 }
 
 float PowerManager::getSolarPower() const {
+#ifdef NO_SOLAR_INPUT
+    return 0.0f;
+#else
     // Estimate solar power in watts (rough calculation)
     // Assumes typical solar panel characteristics
     if (_status.solarVoltage < SOLAR_MIN_VOLTAGE) {
@@ -318,4 +347,5 @@ float PowerManager::getSolarPower() const {
     
     // Rough estimate: P = V * I, assume ~0.5A at operating voltage
     return _status.solarVoltage * 0.5f;
+#endif
 }

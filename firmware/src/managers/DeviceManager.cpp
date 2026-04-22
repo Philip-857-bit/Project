@@ -54,6 +54,22 @@ bool DeviceManager::loadCredentials() {
     _mqttUsername = _storage->getString(NVS_KEY_MQTT_USER);
     _mqttPassword = _storage->getString(NVS_KEY_MQTT_PASS);
     _cellularAPN = _storage->getString(NVS_KEY_CELL_APN);
+
+#ifdef WOKWI_SIM
+    if (_wifiSSID.isEmpty()) {
+        _wifiSSID = WOKWI_DEFAULT_WIFI_SSID;
+        _wifiPassword = WOKWI_DEFAULT_WIFI_PASS;
+    }
+    if (_mqttHost.isEmpty()) {
+        _mqttHost = WOKWI_DEFAULT_MQTT_HOST;
+    }
+    if (_mqttUsername.isEmpty()) {
+        _mqttUsername = WOKWI_DEFAULT_MQTT_USER;
+    }
+    if (_mqttPassword.isEmpty()) {
+        _mqttPassword = WOKWI_DEFAULT_MQTT_PASS;
+    }
+#endif
     
     if (_cellularAPN.isEmpty()) {
         _cellularAPN = MODEM_APN;

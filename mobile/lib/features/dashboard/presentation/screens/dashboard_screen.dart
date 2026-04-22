@@ -6,7 +6,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/feeding_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
-import '../../../../core/providers/auth_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -83,12 +82,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         child:
             deviceState.isLoading
                 ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(),
-                    ],
-                  ),
+                  child: const CircularProgressIndicator(),
                 )
                 : SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),

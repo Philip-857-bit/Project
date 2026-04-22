@@ -465,17 +465,17 @@ INSERT INTO fish_species (
 ) 
 VALUES 
     ('tilapia', 'Nile Tilapia', 3.0, 
-     2.2, 25.0, 30.0, 35.0,
-     6.0, 3.5, 1.5,
-     '{"20": 0.8, "25": 1.0, "30": 1.2}', '[]', NOW(), NOW()),
+    2.1, 26.0, 30.0, 34.0,
+    5.5, 3.0, 1.5,
+    '[{"min_temp": 20, "max_temp": 24, "multiplier": 0.85}, {"min_temp": 24, "max_temp": 30, "multiplier": 1.0}, {"min_temp": 30, "max_temp": 33, "multiplier": 0.9}, {"min_temp": 33, "max_temp": 36, "multiplier": 0.6}]', '[]', NOW(), NOW()),
     ('catfish', 'African Catfish', 2.5, 
-     2.1, 24.0, 28.0, 34.0,
-     5.5, 3.0, 1.0,
-     '{"20": 0.7, "25": 1.0, "30": 1.3}', '[]', NOW(), NOW()),
+    2.0, 26.0, 30.0, 34.0,
+    5.0, 2.5, 1.0,
+    '[{"min_temp": 22, "max_temp": 26, "multiplier": 0.85}, {"min_temp": 26, "max_temp": 30, "multiplier": 1.0}, {"min_temp": 30, "max_temp": 33, "multiplier": 0.85}, {"min_temp": 33, "max_temp": 36, "multiplier": 0.6}]', '[]', NOW(), NOW()),
     ('carp', 'Common Carp', 2.8, 
-     2.3, 20.0, 26.0, 32.0,
-     6.5, 4.0, 2.0,
-     '{"15": 0.6, "20": 0.8, "25": 1.0, "30": 1.1}', '[]', NOW(), NOW()),
+    2.1, 22.0, 28.0, 32.0,
+    6.0, 3.5, 2.0,
+    '[{"min_temp": 14, "max_temp": 20, "multiplier": 0.75}, {"min_temp": 20, "max_temp": 24, "multiplier": 0.9}, {"min_temp": 24, "max_temp": 28, "multiplier": 1.0}, {"min_temp": 28, "max_temp": 31, "multiplier": 0.8}, {"min_temp": 31, "max_temp": 34, "multiplier": 0.55}]', '[]', NOW(), NOW()),
     ('bass', 'Largemouth Bass', 3.5, 
      2.0, 18.0, 24.0, 30.0,
      7.0, 4.5, 2.5,
@@ -497,6 +497,7 @@ VALUES
      5.5, 3.0, 1.5,
      '{"24": 0.8, "27": 1.0, "30": 1.1}', '[]', NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET
+    feeding_rate_percentage = EXCLUDED.feeding_rate_percentage,
     q10_coefficient = EXCLUDED.q10_coefficient,
     optimal_temp_min = EXCLUDED.optimal_temp_min,
     optimal_temp_max = EXCLUDED.optimal_temp_max,
@@ -504,6 +505,8 @@ ON CONFLICT (id) DO UPDATE SET
     do_optimal = EXCLUDED.do_optimal,
     do_critical = EXCLUDED.do_critical,
     do_lethal = EXCLUDED.do_lethal,
+    temperature_factor = EXCLUDED.temperature_factor,
+    growth_stages = EXCLUDED.growth_stages,
     updated_at = NOW();
 
 -- ============================================================================

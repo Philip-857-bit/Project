@@ -8,7 +8,6 @@ import '../../../../core/config/env_config.dart';
 import '../../../../core/providers/app_preferences_provider.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/realtime_provider.dart';
-import '../../../../core/services/mqtt_service.dart';
 import '../../../../core/services/storage_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {

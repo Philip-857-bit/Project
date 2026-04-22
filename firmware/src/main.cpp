@@ -41,6 +41,9 @@ NVSStorage nvsStorage;
 // Timing variables
 unsigned long lastTelemetryTime = 0;
 unsigned long lastSensorReadTime = 0;
+#ifdef WOKWI_SIM
+unsigned long lastSimHeartbeatTime = 0;
+#endif
 
 // Forward declarations
 void communicationTaskFunc(void* parameter);
@@ -160,6 +163,24 @@ void communicationTaskFunc(void* parameter) {
             
             commManager.sendTelemetry(data, power);
         }
+
+#ifdef WOKWI_SIM
+        if (now - lastSimHeartbeatTime >= 5000) {
+            lastSimHeartbeatTime = now;
+            SensorData data = sensorManager.getCurrentData();
+            PowerStatus power = powerManager.getStatus();
+            Serial.printf(
+                "[SIM] uptime=%lus temp=%.2fC do=%.2fmg/L feed=%.1f%% battery=%.1f%% mqtt=%s buffered=%d\n",
+                now / 1000,
+                data.temperature,
+                data.dissolvedOxygen,
+                data.feedLevelPercent,
+                power.batteryPercent,
+                commManager.isConnected() ? "connected" : "disconnected",
+                commManager.getOfflineBufferCount()
+            );
+        }
+#endif
         
         // Process incoming commands
         commManager.processIncomingMessages();

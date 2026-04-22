@@ -8,6 +8,7 @@ import '../../../../core/models/device.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/feeding_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
+import '../../../../core/providers/realtime_provider.dart';
 
 class DeviceDetailScreen extends ConsumerStatefulWidget {
   final String deviceId;
@@ -33,6 +34,18 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
           .read(feedingHistoryProvider.notifier)
           .loadHistory(widget.deviceId, refresh: true),
     ]);
+
+    final realtime = ref.read(realtimeProvider.notifier);
+    final connected = await realtime.connect();
+    if (connected) {
+      realtime.subscribeToDevice(widget.deviceId);
+    }
+  }
+
+  @override
+  void dispose() {
+    ref.read(realtimeProvider.notifier).unsubscribeFromDevice(widget.deviceId);
+    super.dispose();
   }
 
   @override

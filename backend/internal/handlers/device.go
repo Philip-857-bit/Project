@@ -131,9 +131,13 @@ func (h *DeviceHandler) GenerateBindingCode(c *gin.Context) {
 		"device_serial": deviceSerial,
 	}).Info("Binding code generated")
 
+	qrPayload := "SFF-BIND|" + deviceSerial + "|" + code
+
 	c.JSON(http.StatusOK, gin.H{
 		"binding_code": code,
 		"expires_in":   600, // 10 minutes in seconds
+		"qr_payload":   qrPayload,
+		"qr_format":    "SFF-BIND|<device_serial>|<binding_code>",
 	})
 }
 

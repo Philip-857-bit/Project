@@ -9,3 +9,9 @@
 *.log
 .op.raw
 CHAPTER_3_MATERIALS_AND_METHODS.md
+
+# Environment secrets
+.env
+.env.local
+**/.env
+**/.env.local

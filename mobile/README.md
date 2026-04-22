@@ -183,7 +183,6 @@ flutter build ios --release --dart-define-from-file=.env
 - `flutter_riverpod` - State management
 - `go_router` - Navigation
 - `dio` - HTTP client
-- `mqtt_client` - MQTT communication
 - `flutter_blue_plus` - Bluetooth Low Energy
 - `mobile_scanner` - QR code scanning
 - `flutter_secure_storage` - Secure token storage
@@ -199,12 +198,11 @@ flutter build ios --release --dart-define-from-file=.env
 
 ## Real-time Updates
 
-The app uses MQTT for real-time updates:
+The app receives near-real-time updates through backend APIs.
 
-- `devices/{id}/telemetry` - Sensor data updates
-- `devices/{id}/shadow` - Device state changes
-- `devices/{id}/alerts` - Alert notifications
-- `devices/{id}/commands` - Send commands to device
+- Mobile polls backend monitoring endpoints for latest telemetry and alerts
+- Backend remains the single MQTT bridge to devices
+- Device commands are sent to backend HTTP endpoints
 
 ## API Endpoints
 

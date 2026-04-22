@@ -278,6 +278,119 @@ Update `MODEM_APN` in `include/config.h`:
 | 24V Battery | For motor | 1 |
 | 18650 Battery | For ESP32 (built-in) | 1 |
 
+## Wokwi Setup (PlatformIO)
+
+This repository is now configured for Wokwi simulation with PlatformIO.
+
+### Files added for Wokwi
+
+- `wokwi.toml` - points Wokwi to the PlatformIO firmware output
+- `diagram.json` - Wokwi circuit (ESP32 + HC-SR04 + DS18B20 + stepper driver)
+- `platformio.ini` environment: `t-a7670-wokwi`
+- `scripts/load_wokwi_env.py` - loads `.env` / `.env.local` values into build flags
+- `.env.example` - template for local simulation credentials
+
+### Configure MQTT credentials for Wokwi
+
+1. Copy `.env.example` to `.env` inside `firmware/`.
+2. Set your MQTT values in `.env`.
+3. Build `t-a7670-wokwi`.
+
+Supported `.env` keys:
+
+- `WOKWI_DEFAULT_WIFI_SSID`
+- `WOKWI_DEFAULT_WIFI_PASS`
+- `WOKWI_DEFAULT_MQTT_HOST`
+- `WOKWI_DEFAULT_MQTT_USER`
+- `WOKWI_DEFAULT_MQTT_PASS`
+- `MQTT_USE_TLS` (`1` or `0`)
+- `MQTT_SKIP_CERT_VERIFY` (`1` or `0`)
+- `MQTT_PORT` (optional)
+- `MQTT_PORT_TLS` (optional)
+
+### Simulation profile
+
+- Battery is simulated as fixed **24V**
+- Solar input is disabled in simulation (`NO_SOLAR_INPUT`)
+- Driver is configured as **DM542 (Step/Dir/EN)**
+- Schematic pin map is enabled (`SCHEMATIC_PINMAP`):
+        - MOTOR_STEP  -> GPIO25
+        - MOTOR_STEP2 -> GPIO19
+        - TRIG        -> GPIO12
+        - ECHO_S      -> GPIO13
+        - DATA        -> GPIO14
+
+Note: Wokwi does not provide a native DM542 model, so the diagram uses a compatible
+stepper driver part as a **DM542 signal-level stand-in** (Step/Dir/EN behavior).
+
+### Run with PlatformIO extension
+
+1. Select environment: `t-a7670-wokwi`
+2. Build project
+3. Run command: **Wokwi: Start Simulator**
+4. Open the simulator serial monitor (or PlatformIO serial monitor) to view logs
+
+If PlatformIO monitor shows a physical COM port with no output, use the Wokwi env
+monitor command so it connects to the simulator serial stream:
+
+```bash
+pio device monitor -e t-a7670-wokwi
+```
+
+This project forwards Wokwi serial via RFC2217 on localhost:4000.
+
+### WSL monitor flow
+
+When running monitor from WSL, `localhost:4000` points to WSL itself (not Windows),
+so use the helper script that resolves the Windows host IP automatically:
+
+```bash
+bash scripts/wokwi_monitor_wsl.sh
+```
+
+Recommended order:
+
+1. Build: `pio run -e t-a7670-wokwi`
+2. Start **Wokwi: Start Simulator** (not debugger) and press Resume/Play
+3. In WSL terminal: `bash scripts/wokwi_monitor_wsl.sh`
+
+If you start with debugger, serial output may appear delayed or not appear while the
+CPU is halted at breakpoints. For log verification, use normal simulator mode first.
+
+### Debug mode (GDB)
+
+Wokwi debug mode requires `gdbServerPort` in `wokwi.toml`.
+
+Current project setting:
+
+```toml
+[wokwi]
+gdbServerPort = 3333
+```
+
+If VS Code shows `gdbServerPort is not set in wokwi.toml`, ensure this key exists,
+then stop and start the simulator again in debug mode.
+
+Debug startup (important):
+
+1. Build `t-a7670-wokwi`
+2. Start debugging using exactly one method:
+        - **Wokwi panel:** `Start with Debugger` (do not press `F5` again), or
+        - **Command palette:** `Wokwi: Start Simulator and Wait for Debugger`, then press `F5` once
+3. If you see `Unexpected GDB output ... vMustReplyEmpty`, stop all active debug sessions and start again with only one of the methods above.
+
+Expected runtime log in simulation:
+
+- `[SIM] uptime=... temp=... do=... feed=... battery=... mqtt=... buffered=...`
+
+This line prints every ~5 seconds and confirms the firmware loop is running.
+
+### Run with CLI
+
+```bash
+pio run -e t-a7670-wokwi
+```
+
 ## License
 
 Proprietary - Smart Fish Feeder Project

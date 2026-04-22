@@ -80,13 +80,13 @@ public:
      * Check if system is charging
      * @return true if charging from solar or USB
      */
-    bool isCharging();
+    bool isCharging() const;
     
     /**
      * Check if USB is connected
      * @return true if USB power detected
      */
-    bool isUSBConnected();
+    bool isUSBConnected() const;
     
     /**
      * Check if should enter deep sleep

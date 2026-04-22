@@ -12,6 +12,18 @@
 #include "../../include/config.h"
 #include <Arduino.h>
 
+#ifndef DEFAULT_PH_VALUE
+#define DEFAULT_PH_VALUE 7.0f
+#endif
+
+#ifndef DEFAULT_DO_VALUE
+#define DEFAULT_DO_VALUE 0.0f
+#endif
+
+#ifndef DEFAULT_TURBIDITY_VALUE
+#define DEFAULT_TURBIDITY_VALUE 0.0f
+#endif
+
 // =============================================================================
 // Time Functions
 // =============================================================================

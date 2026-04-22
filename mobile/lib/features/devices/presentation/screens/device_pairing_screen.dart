@@ -185,10 +185,25 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                       final barcodes = capture.barcodes;
                       if (barcodes.isNotEmpty) {
                         final code = barcodes.first.rawValue;
-                        if (code != null && code.startsWith('SFF-')) {
+                        if (code == null) {
+                          return;
+                        }
+
+                        String? serial;
+                        if (code.startsWith('SFF-BIND|')) {
+                          final parts = code.split('|');
+                          if (parts.length >= 3) {
+                            serial = parts[1];
+                            _bindingCode = parts[2];
+                          }
+                        } else if (code.startsWith('SFF-')) {
+                          serial = code;
+                        }
+
+                        if (serial != null) {
                           Navigator.pop(ctx);
                           setState(() {
-                            _scannedSerialNumber = code;
+                            _scannedSerialNumber = serial;
                             _currentStep = 1;
                           });
                           _startScan();

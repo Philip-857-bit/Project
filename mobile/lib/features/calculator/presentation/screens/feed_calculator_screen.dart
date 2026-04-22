@@ -18,12 +18,25 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   double _fishCount = 1000;
   double _avgWeight = 200;
   double _waterTemp = 28;
-  double? _dissolvedOxygen;
+  double _dissolvedOxygen = 6.0;
+  final Map<String, TextEditingController> _inputControllers = {};
+  final Map<String, FocusNode> _inputFocusNodes = {};
 
   @override
   void initState() {
     super.initState();
     Future.microtask(_loadData);
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _inputControllers.values) {
+      controller.dispose();
+    }
+    for (final focusNode in _inputFocusNodes.values) {
+      focusNode.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -40,7 +53,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     if (sensorData != null) {
       setState(() {
         _waterTemp = sensorData.waterTemperature;
-        _dissolvedOxygen = sensorData.dissolvedOxygen;
+        _dissolvedOxygen = sensorData.dissolvedOxygen ?? _dissolvedOxygen;
       });
     }
   }
@@ -48,9 +61,11 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   Future<void> _calculate() async {
     if (_selectedSpeciesId == null) return;
 
+    FocusScope.of(context).unfocus();
+
     final request = FeedCalculationRequest(
       speciesId: _selectedSpeciesId!,
-      fishCount: _fishCount.toInt(),
+      fishCount: _fishCount.round(),
       averageWeight: _avgWeight,
       waterTemperature: _waterTemp,
       dissolvedOxygen: _dissolvedOxygen,
@@ -59,12 +74,42 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     await ref.read(calculatorProvider.notifier).calculate(request);
   }
 
+  void _updateInput(VoidCallback updater) {
+    setState(updater);
+    ref.read(calculatorProvider.notifier).clearResult();
+  }
+
+  String _formatFieldValue(double value, {required bool isInteger}) {
+    return isInteger ? value.round().toString() : value.toStringAsFixed(1);
+  }
+
+  TextEditingController _getInputController(String fieldId, String text) {
+    return _inputControllers.putIfAbsent(
+      fieldId,
+      () => TextEditingController(text: text),
+    );
+  }
+
+  FocusNode _getInputFocusNode(String fieldId) {
+    return _inputFocusNodes.putIfAbsent(fieldId, FocusNode.new);
+  }
+
+  void _syncInputText({required String fieldId, required String text}) {
+    final controller = _getInputController(fieldId, text);
+    final focusNode = _getInputFocusNode(fieldId);
+    if (focusNode.hasFocus || controller.text == text) return;
+    controller.value = controller.value.copyWith(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+      composing: TextRange.empty,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final speciesState = ref.watch(speciesListProvider);
     final calcState = ref.watch(calculatorProvider);
     final result = calcState.result;
-
 
     return Scaffold(
       appBar: AppBar(title: const Text('Feed Calculator')),
@@ -123,7 +168,8 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                           ],
                         )
                         : DropdownButtonFormField<String>(
-                          value: _selectedSpeciesId,
+                          key: ValueKey(_selectedSpeciesId),
+                          initialValue: _selectedSpeciesId,
                           items:
                               speciesState.species
                                   .map(
@@ -134,7 +180,7 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                                   )
                                   .toList(),
                           onChanged:
-                              (v) => setState(() => _selectedSpeciesId = v),
+                              (v) => _updateInput(() => _selectedSpeciesId = v),
                           decoration: const InputDecoration(
                             border: OutlineInputBorder(),
                           ),
@@ -157,46 +203,50 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSlider(
+                      fieldId: 'fishCount',
                       label: 'Fish Count',
                       value: _fishCount,
-                      min: 100,
+                      min: 1,
                       max: 10000,
-                      divisions: 99,
+                      divisions: 200,
                       suffix: ' fish',
-                      onChanged: (v) => setState(() => _fishCount = v),
+                      isInteger: true,
+                      onChanged: (v) => _updateInput(() => _fishCount = v),
                     ),
                     const SizedBox(height: 16),
                     _buildSlider(
+                      fieldId: 'averageWeight',
                       label: 'Average Weight',
                       value: _avgWeight,
-                      min: 10,
+                      min: 1,
                       max: 1000,
-                      divisions: 99,
+                      divisions: 200,
                       suffix: 'g',
-                      onChanged: (v) => setState(() => _avgWeight = v),
+                      onChanged: (v) => _updateInput(() => _avgWeight = v),
                     ),
                     const SizedBox(height: 16),
                     _buildSlider(
+                      fieldId: 'waterTemperature',
                       label: 'Water Temperature',
                       value: _waterTemp,
-                      min: 15,
+                      min: 0,
                       max: 35,
-                      divisions: 20,
+                      divisions: 70,
                       suffix: '°C',
-                      onChanged: (v) => setState(() => _waterTemp = v),
+                      onChanged: (v) => _updateInput(() => _waterTemp = v),
                     ),
-                    if (_dissolvedOxygen != null) ...[
-                      const SizedBox(height: 16),
-                      _buildSlider(
-                        label: 'Dissolved Oxygen',
-                        value: _dissolvedOxygen!,
-                        min: 0,
-                        max: 15,
-                        divisions: 30,
-                        suffix: ' mg/L',
-                        onChanged: (v) => setState(() => _dissolvedOxygen = v),
-                      ),
-                    ],
+                    const SizedBox(height: 16),
+                    _buildSlider(
+                      fieldId: 'dissolvedOxygen',
+                      label: 'Dissolved Oxygen',
+                      value: _dissolvedOxygen,
+                      min: 0,
+                      max: 15,
+                      divisions: 60,
+                      suffix: ' mg/L',
+                      onChanged:
+                          (v) => _updateInput(() => _dissolvedOxygen = v),
+                    ),
                   ],
                 ),
               ),
@@ -264,8 +314,8 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                         '${result.biomass.toStringAsFixed(1)} kg',
                       ),
                       _buildResultRow(
-                        'Feeding Rate',
-                        '${(result.feedingRate * 100).toStringAsFixed(1)}%',
+                        'Feeding Rate (BW/day)',
+                        '${(result.feedingRate * 100).toStringAsFixed(2)}%',
                       ),
                       _buildResultRow(
                         'Q10 Factor',
@@ -313,6 +363,10 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
+          _buildInfoChip(
+            'Base BW%',
+            '${selected.feedingRatePercentage.toStringAsFixed(1)}%',
+          ),
           _buildInfoChip('Q10', selected.q10Coefficient.toString()),
           _buildInfoChip(
             'Optimal',
@@ -337,14 +391,21 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   }
 
   Widget _buildSlider({
+    required String fieldId,
     required String label,
     required double value,
     required double min,
     required double max,
     required int divisions,
     required String suffix,
+    bool isInteger = false,
     required ValueChanged<double> onChanged,
   }) {
+    final displayValue = _formatFieldValue(value, isInteger: isInteger);
+    _syncInputText(fieldId: fieldId, text: displayValue);
+    final controller = _getInputController(fieldId, displayValue);
+    final focusNode = _getInputFocusNode(fieldId);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -352,12 +413,40 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label, style: Theme.of(context).textTheme.titleMedium),
-            Text(
-              '${value.round()}$suffix',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            SizedBox(
+              width: 110,
+              child: TextFormField(
+                controller: controller,
+                focusNode: focusNode,
+                textAlign: TextAlign.right,
+                keyboardType: TextInputType.numberWithOptions(
+                  decimal: !isInteger,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  suffixText: suffix.trim(),
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (text) {
+                  final parsed = double.tryParse(text.trim());
+                  if (parsed == null) return;
+                  final clamped = parsed.clamp(min, max).toDouble();
+                  final nextValue =
+                      isInteger ? clamped.roundToDouble() : clamped;
+                  if (nextValue == value) return;
+                  onChanged(nextValue);
+                },
+                onFieldSubmitted: (text) {
+                  final parsed = double.tryParse(text.trim());
+                  if (parsed == null) return;
+                  final clamped = parsed.clamp(min, max).toDouble();
+                  onChanged(isInteger ? clamped.roundToDouble() : clamped);
+                },
+              ),
             ),
           ],
         ),
+        const SizedBox(height: 8),
         Slider(
           value: value,
           min: min,
@@ -382,4 +471,3 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     );
   }
 }
-

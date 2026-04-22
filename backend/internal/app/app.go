@@ -98,11 +98,9 @@ func (a *App) Run() error {
 	// Initialize services
 	services := services.New(repos, redisClient, a.config, a.logger)
 
-	// Ensure calculator species exist for mobile feed calculator dropdown.
+	// Seed default reference data (idempotent) after migrations are applied.
 	if err := services.Calculator.SeedDefaultSpecies(); err != nil {
-		a.logger.WithError(err).Warn("Failed to seed default calculator species")
-	} else {
-		a.logger.Info("Calculator species seed check completed")
+		return fmt.Errorf("failed to seed default fish species: %w", err)
 	}
 
 	// Initialize handlers

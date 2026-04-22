@@ -260,21 +260,31 @@ class FeedCalculationResult {
 
   factory FeedCalculationResult.fromJson(Map<String, dynamic> json) {
     final recommendation = json['recommendation'] ?? json;
-    final basicRecommendation =
-        recommendation['basic_recommendation'] ?? const {};
+    final basicRecommendation = recommendation['basic_recommendation'] ?? const {};
+    final suggestedFeedingsRaw =
+        recommendation['final_feeding_frequency'] ?? json['suggested_feedings'];
+    final parsedSuggestedFeedings =
+        suggestedFeedingsRaw is num
+            ? suggestedFeedingsRaw.toInt()
+            : int.tryParse(suggestedFeedingsRaw?.toString() ?? '') ?? 2;
+    final normalizedSuggestedFeedings =
+        parsedSuggestedFeedings <= 0
+            ? 2
+            : parsedSuggestedFeedings > 2
+            ? 2
+            : parsedSuggestedFeedings;
 
     return FeedCalculationResult(
       recommendedAmount: _doubleValue(
         recommendation['final_daily_amount'] ?? json['recommended_amount'],
       ),
       biomass: _doubleValue(
-        basicRecommendation['species_breakdown'] is List &&
-                (basicRecommendation['species_breakdown'] as List).isNotEmpty
-            ? basicRecommendation['species_breakdown'][0]['daily_amount']
-            : json['biomass'],
+        recommendation['total_biomass_kg'] ??
+            basicRecommendation['total_biomass_kg'] ??
+            json['biomass'],
       ),
       feedingRate: _doubleValue(
-        basicRecommendation['adjustments']?['total_adjustment'] ??
+        recommendation['effective_feeding_rate'] ??
             json['feeding_rate'],
       ),
       q10Factor: _doubleValue(
@@ -289,10 +299,27 @@ class FeedCalculationResult {
           recommendation['basic_recommendation']?['environmental_note'] ??
           json['recommendation'] ??
           '',
-      suggestedFeedings:
-          recommendation['final_feeding_frequency'] ??
-          json['suggested_feedings'] ??
-          3,
+        suggestedFeedings: normalizedSuggestedFeedings,
+    );
+  }
+
+  FeedCalculationResult copyWith({
+    double? recommendedAmount,
+    double? biomass,
+    double? feedingRate,
+    double? q10Factor,
+    double? obmSafetyFactor,
+    String? recommendation,
+    int? suggestedFeedings,
+  }) {
+    return FeedCalculationResult(
+      recommendedAmount: recommendedAmount ?? this.recommendedAmount,
+      biomass: biomass ?? this.biomass,
+      feedingRate: feedingRate ?? this.feedingRate,
+      q10Factor: q10Factor ?? this.q10Factor,
+      obmSafetyFactor: obmSafetyFactor ?? this.obmSafetyFactor,
+      recommendation: recommendation ?? this.recommendation,
+      suggestedFeedings: suggestedFeedings ?? this.suggestedFeedings,
     );
   }
 }
@@ -300,6 +327,7 @@ class FeedCalculationResult {
 class FishSpecies {
   final String id;
   final String name;
+  final double feedingRatePercentage;
   final double q10Coefficient;
   final double referenceTemperature;
   final double optimalTempMin;
@@ -311,6 +339,7 @@ class FishSpecies {
   FishSpecies({
     required this.id,
     required this.name,
+    required this.feedingRatePercentage,
     required this.q10Coefficient,
     required this.referenceTemperature,
     required this.optimalTempMin,
@@ -324,6 +353,7 @@ class FishSpecies {
     return FishSpecies(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
+      feedingRatePercentage: (json['feeding_rate_percentage'] ?? 0).toDouble(),
       q10Coefficient: (json['q10_coefficient'] ?? 2.0).toDouble(),
       referenceTemperature:
           (json['reference_temperature'] ?? json['optimal_temp_min'] ?? 25)

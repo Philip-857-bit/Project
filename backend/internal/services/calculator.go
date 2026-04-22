@@ -11,6 +11,8 @@ import (
 	"smart-fish-feeder/internal/models"
 	"smart-fish-feeder/internal/redis"
 	"smart-fish-feeder/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 // CalculatorService handles feed calculation business logic
@@ -205,8 +207,10 @@ func (s *CalculatorService) getGrowthStageMultiplier(growthStagesJSON string, we
 		return 1.0, err
 	}
 
-	for _, stage := range stages {
-		if weight >= stage.MinWeight && weight <= stage.MaxWeight {
+	for i, stage := range stages {
+		isLast := i == len(stages)-1
+		inRange := weight >= stage.MinWeight && (weight < stage.MaxWeight || (isLast && weight <= stage.MaxWeight))
+		if inRange {
 			return stage.Multiplier, nil
 		}
 	}
@@ -293,14 +297,14 @@ func (s *CalculatorService) getWeatherMultiplier(weather string) float64 {
 
 // calculateOptimalFeedingFrequency determines optimal feeding frequency based on daily amount
 func (s *CalculatorService) calculateOptimalFeedingFrequency(dailyAmount float64) int {
-	// Base frequency on total daily amount
-	// More frequent feeding for larger amounts to improve digestion
+	// Base frequency on total daily amount.
+	// Keep smaller operations at lower frequency to avoid over-feeding cycles.
 	switch {
-	case dailyAmount <= 100: // Small amounts
+	case dailyAmount <= 250: // Small amounts
 		return 2
-	case dailyAmount <= 500: // Medium amounts
+	case dailyAmount <= 1500: // Medium amounts
 		return 3
-	case dailyAmount <= 1000: // Large amounts
+	case dailyAmount <= 4000: // Large amounts
 		return 4
 	default: // Very large amounts
 		return 5
@@ -454,34 +458,24 @@ type Q10FeedRecommendation = models.Q10FeedRecommendation
 
 // SeedDefaultSpecies seeds the database with default fish species
 func (s *CalculatorService) SeedDefaultSpecies() error {
-	// Check if species already exist
-	existing, err := s.GetAllSpecies()
-	if err != nil {
-		return err
-	}
-
-	if len(existing) > 0 {
-		return nil // Species already exist, no need to seed
-	}
-
 	// Default fish species with Q10 biological parameters
 	defaultSpecies := []models.FishSpecies{
 		{
 			ID:                    "tilapia",
 			Name:                  "Tilapia",
 			FeedingRatePercentage: 3.0,  // 3% of body weight per day
-			Q10Coefficient:        2.2,  // Q10 metabolic coefficient for Tilapia
+			Q10Coefficient:        2.1,  // Updated practical Q10 coefficient for Tilapia
 			OptimalTempMin:        26.0, // °C
 			OptimalTempMax:        30.0, // °C
 			CriticalTempMax:       34.0, // °C - thermal stress limit
-			DOOptimal:             6.0,  // mg/L - optimal dissolved oxygen
+			DOOptimal:             5.5,  // mg/L - optimal dissolved oxygen
 			DOCritical:            3.0,  // mg/L - critical dissolved oxygen
 			DOLethal:              1.5,  // mg/L - lethal dissolved oxygen
 			TemperatureFactor: `[
-				{"min_temp": 15, "max_temp": 20, "multiplier": 0.7},
-				{"min_temp": 20, "max_temp": 25, "multiplier": 1.0},
-				{"min_temp": 25, "max_temp": 30, "multiplier": 1.1},
-				{"min_temp": 30, "max_temp": 35, "multiplier": 0.8}
+				{"min_temp": 20, "max_temp": 24, "multiplier": 0.85},
+				{"min_temp": 24, "max_temp": 30, "multiplier": 1.0},
+				{"min_temp": 30, "max_temp": 33, "multiplier": 0.9},
+				{"min_temp": 33, "max_temp": 36, "multiplier": 0.6}
 			]`,
 			GrowthStages: `[
 				{"min_weight": 0.1, "max_weight": 10, "multiplier": 1.5, "description": "Juvenile"},
@@ -494,20 +488,20 @@ func (s *CalculatorService) SeedDefaultSpecies() error {
 		},
 		{
 			ID:                    "catfish",
-			Name:                  "Catfish",
+			Name:                  "African Catfish",
 			FeedingRatePercentage: 2.5,  // 2.5% of body weight per day
-			Q10Coefficient:        2.1,  // Q10 metabolic coefficient for Catfish
-			OptimalTempMin:        22.0, // °C
-			OptimalTempMax:        28.0, // °C
-			CriticalTempMax:       32.0, // °C - thermal stress limit
-			DOOptimal:             5.5,  // mg/L - optimal dissolved oxygen
+			Q10Coefficient:        2.0,  // Updated practical Q10 coefficient for Catfish
+			OptimalTempMin:        26.0, // °C
+			OptimalTempMax:        30.0, // °C
+			CriticalTempMax:       34.0, // °C - thermal stress limit
+			DOOptimal:             5.0,  // mg/L - optimal dissolved oxygen
 			DOCritical:            2.5,  // mg/L - critical dissolved oxygen
 			DOLethal:              1.0,  // mg/L - lethal dissolved oxygen
 			TemperatureFactor: `[
-				{"min_temp": 18, "max_temp": 22, "multiplier": 0.8},
-				{"min_temp": 22, "max_temp": 28, "multiplier": 1.0},
-				{"min_temp": 28, "max_temp": 32, "multiplier": 1.1},
-				{"min_temp": 32, "max_temp": 35, "multiplier": 0.9}
+				{"min_temp": 22, "max_temp": 26, "multiplier": 0.85},
+				{"min_temp": 26, "max_temp": 30, "multiplier": 1.0},
+				{"min_temp": 30, "max_temp": 33, "multiplier": 0.85},
+				{"min_temp": 33, "max_temp": 36, "multiplier": 0.6}
 			]`,
 			GrowthStages: `[
 				{"min_weight": 0.5, "max_weight": 20, "multiplier": 1.4, "description": "Juvenile"},
@@ -520,21 +514,21 @@ func (s *CalculatorService) SeedDefaultSpecies() error {
 		},
 		{
 			ID:                    "carp",
-			Name:                  "Carp",
+			Name:                  "Common Carp",
 			FeedingRatePercentage: 2.8,  // 2.8% of body weight per day
-			Q10Coefficient:        2.3,  // Q10 metabolic coefficient for Carp
-			OptimalTempMin:        20.0, // °C
-			OptimalTempMax:        25.0, // °C
-			CriticalTempMax:       30.0, // °C - thermal stress limit
-			DOOptimal:             7.0,  // mg/L - optimal dissolved oxygen
+			Q10Coefficient:        2.1,  // Updated practical Q10 coefficient for Carp
+			OptimalTempMin:        22.0, // °C
+			OptimalTempMax:        28.0, // °C
+			CriticalTempMax:       32.0, // °C - thermal stress limit
+			DOOptimal:             6.0,  // mg/L - optimal dissolved oxygen
 			DOCritical:            3.5,  // mg/L - critical dissolved oxygen
 			DOLethal:              2.0,  // mg/L - lethal dissolved oxygen
 			TemperatureFactor: `[
-				{"min_temp": 10, "max_temp": 15, "multiplier": 0.5},
-				{"min_temp": 15, "max_temp": 20, "multiplier": 0.8},
-				{"min_temp": 20, "max_temp": 25, "multiplier": 1.0},
-				{"min_temp": 25, "max_temp": 30, "multiplier": 1.2},
-				{"min_temp": 30, "max_temp": 35, "multiplier": 0.9}
+				{"min_temp": 14, "max_temp": 20, "multiplier": 0.75},
+				{"min_temp": 20, "max_temp": 24, "multiplier": 0.9},
+				{"min_temp": 24, "max_temp": 28, "multiplier": 1.0},
+				{"min_temp": 28, "max_temp": 31, "multiplier": 0.8},
+				{"min_temp": 31, "max_temp": 34, "multiplier": 0.55}
 			]`,
 			GrowthStages: `[
 				{"min_weight": 1, "max_weight": 50, "multiplier": 1.3, "description": "Juvenile"},
@@ -547,10 +541,34 @@ func (s *CalculatorService) SeedDefaultSpecies() error {
 		},
 	}
 
-	// Create each species
+	// Upsert each species by ID so startup seeding also refreshes existing defaults.
 	for _, species := range defaultSpecies {
-		if err := s.CreateSpecies(&species); err != nil {
-			return fmt.Errorf("failed to create species %s: %w", species.Name, err)
+		existing, err := s.GetSpeciesByID(species.ID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("failed to get species %s: %w", species.ID, err)
+		}
+
+		if errors.Is(err, gorm.ErrRecordNotFound) || existing == nil {
+			if err := s.CreateSpecies(&species); err != nil {
+				return fmt.Errorf("failed to create species %s: %w", species.Name, err)
+			}
+			continue
+		}
+
+		existing.Name = species.Name
+		existing.FeedingRatePercentage = species.FeedingRatePercentage
+		existing.Q10Coefficient = species.Q10Coefficient
+		existing.OptimalTempMin = species.OptimalTempMin
+		existing.OptimalTempMax = species.OptimalTempMax
+		existing.CriticalTempMax = species.CriticalTempMax
+		existing.DOOptimal = species.DOOptimal
+		existing.DOCritical = species.DOCritical
+		existing.DOLethal = species.DOLethal
+		existing.TemperatureFactor = species.TemperatureFactor
+		existing.GrowthStages = species.GrowthStages
+
+		if err := s.UpdateSpecies(existing); err != nil {
+			return fmt.Errorf("failed to update species %s: %w", species.Name, err)
 		}
 	}
 
