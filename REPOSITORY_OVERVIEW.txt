@@ -1,0 +1,232 @@
+# Project Repository Overview (Smart Fish Feeder / SmartAqua)
+
+This repository contains a full-stack IoT aquaculture platform for **automated fish feeding, pond monitoring, and remote device control**.
+
+It is organized as a multi-component system:
+- **Backend (Go)** for APIs, business logic, telemetry ingestion, scheduling, and analytics
+- **Firmware (ESP32 / PlatformIO)** for on-device control, sensing, connectivity, and motor actuation
+- **Mobile app (Flutter)** for user operations, monitoring, and device management
+- **Documentation scripts and proposal assets** under `docs/`
+
+---
+
+## 1) What the system does
+
+At a high level, the project enables fish farmers to:
+- Register and manage feeding devices
+- Configure automatic feeding schedules
+- Trigger manual feeding remotely
+- Monitor sensor values (temperature, feed level, power/battery, connectivity)
+- Receive alerts
+- Track feeding events/history
+- Use feed recommendations driven by biological/algorithmic logic
+
+The platform is designed for real-world field use with intermittent connectivity and low-bandwidth conditions.
+
+---
+
+## 2) End-to-end architecture
+
+Main interaction chain:
+
+1. **Mobile app** calls backend REST APIs and reads near-real-time data
+2. **Backend** manages users, devices, schedules, analytics, and command orchestration
+3. **Firmware devices** (ESP32-based controllers/cameras) execute feed actions and publish telemetry/events
+4. **MQTT broker** is the device messaging channel between backend and hardware
+5. **PostgreSQL** persists system records and historical data
+6. **Redis** supports caching/session-related operational workloads
+
+Core communication modes:
+- **HTTP/REST**: App ↔ Backend
+- **MQTT**: Backend ↔ Device
+- **BLE**: Mobile provisioning flow support in app stack
+
+---
+
+## 3) Repository layout (major to minor)
+
+```text
+Project/
+├── .github/
+│   └── workflows/
+│       └── build-debug-apk.yml         # CI workflow for Flutter debug APK build
+├── backend/                              # Go backend API and core business services
+│   ├── cmd/server/                       # Entrypoint
+│   ├── configs/config.yaml               # Main app config
+│   ├── docs/                             # MQTT and Railway deployment docs
+│   ├── internal/
+│   │   ├── algorithms/                   # Biological, CV, RL, fuzzy logic, sensor fusion, math
+│   │   ├── app/                          # App setup and routing wiring
+│   │   ├── config/                       # Config loading/handling
+│   │   ├── database/                     # DB initialization/migration wiring
+│   │   ├── handlers/                     # HTTP handlers
+│   │   ├── middleware/                   # Request middleware
+│   │   ├── models/                       # Domain/data models
+│   │   ├── mqtt/                         # MQTT client/protocol integration
+│   │   ├── redis/                        # Redis integration
+│   │   ├── repository/                   # Data access layer
+│   │   └── services/                     # Business logic layer
+│   ├── Makefile                          # Build/test/lint tasks
+│   ├── Dockerfile                        # Containerization
+│   ├── docker-compose.yml                # Local service orchestration
+│   └── README.md                         # Backend-specific details
+├── firmware/                             # ESP32 firmware (main controller + camera)
+│   ├── include/config.h                  # Hardware pin map and runtime constants
+│   ├── src/
+│   │   ├── main.cpp                      # Primary firmware entry
+│   │   ├── cam/                          # ESP32-CAM module code
+│   │   ├── hal/                          # Hardware abstraction layer code
+│   │   ├── managers/                     # Runtime manager modules
+│   │   └── storage/                      # Data/state storage utilities
+│   ├── platformio.ini                    # PlatformIO environments and build targets
+│   ├── diagram.json / wokwi.toml         # Wokwi simulation assets
+│   └── README.md                         # Firmware setup, wiring, BOM, troubleshooting
+├── mobile/                               # Flutter mobile app
+│   ├── lib/
+│   │   ├── core/                         # Models, services, providers, router, theme
+│   │   ├── features/                     # Auth, dashboard, devices, feeding, monitoring, etc.
+│   │   └── main.dart                     # App entrypoint
+│   ├── android/ ios/ web/                # Platform targets
+│   ├── test/                             # Flutter tests
+│   ├── pubspec.yaml                      # Dependencies and package metadata
+│   └── README.md                         # Mobile-specific setup and architecture
+├── docs/                                 # Proposal/doc generation scripts and content
+└── run_all_scenarios.bat                 # LTspice simulation batch runner for power scenarios
+```
+
+---
+
+## 4) Backend details
+
+### Stack
+- Go `1.24.x`
+- Gin (HTTP framework)
+- GORM + PostgreSQL
+- Redis client
+- JWT authentication
+- MQTT integration (Paho)
+
+### Functional domains
+- Authentication and user profile management
+- Device registration/binding and lifecycle operations
+- Feeding schedules, manual feed commands, history, analytics
+- Monitoring endpoints for sensors/alerts/status
+- Feed calculator services and species data flows
+- Algorithm modules for advanced decision support and optimization
+
+### Configuration surface (`backend/configs/config.yaml`)
+- `server`, `database`, `redis`, `jwt`, `logging`
+- `device`, `vision`, `cloudinary`
+- `mqtt`, `ble`, `websocket`
+- `offline_sync`, `cellular`, `power`
+
+### Quality/operations tooling
+- `make build`, `make test`, `make lint`, `make vet`, `make coverage`
+- Docker support for local/prod-style container runs
+
+### Backend docs
+- `backend/docs/MQTT_COMMUNICATION.md`
+- `backend/docs/RAILWAY_DEPLOYMENT.md`
+
+---
+
+## 5) Firmware details
+
+### Hardware focus
+- Main board: **LILYGO T-A7670 R2** (ESP32 + A7670G LTE)
+- Camera: **ESP32-CAM**
+- Motor chain: NEMA stepper + DM542/TB6600 driver + auger feed mechanism
+- Sensors: load cell (HX711), ultrasonic feed level sensor, DS18B20 temperature
+- Power model includes solar-assisted scenarios and battery management
+
+### Build environments (`firmware/platformio.ini`)
+- `t-a7670-dm542` (default)
+- `t-a7670-tb6600`
+- `t-a7670-debug`
+- `t-a7670-release`
+- `esp32cam`
+- `t-a7670-wokwi` (simulator profile)
+
+### Config-heavy implementation
+`firmware/include/config.h` centralizes:
+- Pin definitions
+- Motor/auger parameters
+- Sensor thresholds and calibration constants
+- Battery/solar thresholds
+- MQTT/network settings
+- Biological algorithm constants (Q10, OBM, feed-rate references)
+- NVS storage key definitions
+
+---
+
+## 6) Mobile app details
+
+### Stack
+- Flutter / Dart
+- Riverpod state management
+- GoRouter navigation
+- Dio/Retrofit networking
+- BLE support (`flutter_blue_plus`)
+- Secure storage and local persistence packages
+- Firebase messaging integration
+
+### Feature organization
+- `auth`, `dashboard`, `devices`, `feeding`, `monitoring`, `calculator`, `video`, `settings`
+- Core layers for API, MQTT-related app-side handling, BLE provisioning, and state providers
+
+### Runtime/build config
+- Uses `.env` + `--dart-define-from-file=.env`
+- CI workflow present to build Android debug APK from `mobile/`
+
+---
+
+## 7) Algorithms and intelligence scope
+
+The backend algorithm module includes grouped implementations for:
+- **Biological models** (Q10 metabolism, OBM safety, growth/FCR concerns)
+- **Computer vision primitives** (optical flow, blob detection, surface activity/boil index)
+- **Fuzzy logic controls**
+- **Reinforcement learning utilities** (DDPG, Q-learning-related components)
+- **Sensor fusion** (Kalman and confidence/quality logic)
+- **Signal processing and math utilities**
+
+This indicates the system is intended to support adaptive/optimized feeding behavior beyond fixed timer-only automation.
+
+---
+
+## 8) Operations and development workflows
+
+### Typical local workflow by component
+- Backend: run Go tests/builds and API server with Make targets
+- Mobile: `flutter pub get`, `flutter run`, `flutter build ...`
+- Firmware: `pio run -e <env>`, upload/monitor via PlatformIO
+
+### CI currently included
+- GitHub Actions workflow for mobile debug APK generation
+
+### Deployment signals
+- Backend documentation includes Railway deployment path
+- MQTT broker expected externally in many deployment scenarios
+
+---
+
+## 9) Security and reliability intent (as represented in repo docs/code organization)
+
+- JWT-based authentication in backend
+- Structured config for TLS-enabled MQTT and cert-oriented setups
+- Mobile certificate pinning references in documentation
+- Offline buffering/retry concepts in firmware/backend docs
+- Health endpoints and observable runtime behavior in backend docs
+
+---
+
+## 10) Practical interpretation of this repository
+
+This is a **production-oriented IoT aquaculture platform repository** that combines:
+- embedded control firmware,
+- cloud/API backend services,
+- and a cross-platform mobile client,
+
+with explicit support for remote management, telemetry, adaptive feeding logic, and field deployment conditions (cellular links, power variability, and intermittent connectivity).
+
+In short: this repository is not a single app; it is a **complete multi-layer smart fish feeding ecosystem**.
