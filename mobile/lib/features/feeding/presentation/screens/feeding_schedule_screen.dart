@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/models/device.dart';
 import '../../../../core/models/feeding.dart';
+import '../../../../core/providers/calculator_provider.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/feeding_provider.dart';
 
@@ -17,6 +18,25 @@ class FeedingScheduleScreen extends ConsumerStatefulWidget {
 
 class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
   String? _selectedDeviceId;
+
+  _CalculatorSuggestion? _latestCalculatorSuggestion() {
+    final calculatorState = ref.read(calculatorProvider);
+    final result = calculatorState.result;
+    if (result == null) return null;
+
+    final suggestedFeedings =
+        result.suggestedFeedings <= 0 ? 1 : result.suggestedFeedings;
+    final perFeeding = result.recommendedAmount / suggestedFeedings;
+    final request = calculatorState.lastRequest;
+
+    return _CalculatorSuggestion(
+      recommendedDailyAmount: result.recommendedAmount,
+      recommendedPerFeedingAmount: perFeeding,
+      suggestedFeedings: suggestedFeedings,
+      calculatedAt: calculatorState.lastCalculatedAt ?? DateTime.now(),
+      waterTemperature: request?.waterTemperature,
+    );
+  }
 
   @override
   void initState() {
@@ -195,12 +215,15 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
   }
 
   void _showAddScheduleDialog(BuildContext context) {
+    final suggestion = _latestCalculatorSuggestion();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder:
           (ctx) => _AddScheduleSheet(
             deviceId: _selectedDeviceId!,
+            calculatorSuggestion: suggestion,
             onSave: (schedule) async {
               final success = await ref
                   .read(feedingSchedulesProvider.notifier)
@@ -216,6 +239,8 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
   }
 
   void _showEditScheduleDialog(BuildContext context, FeedingSchedule schedule) {
+    final suggestion = _latestCalculatorSuggestion();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -223,6 +248,7 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
           (ctx) => _AddScheduleSheet(
             deviceId: _selectedDeviceId!,
             schedule: schedule,
+            calculatorSuggestion: suggestion,
             onSave: (updated) async {
               final success = await ref
                   .read(feedingSchedulesProvider.notifier)
@@ -351,11 +377,13 @@ class _ScheduleCard extends StatelessWidget {
 class _AddScheduleSheet extends StatefulWidget {
   final String deviceId;
   final FeedingSchedule? schedule;
+  final _CalculatorSuggestion? calculatorSuggestion;
   final Function(FeedingSchedule) onSave;
 
   const _AddScheduleSheet({
     required this.deviceId,
     this.schedule,
+    this.calculatorSuggestion,
     required this.onSave,
   });
 
@@ -364,9 +392,15 @@ class _AddScheduleSheet extends StatefulWidget {
 }
 
 class _AddScheduleSheetState extends State<_AddScheduleSheet> {
+  static const double _minAmount = 10;
+  static const double _maxAmount = 500;
+
   late TimeOfDay _selectedTime;
   late double _amount;
   late Set<int> _selectedDays;
+  late final TextEditingController _amountController;
+  final FocusNode _amountFocusNode = FocusNode();
+  bool _autoFilledFromCalculator = false;
 
   @override
   void initState() {
@@ -379,15 +413,33 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
       );
       _amount = widget.schedule!.amount;
       _selectedDays = widget.schedule!.daysOfWeek.toSet();
+    } else if (widget.calculatorSuggestion != null) {
+      _selectedTime = const TimeOfDay(hour: 8, minute: 0);
+      _amount = _clampAmount(
+        widget.calculatorSuggestion!.recommendedPerFeedingAmount,
+      );
+      _selectedDays = {0, 1, 2, 3, 4, 5, 6};
+      _autoFilledFromCalculator = true;
     } else {
       _selectedTime = const TimeOfDay(hour: 8, minute: 0);
-      _amount = 200;
+      _amount = 18.75; // 15 fish x 50g x 2.5% per feeding (5% BW/day / 2 feeds)
       _selectedDays = {0, 1, 2, 3, 4, 5, 6};
     }
+
+    _amountController = TextEditingController(text: _amount.toStringAsFixed(2));
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _amountFocusNode.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    _syncAmountText();
+
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -431,14 +483,75 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
             title: const Text('Amount'),
             subtitle: Slider(
               value: _amount,
-              min: 50,
-              max: 500,
+              min: _minAmount,
+              max: _maxAmount,
               divisions: 18,
               label: '${_amount.round()}g',
-              onChanged: (value) => setState(() => _amount = value),
+              onChanged: _setAmount,
             ),
-            trailing: Text('${_amount.round()}g'),
+            trailing: SizedBox(
+              width: 88,
+              child: TextFormField(
+                controller: _amountController,
+                focusNode: _amountFocusNode,
+                textAlign: TextAlign.right,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: false,
+                ),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  suffixText: 'g',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (text) {
+                  final parsed = double.tryParse(text.trim());
+                  if (parsed == null) return;
+                  _setAmount(parsed);
+                },
+                onFieldSubmitted: (text) {
+                  final parsed = double.tryParse(text.trim());
+                  if (parsed == null) return;
+                  _setAmount(parsed);
+                },
+              ),
+            ),
           ),
+          if (widget.calculatorSuggestion != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Card(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _calculatorSummary(widget.calculatorSuggestion!),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _calculatorContext(widget.calculatorSuggestion!),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                      FilledButton.tonalIcon(
+                        onPressed: _applyCalculatorSuggestion,
+                        icon: const Icon(Icons.auto_awesome),
+                        label: Text(
+                          _autoFilledFromCalculator
+                              ? 'Reapply calculator amount'
+                              : 'Use calculator amount',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           const Divider(),
 
           const ListTile(
@@ -448,7 +561,7 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
           Wrap(
             spacing: 8,
             children: List.generate(7, (index) {
-              final days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+              final days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
               final isSelected = _selectedDays.contains(index);
               return FilterChip(
                 label: Text(days[index]),
@@ -479,6 +592,66 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
     );
   }
 
+  void _setAmount(double value) {
+    final clamped = _clampAmount(value);
+    if (clamped == _amount) {
+      _syncAmountText();
+      return;
+    }
+
+    setState(() {
+      _amount = clamped;
+      _autoFilledFromCalculator = false;
+    });
+  }
+
+  double _clampAmount(double value) {
+    return value.clamp(_minAmount, _maxAmount).toDouble();
+  }
+
+  void _applyCalculatorSuggestion() {
+    final suggestion = widget.calculatorSuggestion;
+    if (suggestion == null) return;
+    setState(() {
+      _amount = _clampAmount(suggestion.recommendedPerFeedingAmount);
+      _autoFilledFromCalculator = true;
+    });
+  }
+
+  String _calculatorSummary(_CalculatorSuggestion suggestion) {
+    return 'Calculator: ${suggestion.recommendedDailyAmount.round()}g/day -> '
+        '${suggestion.recommendedPerFeedingAmount.round()}g/feed '
+        '(${suggestion.suggestedFeedings}x/day)';
+  }
+
+  String _calculatorContext(_CalculatorSuggestion suggestion) {
+    final temp = suggestion.waterTemperature;
+    final parts = <String>[];
+    if (temp != null) {
+      parts.add('Temp ${temp.toStringAsFixed(1)}°C');
+    }
+
+    final contextLine =
+        parts.isEmpty
+            ? 'Based on your last calculator run.'
+            : '${parts.join(' • ')} from your last calculator run.';
+
+    final time =
+        '${suggestion.calculatedAt.hour.toString().padLeft(2, '0')}:${suggestion.calculatedAt.minute.toString().padLeft(2, '0')}';
+    return '$contextLine ($time)';
+  }
+
+  void _syncAmountText() {
+    final text = _amount.round().toString();
+    if (_amountFocusNode.hasFocus || _amountController.text == text) return;
+
+    _amountController.value = _amountController.value.copyWith(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+      composing: TextRange.empty,
+    );
+  }
+
   void _save() {
     final timeStr =
         '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}';
@@ -487,10 +660,27 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
       deviceId: widget.deviceId,
       time: timeStr,
       amount: _amount,
+      durationSeconds: widget.schedule?.durationSeconds ?? 10,
       daysOfWeek: _selectedDays.toList()..sort(),
       isEnabled: widget.schedule?.isEnabled ?? true,
     );
     widget.onSave(schedule);
     Navigator.pop(context);
   }
+}
+
+class _CalculatorSuggestion {
+  final double recommendedDailyAmount;
+  final double recommendedPerFeedingAmount;
+  final int suggestedFeedings;
+  final DateTime calculatedAt;
+  final double? waterTemperature;
+
+  const _CalculatorSuggestion({
+    required this.recommendedDailyAmount,
+    required this.recommendedPerFeedingAmount,
+    required this.suggestedFeedings,
+    required this.calculatedAt,
+    this.waterTemperature,
+  });
 }

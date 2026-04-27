@@ -99,8 +99,6 @@ class DeviceStatus extends Equatable {
   final double batteryLevel;
   final double feedLevel;
   final double waterTemperature;
-  final double? dissolvedOxygen;
-  final double? ph;
   final int signalStrength;
   final bool isSolarCharging;
   final double solarVoltage;
@@ -110,8 +108,6 @@ class DeviceStatus extends Equatable {
     required this.batteryLevel,
     required this.feedLevel,
     required this.waterTemperature,
-    this.dissolvedOxygen,
-    this.ph,
     required this.signalStrength,
     required this.isSolarCharging,
     required this.solarVoltage,
@@ -124,12 +120,10 @@ class DeviceStatus extends Equatable {
       feedLevel:
           (json['feed_level'] ?? json['weight_percentage'] ?? 0).toDouble(),
       waterTemperature: (json['water_temperature'] ?? 0).toDouble(),
-      dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
-      ph: json['ph']?.toDouble(),
       signalStrength: json['signal_strength'] ?? json['cellular_signal'] ?? 0,
       isSolarCharging:
           json['is_solar_charging'] ??
-          ((json['power_source'] ?? '') == 'SOLAR'),
+          ((json['power_source'] ?? '').toString().toLowerCase() == 'solar'),
       solarVoltage: (json['solar_voltage'] ?? 0).toDouble(),
       connectionType:
           json['connection_type'] ?? json['power_source'] ?? 'unknown',
@@ -140,8 +134,6 @@ class DeviceStatus extends Equatable {
     'battery_level': batteryLevel,
     'feed_level': feedLevel,
     'water_temperature': waterTemperature,
-    'dissolved_oxygen': dissolvedOxygen,
-    'ph': ph,
     'signal_strength': signalStrength,
     'is_solar_charging': isSolarCharging,
     'solar_voltage': solarVoltage,
@@ -153,8 +145,6 @@ class DeviceStatus extends Equatable {
     batteryLevel,
     feedLevel,
     waterTemperature,
-    dissolvedOxygen,
-    ph,
     signalStrength,
     isSolarCharging,
     solarVoltage,

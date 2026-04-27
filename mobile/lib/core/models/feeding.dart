@@ -4,11 +4,19 @@ String _stringValue(dynamic value) => value?.toString() ?? '';
 
 double _doubleValue(dynamic value) => (value ?? 0).toDouble();
 
+int _intValue(dynamic value, {int fallback = 0}) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? fallback;
+  return fallback;
+}
+
 class FeedingSchedule extends Equatable {
   final String id;
   final String deviceId;
   final String time;
   final double amount;
+  final int durationSeconds;
   final List<int> daysOfWeek;
   final bool isEnabled;
   final DateTime? createdAt;
@@ -19,6 +27,7 @@ class FeedingSchedule extends Equatable {
     required this.deviceId,
     required this.time,
     required this.amount,
+    this.durationSeconds = 10,
     required this.daysOfWeek,
     required this.isEnabled,
     this.createdAt,
@@ -39,6 +48,7 @@ class FeedingSchedule extends Equatable {
       deviceId: json['device_id'] ?? '',
       time: time,
       amount: _doubleValue(json['amount'] ?? json['quantity_grams']),
+      durationSeconds: _intValue(json['duration_seconds'], fallback: 10),
       daysOfWeek: List<int>.from(json['days_of_week'] ?? [0, 1, 2, 3, 4, 5, 6]),
       isEnabled: json['is_enabled'] ?? json['is_active'] ?? true,
       createdAt:
@@ -58,13 +68,14 @@ class FeedingSchedule extends Equatable {
     final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
 
     return {
-      if (id.isNotEmpty) 'id': int.tryParse(id) ?? id,
+      if (id.isNotEmpty && int.tryParse(id) != null) 'id': int.parse(id),
       'device_id': deviceId,
       'name': 'Schedule $time',
       'hour': hour,
       'minute': minute,
       'quantity_grams': amount,
-      'duration_seconds': 0,
+      'duration_seconds': durationSeconds,
+      'days_of_week': daysOfWeek,
       'is_active': isEnabled,
     };
   }
@@ -74,6 +85,7 @@ class FeedingSchedule extends Equatable {
     String? deviceId,
     String? time,
     double? amount,
+    int? durationSeconds,
     List<int>? daysOfWeek,
     bool? isEnabled,
   }) {
@@ -82,6 +94,7 @@ class FeedingSchedule extends Equatable {
       deviceId: deviceId ?? this.deviceId,
       time: time ?? this.time,
       amount: amount ?? this.amount,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
       daysOfWeek: daysOfWeek ?? this.daysOfWeek,
       isEnabled: isEnabled ?? this.isEnabled,
       createdAt: createdAt,
@@ -111,6 +124,7 @@ class FeedingSchedule extends Equatable {
     deviceId,
     time,
     amount,
+    durationSeconds,
     daysOfWeek,
     isEnabled,
   ];
@@ -129,7 +143,6 @@ class FeedingEvent extends Equatable {
   final DateTime scheduledAt;
   final DateTime? completedAt;
   final double? waterTemperature;
-  final double? dissolvedOxygen;
 
   const FeedingEvent({
     required this.id,
@@ -142,7 +155,6 @@ class FeedingEvent extends Equatable {
     required this.scheduledAt,
     this.completedAt,
     this.waterTemperature,
-    this.dissolvedOxygen,
   });
 
   factory FeedingEvent.fromJson(Map<String, dynamic> json) {
@@ -151,8 +163,11 @@ class FeedingEvent extends Equatable {
       deviceId: json['device_id'] ?? '',
       amount: _doubleValue(json['amount'] ?? json['quantity_grams']),
       actualAmount:
-          (json['actual_amount'] ?? json['quantity_grams'])?.toDouble(),
-      status: _parseStatus(json['status'] ?? 'completed'),
+          (json['actual_dispensed'] ??
+                  json['actual_amount'] ??
+                  json['quantity_grams'])
+              ?.toDouble(),
+      status: _parseStatus(json['status'] ?? _resultToStatus(json['result'])),
       type: json['type'] ?? json['trigger_type'] ?? 'scheduled',
       errorMessage: json['error_message'],
       scheduledAt: DateTime.parse(
@@ -164,9 +179,21 @@ class FeedingEvent extends Equatable {
           json['completed_at'] != null
               ? DateTime.parse(json['completed_at'])
               : null,
-      waterTemperature: json['water_temperature']?.toDouble(),
-      dissolvedOxygen: json['dissolved_oxygen']?.toDouble(),
+      waterTemperature:
+          (json['water_temperature'] ?? json['temperature'])?.toDouble(),
     );
+  }
+
+  static String _resultToStatus(dynamic result) {
+    // FeedingResult firmware enum: 0=SUCCESS 1=PARTIAL 2=TIMEOUT 3=CANCELLED 4=STALL 5=LOW_FEED 6=ERROR
+    switch (_intValue(result)) {
+      case 0:
+        return 'completed';
+      case 3:
+        return 'cancelled';
+      default:
+        return 'failed';
+    }
   }
 
   static FeedingEventStatus _parseStatus(String? status) {
@@ -193,16 +220,12 @@ class FeedCalculationRequest {
   final int fishCount;
   final double averageWeight;
   final double waterTemperature;
-  final double? dissolvedOxygen;
-  final double? ph;
 
   FeedCalculationRequest({
     required this.speciesId,
     required this.fishCount,
     required this.averageWeight,
     required this.waterTemperature,
-    this.dissolvedOxygen,
-    this.ph,
   });
 
   Map<String, dynamic> toJson() => {
@@ -219,23 +242,6 @@ class FeedCalculationRequest {
       'weather_condition': 'sunny',
     },
     'use_q10_algorithm': true,
-    if (dissolvedOxygen != null || ph != null)
-      'sensor_data': [
-        if (dissolvedOxygen != null)
-          {
-            'type': 'dissolved_oxygen',
-            'value': dissolvedOxygen,
-            'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-            'quality': 1.0,
-          },
-        if (ph != null)
-          {
-            'type': 'ph',
-            'value': ph,
-            'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-            'quality': 1.0,
-          },
-      ],
   };
 }
 
@@ -260,7 +266,8 @@ class FeedCalculationResult {
 
   factory FeedCalculationResult.fromJson(Map<String, dynamic> json) {
     final recommendation = json['recommendation'] ?? json;
-    final basicRecommendation = recommendation['basic_recommendation'] ?? const {};
+    final basicRecommendation =
+        recommendation['basic_recommendation'] ?? const {};
     final suggestedFeedingsRaw =
         recommendation['final_feeding_frequency'] ?? json['suggested_feedings'];
     final parsedSuggestedFeedings =
@@ -270,8 +277,8 @@ class FeedCalculationResult {
     final normalizedSuggestedFeedings =
         parsedSuggestedFeedings <= 0
             ? 2
-            : parsedSuggestedFeedings > 2
-            ? 2
+            : parsedSuggestedFeedings > 10
+            ? 10
             : parsedSuggestedFeedings;
 
     return FeedCalculationResult(
@@ -284,8 +291,7 @@ class FeedCalculationResult {
             json['biomass'],
       ),
       feedingRate: _doubleValue(
-        recommendation['effective_feeding_rate'] ??
-            json['feeding_rate'],
+        recommendation['effective_feeding_rate'] ?? json['feeding_rate'],
       ),
       q10Factor: _doubleValue(
         recommendation['q10_recommendation']?['biological_factors']?['q10_factor'] ??
@@ -299,7 +305,7 @@ class FeedCalculationResult {
           recommendation['basic_recommendation']?['environmental_note'] ??
           json['recommendation'] ??
           '',
-        suggestedFeedings: normalizedSuggestedFeedings,
+      suggestedFeedings: normalizedSuggestedFeedings,
     );
   }
 

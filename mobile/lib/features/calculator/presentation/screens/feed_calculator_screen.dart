@@ -18,7 +18,6 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
   double _fishCount = 1000;
   double _avgWeight = 200;
   double _waterTemp = 28;
-  double _dissolvedOxygen = 6.0;
   final Map<String, TextEditingController> _inputControllers = {};
   final Map<String, FocusNode> _inputFocusNodes = {};
 
@@ -53,7 +52,6 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
     if (sensorData != null) {
       setState(() {
         _waterTemp = sensorData.waterTemperature;
-        _dissolvedOxygen = sensorData.dissolvedOxygen ?? _dissolvedOxygen;
       });
     }
   }
@@ -68,7 +66,6 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
       fishCount: _fishCount.round(),
       averageWeight: _avgWeight,
       waterTemperature: _waterTemp,
-      dissolvedOxygen: _dissolvedOxygen,
     );
 
     await ref.read(calculatorProvider.notifier).calculate(request);
@@ -234,18 +231,6 @@ class _FeedCalculatorScreenState extends ConsumerState<FeedCalculatorScreen> {
                       divisions: 70,
                       suffix: '°C',
                       onChanged: (v) => _updateInput(() => _waterTemp = v),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSlider(
-                      fieldId: 'dissolvedOxygen',
-                      label: 'Dissolved Oxygen',
-                      value: _dissolvedOxygen,
-                      min: 0,
-                      max: 15,
-                      divisions: 60,
-                      suffix: ' mg/L',
-                      onChanged:
-                          (v) => _updateInput(() => _dissolvedOxygen = v),
                     ),
                   ],
                 ),

@@ -50,8 +50,6 @@ func TestQ10CalculatorService_CalculateQ10FeedRecommendation(t *testing.T) {
 			},
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 25.0,
-				DissolvedOxygen:  8.0,
-				PH:               7.5,
 				Season:           "summer",
 				WeatherCondition: "sunny",
 			},
@@ -73,8 +71,6 @@ func TestQ10CalculatorService_CalculateQ10FeedRecommendation(t *testing.T) {
 			},
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 22.0,
-				DissolvedOxygen:  7.0,
-				PH:               7.0,
 				Season:           "spring",
 				WeatherCondition: "cloudy",
 			},
@@ -85,8 +81,6 @@ func TestQ10CalculatorService_CalculateQ10FeedRecommendation(t *testing.T) {
 			populations: []models.FishPopulation{},
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 25.0,
-				DissolvedOxygen:  8.0,
-				PH:               7.5,
 				Season:           "summer",
 				WeatherCondition: "sunny",
 			},
@@ -104,51 +98,11 @@ func TestQ10CalculatorService_CalculateQ10FeedRecommendation(t *testing.T) {
 			},
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: -5.0,
-				DissolvedOxygen:  8.0,
-				PH:               7.5,
 				Season:           "summer",
 				WeatherCondition: "sunny",
 			},
 			expectError: true,
 			errorMsg:    "water temperature must be between 0 and 50 degrees Celsius",
-		},
-		{
-			name: "Invalid dissolved oxygen",
-			populations: []models.FishPopulation{
-				{
-					SpeciesID:     "tilapia",
-					Count:         100,
-					AverageWeight: 250.0,
-				},
-			},
-			environmental: models.Q10EnvironmentalFactors{
-				WaterTemperature: 25.0,
-				DissolvedOxygen:  -1.0,
-				PH:               7.5,
-				Season:           "summer",
-				WeatherCondition: "sunny",
-			},
-			expectError: true,
-			errorMsg:    "dissolved oxygen must be between 0 and 20 mg/L",
-		},
-		{
-			name: "Invalid pH",
-			populations: []models.FishPopulation{
-				{
-					SpeciesID:     "tilapia",
-					Count:         100,
-					AverageWeight: 250.0,
-				},
-			},
-			environmental: models.Q10EnvironmentalFactors{
-				WaterTemperature: 25.0,
-				DissolvedOxygen:  8.0,
-				PH:               15.0,
-				Season:           "summer",
-				WeatherCondition: "sunny",
-			},
-			expectError: true,
-			errorMsg:    "pH must be between 0 and 14",
 		},
 		{
 			name: "Invalid season",
@@ -161,8 +115,6 @@ func TestQ10CalculatorService_CalculateQ10FeedRecommendation(t *testing.T) {
 			},
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 25.0,
-				DissolvedOxygen:  8.0,
-				PH:               7.5,
 				Season:           "invalid_season",
 				WeatherCondition: "sunny",
 			},
@@ -180,8 +132,6 @@ func TestQ10CalculatorService_CalculateQ10FeedRecommendation(t *testing.T) {
 			},
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 25.0,
-				DissolvedOxygen:  8.0,
-				PH:               7.5,
 				Season:           "summer",
 				WeatherCondition: "invalid_weather",
 			},
@@ -199,8 +149,6 @@ func TestQ10CalculatorService_CalculateQ10FeedRecommendation(t *testing.T) {
 			},
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 25.0,
-				DissolvedOxygen:  8.0,
-				PH:               7.5,
 				Season:           "summer",
 				WeatherCondition: "sunny",
 			},
@@ -218,8 +166,6 @@ func TestQ10CalculatorService_CalculateQ10FeedRecommendation(t *testing.T) {
 			},
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 25.0,
-				DissolvedOxygen:  8.0,
-				PH:               7.5,
 				Season:           "summer",
 				WeatherCondition: "sunny",
 			},
@@ -237,8 +183,6 @@ func TestQ10CalculatorService_CalculateQ10FeedRecommendation(t *testing.T) {
 			},
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 25.0,
-				DissolvedOxygen:  8.0,
-				PH:               7.5,
 				Season:           "summer",
 				WeatherCondition: "sunny",
 			},
@@ -461,25 +405,14 @@ func TestQ10CalculatorService_evaluateSafetyConstraints(t *testing.T) {
 			name: "Safe conditions",
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 25.0,
-				DissolvedOxygen:  8.0,
 			},
 			expectStop:   false,
 			expectAction: "Conditions within acceptable range.",
 		},
 		{
-			name: "Critical low DO",
-			environmental: models.Q10EnvironmentalFactors{
-				WaterTemperature: 25.0,
-				DissolvedOxygen:  2.5,
-			},
-			expectStop:   true,
-			expectAction: "Critical dissolved oxygen level (2.5 mg/L). Increase aeration immediately.",
-		},
-		{
 			name: "Critical high temperature",
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 40.0,
-				DissolvedOxygen:  8.0,
 			},
 			expectStop:   true,
 			expectAction: "Critical water temperature (40.0°C). Provide cooling or shade.",
@@ -488,25 +421,14 @@ func TestQ10CalculatorService_evaluateSafetyConstraints(t *testing.T) {
 			name: "Critical low temperature",
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 2.0,
-				DissolvedOxygen:  8.0,
 			},
 			expectStop:   true,
 			expectAction: "Water temperature too low (2.0°C). Fish metabolism severely reduced.",
 		},
 		{
-			name: "Warning low DO",
-			environmental: models.Q10EnvironmentalFactors{
-				WaterTemperature: 25.0,
-				DissolvedOxygen:  4.5,
-			},
-			expectStop:   false,
-			expectAction: "Low dissolved oxygen. Monitor fish behavior and consider reducing feeding.",
-		},
-		{
 			name: "Warning high temperature",
 			environmental: models.Q10EnvironmentalFactors{
 				WaterTemperature: 32.0,
-				DissolvedOxygen:  8.0,
 			},
 			expectStop:   false,
 			expectAction: "High water temperature. Monitor for thermal stress.",
@@ -520,8 +442,8 @@ func TestQ10CalculatorService_evaluateSafetyConstraints(t *testing.T) {
 			assert.Equal(t, tt.expectStop, constraints.EmergencyStop)
 			assert.Contains(t, constraints.RecommendedAction, tt.expectAction)
 
-			// Validate safety flags
-			assert.Equal(t, tt.environmental.DissolvedOxygen >= 3.0, constraints.DOSafe)
+			// DOSafe is always true (no DO sensor)
+			assert.True(t, constraints.DOSafe)
 			assert.Equal(t, tt.environmental.WaterTemperature <= 35.0 && tt.environmental.WaterTemperature >= 5.0, constraints.TemperatureSafe)
 		})
 	}
@@ -682,12 +604,12 @@ func TestQ10CalculatorService_calculateOptimalFeedingFrequency(t *testing.T) {
 		},
 		{
 			name:        "Large amount",
-			dailyAmount: 750.0,
+			dailyAmount: 2000.0,
 			expected:    4,
 		},
 		{
 			name:        "Very large amount",
-			dailyAmount: 1500.0,
+			dailyAmount: 5000.0,
 			expected:    5,
 		},
 		{
@@ -697,12 +619,12 @@ func TestQ10CalculatorService_calculateOptimalFeedingFrequency(t *testing.T) {
 		},
 		{
 			name:        "Boundary - medium/large",
-			dailyAmount: 500.0,
+			dailyAmount: 251.0,
 			expected:    3,
 		},
 		{
 			name:        "Boundary - large/very large",
-			dailyAmount: 1000.0,
+			dailyAmount: 1501.0,
 			expected:    4,
 		},
 	}

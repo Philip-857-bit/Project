@@ -295,18 +295,18 @@ func (s *CalculatorService) getWeatherMultiplier(weather string) float64 {
 	return 1.0
 }
 
-// calculateOptimalFeedingFrequency determines optimal feeding frequency based on daily amount
+// calculateOptimalFeedingFrequency determines optimal feeding frequency based on daily amount.
+// For the 8-week Clarias gariepinus trial (15 fish x 50g, 5% BW/day = ~37.5g/day),
+// daily amounts fall in the <=250g bucket which returns 2 feeds/day as required.
 func (s *CalculatorService) calculateOptimalFeedingFrequency(dailyAmount float64) int {
-	// Base frequency on total daily amount.
-	// Keep smaller operations at lower frequency to avoid over-feeding cycles.
 	switch {
-	case dailyAmount <= 250: // Small amounts
+	case dailyAmount <= 250: // Small systems (e.g. trial tanks) - 2 feeds/day
 		return 2
-	case dailyAmount <= 1500: // Medium amounts
+	case dailyAmount <= 1500: // Medium pond/tank
 		return 3
-	case dailyAmount <= 4000: // Large amounts
+	case dailyAmount <= 4000: // Large pond
 		return 4
-	default: // Very large amounts
+	default: // Commercial scale
 		return 5
 	}
 }
@@ -435,8 +435,6 @@ func (s *CalculatorService) CalculateQ10Recommendation(populations []FishPopulat
 
 	modelEnvironmental := models.Q10EnvironmentalFactors{
 		WaterTemperature: environmental.WaterTemperature,
-		DissolvedOxygen:  environmental.DissolvedOxygen,
-		PH:               environmental.PH,
 		Season:           environmental.Season,
 		WeatherCondition: environmental.WeatherCondition,
 	}
@@ -447,8 +445,6 @@ func (s *CalculatorService) CalculateQ10Recommendation(populations []FishPopulat
 // Q10EnvironmentalFactors represents environmental conditions for Q10 calculations (service layer)
 type Q10EnvironmentalFactors struct {
 	WaterTemperature float64 `json:"water_temperature" validate:"min=0,max=50"`
-	DissolvedOxygen  float64 `json:"dissolved_oxygen" validate:"min=0,max=20"`
-	PH               float64 `json:"ph" validate:"min=0,max=14"`
 	Season           string  `json:"season" validate:"oneof=spring summer autumn winter"`
 	WeatherCondition string  `json:"weather_condition" validate:"oneof=sunny cloudy rainy"`
 }
@@ -489,25 +485,25 @@ func (s *CalculatorService) SeedDefaultSpecies() error {
 		{
 			ID:                    "catfish",
 			Name:                  "African Catfish",
-			FeedingRatePercentage: 2.5,  // 2.5% of body weight per day
-			Q10Coefficient:        2.0,  // Updated practical Q10 coefficient for Catfish
-			OptimalTempMin:        26.0, // °C
-			OptimalTempMax:        30.0, // °C
-			CriticalTempMax:       34.0, // °C - thermal stress limit
+			FeedingRatePercentage: 5.0,  // 5% BW/day - post-juvenile 50g+ (supervisor instruction: range, not absolute)
+			Q10Coefficient:        2.1,  // Brett & Groves (1979) - Clarias gariepinus post-juvenile
+			OptimalTempMin:        26.0, // °C - Kasihmuddin et al. (2021)
+			OptimalTempMax:        30.0, // °C - Britz & Hecht (1987)
+			CriticalTempMax:       32.0, // °C - reduce feeding above this (Kasihmuddin 2021)
 			DOOptimal:             5.0,  // mg/L - optimal dissolved oxygen
 			DOCritical:            2.5,  // mg/L - critical dissolved oxygen
 			DOLethal:              1.0,  // mg/L - lethal dissolved oxygen
 			TemperatureFactor: `[
-				{"min_temp": 22, "max_temp": 26, "multiplier": 0.85},
+				{"min_temp": 20, "max_temp": 26, "multiplier": 0.85},
 				{"min_temp": 26, "max_temp": 30, "multiplier": 1.0},
-				{"min_temp": 30, "max_temp": 33, "multiplier": 0.85},
-				{"min_temp": 33, "max_temp": 36, "multiplier": 0.6}
+				{"min_temp": 30, "max_temp": 32, "multiplier": 0.9},
+				{"min_temp": 32, "max_temp": 36, "multiplier": 0.5}
 			]`,
 			GrowthStages: `[
-				{"min_weight": 0.5, "max_weight": 20, "multiplier": 1.4, "description": "Juvenile"},
-				{"min_weight": 20, "max_weight": 100, "multiplier": 1.1, "description": "Growing"},
-				{"min_weight": 100, "max_weight": 500, "multiplier": 1.0, "description": "Adult"},
-				{"min_weight": 500, "max_weight": 2000, "multiplier": 0.7, "description": "Mature"}
+				{"min_weight": 0.5, "max_weight": 10, "multiplier": 1.6, "description": "Fingerling"},
+				{"min_weight": 10, "max_weight": 30, "multiplier": 1.3, "description": "Juvenile"},
+				{"min_weight": 30, "max_weight": 100, "multiplier": 1.0, "description": "Post-juvenile"},
+				{"min_weight": 100, "max_weight": 2000, "multiplier": 0.7, "description": "Sub-adult"}
 			]`,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),

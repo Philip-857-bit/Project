@@ -72,7 +72,7 @@ func (m *MockWebSocketConn) Close() error {
 func TestNewWebSocketHub(t *testing.T) {
 	logger := logrus.New()
 
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	assert.NotNil(t, hub)
 	assert.NotNil(t, hub.clients)
@@ -84,7 +84,7 @@ func TestNewWebSocketHub(t *testing.T) {
 
 func TestWebSocketHub_RegisterClient(t *testing.T) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	// Start hub in background
 	go hub.Run()
@@ -121,7 +121,7 @@ func TestWebSocketHub_RegisterClient(t *testing.T) {
 
 func TestWebSocketHub_BroadcastSensorData(t *testing.T) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	// Start hub in background
 	go hub.Run()
@@ -131,8 +131,6 @@ func TestWebSocketHub_BroadcastSensorData(t *testing.T) {
 		DeviceID:         deviceID,
 		WeightGrams:      1500.0,
 		WaterTemperature: 25.5,
-		DissolvedOxygen:  8.2,
-		PH:               7.1,
 		Timestamp:        time.Now(),
 	}
 
@@ -147,7 +145,7 @@ func TestWebSocketHub_BroadcastSensorData(t *testing.T) {
 
 func TestWebSocketHub_BroadcastAlert(t *testing.T) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	deviceID := "device-001"
 	alert := map[string]interface{}{
@@ -164,7 +162,7 @@ func TestWebSocketHub_BroadcastAlert(t *testing.T) {
 
 func TestWebSocketHub_registerClient(t *testing.T) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	deviceID := "device-001"
 	client := &WebSocketClient{
@@ -188,7 +186,7 @@ func TestWebSocketHub_registerClient(t *testing.T) {
 
 func TestWebSocketHub_unregisterClient(t *testing.T) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	deviceID := "device-001"
 	client := &WebSocketClient{
@@ -221,7 +219,7 @@ func TestWebSocketHub_unregisterClient(t *testing.T) {
 
 func TestWebSocketHub_broadcastToClients(t *testing.T) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	deviceID := "device-001"
 	sensorData := &models.SensorData{
@@ -260,7 +258,7 @@ func TestWebSocketHub_broadcastToClients(t *testing.T) {
 
 func TestWebSocketHub_broadcastToClients_FullChannel(t *testing.T) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	deviceID := "device-001"
 	sensorData := &models.SensorData{
@@ -299,7 +297,7 @@ func TestWebSocketHub_broadcastToClients_FullChannel(t *testing.T) {
 
 func TestWebSocketClient_Creation(t *testing.T) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	deviceID := "device-001"
 
@@ -324,7 +322,7 @@ func TestWebSocketHub_Properties(t *testing.T) {
 	properties.Property("Hub handles any device ID", prop.ForAll(
 		func(deviceID string) bool {
 			logger := logrus.New()
-			hub := NewWebSocketHub(logger)
+			hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 			// Should not panic with any device ID
 			sensorData := &models.SensorData{
@@ -352,7 +350,7 @@ func TestWebSocketHub_Properties(t *testing.T) {
 			}
 
 			logger := logrus.New()
-			hub := NewWebSocketHub(logger)
+			hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 			client := &WebSocketClient{
 				deviceID: deviceID,
@@ -380,7 +378,7 @@ func TestWebSocketHub_Properties(t *testing.T) {
 // Benchmark tests
 func BenchmarkWebSocketHub_RegisterClient(b *testing.B) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	clients := make([]*WebSocketClient, b.N)
 	for i := 0; i < b.N; i++ {
@@ -399,7 +397,7 @@ func BenchmarkWebSocketHub_RegisterClient(b *testing.B) {
 
 func BenchmarkWebSocketHub_BroadcastSensorData(b *testing.B) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	// Start hub
 	go hub.Run()
@@ -420,7 +418,7 @@ func BenchmarkWebSocketHub_BroadcastSensorData(b *testing.B) {
 
 func BenchmarkWebSocketHub_BroadcastAlert(b *testing.B) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	deviceID := "device-001"
 	alert := map[string]interface{}{
@@ -437,7 +435,7 @@ func BenchmarkWebSocketHub_BroadcastAlert(b *testing.B) {
 // Edge case tests
 func TestWebSocketHub_EdgeCases(t *testing.T) {
 	logger := logrus.New()
-	hub := NewWebSocketHub(logger)
+	hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 	t.Run("Empty device ID", func(t *testing.T) {
 		client := &WebSocketClient{
@@ -573,9 +571,6 @@ func TestWebSocketHub_EdgeCases(t *testing.T) {
 			DeviceID:         deviceID,
 			WeightGrams:      1500.0,
 			WaterTemperature: 25.5,
-			DissolvedOxygen:  8.2,
-			PH:               7.1,
-			Turbidity:        5.0,
 			BatteryLevel:     85,
 			BatteryVoltage:   3.7,
 			PowerSource:      "battery",
@@ -621,7 +616,7 @@ func TestWebSocketHub_EdgeCases(t *testing.T) {
 func TestWebSocketHub_Integration(t *testing.T) {
 	t.Run("Complete WebSocket workflow", func(t *testing.T) {
 		logger := logrus.New()
-		hub := NewWebSocketHub(logger)
+		hub := NewWebSocketHub(logger, 4096, 60*time.Second)
 
 		// Start hub
 		go hub.Run()

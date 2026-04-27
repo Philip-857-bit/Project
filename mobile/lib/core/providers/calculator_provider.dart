@@ -139,12 +139,16 @@ class CalculatorState {
   final bool isCalculating;
   final String? error;
   final List<FeedCalculationResult> history;
+  final FeedCalculationRequest? lastRequest;
+  final DateTime? lastCalculatedAt;
 
   const CalculatorState({
     this.result,
     this.isCalculating = false,
     this.error,
     this.history = const [],
+    this.lastRequest,
+    this.lastCalculatedAt,
   });
 
   CalculatorState copyWith({
@@ -152,12 +156,16 @@ class CalculatorState {
     bool? isCalculating,
     String? error,
     List<FeedCalculationResult>? history,
+    FeedCalculationRequest? lastRequest,
+    DateTime? lastCalculatedAt,
   }) {
     return CalculatorState(
       result: result ?? this.result,
       isCalculating: isCalculating ?? this.isCalculating,
       error: error,
       history: history ?? this.history,
+      lastRequest: lastRequest ?? this.lastRequest,
+      lastCalculatedAt: lastCalculatedAt ?? this.lastCalculatedAt,
     );
   }
 }
@@ -199,6 +207,8 @@ class CalculatorNotifier extends StateNotifier<CalculatorState> {
           result: result,
           isCalculating: false,
           history: [result, ...state.history.take(9)],
+          lastRequest: request,
+          lastCalculatedAt: DateTime.now(),
         );
         return result;
       } else {
@@ -218,7 +228,7 @@ class CalculatorNotifier extends StateNotifier<CalculatorState> {
   }
 
   void clearResult() {
-    state = state.copyWith(result: null, error: null);
+    state = CalculatorState(isCalculating: false, history: state.history);
   }
 
   void clearHistory() {

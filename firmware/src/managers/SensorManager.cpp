@@ -43,13 +43,14 @@ bool SensorManager::begin() {
     
     Serial.println("[SensorManager] Initializing sensors...");
     
+#ifndef NO_LOADCELL
     // Initialize HX711 Load Cell
     _loadCell = new HX711();
     _loadCell->begin(PIN_HX711_DOUT, PIN_HX711_SCK);
-    
+
     // Wait for HX711 to stabilize
     delay(100);
-    
+
     if (_loadCell->is_ready()) {
         _loadCell->set_scale(_loadCellCalibration);
         _loadCell->tare(LOADCELL_SAMPLES);
@@ -60,6 +61,11 @@ bool SensorManager::begin() {
     } else {
         Serial.println("[SensorManager] HX711 not responding");
     }
+#else
+    _status.loadCellOK = false;
+    _preferredSource = FeedLevelSource::ULTRASONIC;
+    Serial.println("[SensorManager] HX711 disabled - using ultrasonic only");
+#endif
     
     // Initialize JSN-SR04T Ultrasonic Sensor (backup)
     _sonar = new NewPing(PIN_ULTRASONIC_TRIG, PIN_ULTRASONIC_ECHO, ULTRASONIC_MAX_DISTANCE);
@@ -104,21 +110,22 @@ bool SensorManager::begin() {
 void SensorManager::update() {
     unsigned long now = millis();
     
+#ifndef NO_LOADCELL
     // Read HX711 load cell (primary feed level)
     if (_status.loadCellOK) {
         float weight = readLoadCell();
-        
+
         if (weight >= 0 && weight <= _hopperCapacityGrams * 1.1f) {  // Allow 10% over
             _weightSamples[_sampleIndex % SAMPLE_COUNT] = weight;
-            
+
             float medianWeight = calculateMedian(_weightSamples, SAMPLE_COUNT);
-            
+
             if (validateReading(medianWeight, 0, _hopperCapacityGrams * 1.1f)) {
                 _currentData.feedWeightGrams = medianWeight;
                 _currentData.loadCellValid = true;
-                
+
                 // Calculate percentage from weight
-                if (_preferredSource == FeedLevelSource::LOAD_CELL || 
+                if (_preferredSource == FeedLevelSource::LOAD_CELL ||
                     _preferredSource == FeedLevelSource::FUSED) {
                     _currentData.feedLevelPercent = weightToPercent(medianWeight);
                     _currentData.levelSource = FeedLevelSource::LOAD_CELL;
@@ -130,6 +137,7 @@ void SensorManager::update() {
             _status.errorCount++;
         }
     }
+#endif
     
     // Read ultrasonic sensor (backup feed level)
     if (_status.ultrasonicOK) {
@@ -279,13 +287,18 @@ bool SensorManager::validateReading(float value, float min, float max) {
 }
 
 void SensorManager::tareLoadCell() {
+#ifndef NO_LOADCELL
     if (_status.loadCellOK && _loadCell->is_ready()) {
         _loadCell->tare(LOADCELL_SAMPLES);
         Serial.println("[SensorManager] Load cell tared");
     }
+#else
+    Serial.println("[SensorManager] tareLoadCell: HX711 disabled");
+#endif
 }
 
 void SensorManager::calibrateLoadCell(float knownWeightGrams) {
+#ifndef NO_LOADCELL
     if (_status.loadCellOK && _loadCell->is_ready() && knownWeightGrams > 0) {
         _loadCell->set_scale();  // Reset scale
         float reading = _loadCell->get_units(LOADCELL_SAMPLES);
@@ -294,6 +307,9 @@ void SensorManager::calibrateLoadCell(float knownWeightGrams) {
         _status.loadCellCalibration = _loadCellCalibration;
         Serial.printf("[SensorManager] Load cell calibrated: %.2f\n", _loadCellCalibration);
     }
+#else
+    Serial.println("[SensorManager] calibrateLoadCell: HX711 disabled");
+#endif
 }
 
 void SensorManager::setLoadCellCalibration(float factor) {

@@ -13,13 +13,27 @@ class ManualFeedScreen extends ConsumerStatefulWidget {
 }
 
 class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
-  double _amount = 200;
+  static const double _minAmount = 1;
+  static const double _maxAmount = 500;
+
+  double _amount =
+      18.75; // 15 fish x 50g x 2.5% per feeding (5% BW/day / 2 feeds)
   String? _selectedDeviceId;
+  late final TextEditingController _amountController;
+  final FocusNode _amountFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
+    _amountController = TextEditingController(text: _amount.toStringAsFixed(2));
     Future.microtask(_loadDevices);
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _amountFocusNode.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDevices() async {
@@ -32,6 +46,8 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
 
   Future<void> _triggerFeed() async {
     if (_selectedDeviceId == null) return;
+
+    FocusScope.of(context).unfocus();
 
     final success = await ref
         .read(manualFeedProvider.notifier)
@@ -53,6 +69,8 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _syncAmountText();
+
     final deviceState = ref.watch(deviceListProvider);
     final feedState = ref.watch(manualFeedProvider);
     final selectedDevice =
@@ -100,6 +118,33 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
+                    SizedBox(
+                      width: 120,
+                      child: TextFormField(
+                        controller: _amountController,
+                        focusNode: _amountFocusNode,
+                        textAlign: TextAlign.right,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: false,
+                        ),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          suffixText: 'g',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (text) {
+                          final parsed = double.tryParse(text.trim());
+                          if (parsed == null) return;
+                          _setAmount(parsed);
+                        },
+                        onFieldSubmitted: (text) {
+                          final parsed = double.tryParse(text.trim());
+                          if (parsed == null) return;
+                          _setAmount(parsed);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                       '${_amount.round()}g',
                       style: Theme.of(
@@ -112,10 +157,10 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
                     const SizedBox(height: 16),
                     Slider(
                       value: _amount,
-                      min: 50,
-                      max: 500,
+                      min: _minAmount,
+                      max: _maxAmount,
                       divisions: 18,
-                      onChanged: (value) => setState(() => _amount = value),
+                      onChanged: _setAmount,
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -142,25 +187,25 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
                 _QuickAmountButton(
                   amount: 100,
                   isSelected: _amount == 100,
-                  onTap: () => setState(() => _amount = 100),
+                  onTap: () => _setAmount(100),
                 ),
                 const SizedBox(width: 8),
                 _QuickAmountButton(
                   amount: 200,
                   isSelected: _amount == 200,
-                  onTap: () => setState(() => _amount = 200),
+                  onTap: () => _setAmount(200),
                 ),
                 const SizedBox(width: 8),
                 _QuickAmountButton(
                   amount: 300,
                   isSelected: _amount == 300,
-                  onTap: () => setState(() => _amount = 300),
+                  onTap: () => _setAmount(300),
                 ),
                 const SizedBox(width: 8),
                 _QuickAmountButton(
                   amount: 400,
                   isSelected: _amount == 400,
-                  onTap: () => setState(() => _amount = 400),
+                  onTap: () => _setAmount(400),
                 ),
               ],
             ),
@@ -216,6 +261,29 @@ class _ManualFeedScreenState extends ConsumerState<ManualFeedScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _setAmount(double value) {
+    final clamped = value.clamp(_minAmount, _maxAmount).toDouble();
+    if (clamped == _amount) {
+      _syncAmountText();
+      return;
+    }
+
+    setState(() {
+      _amount = clamped;
+    });
+  }
+
+  void _syncAmountText() {
+    final text = _amount.round().toString();
+    if (_amountFocusNode.hasFocus || _amountController.text == text) return;
+
+    _amountController.value = _amountController.value.copyWith(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+      composing: TextRange.empty,
     );
   }
 

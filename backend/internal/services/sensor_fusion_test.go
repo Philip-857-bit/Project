@@ -158,15 +158,9 @@ func TestSensorFusionService_FuseSensorData(t *testing.T) {
 				assert.Equal(t, tt.deviceID, fusedData.DeviceID)
 				assert.Equal(t, "kalman_weighted_average", fusedData.FusionAlgorithm)
 
-				// Validate confidence ranges
+				// Validate confidence ranges (temperature is the only hardware sensor)
 				assert.GreaterOrEqual(t, fusedData.TemperatureConf, 0.0)
 				assert.LessOrEqual(t, fusedData.TemperatureConf, 1.0)
-				assert.GreaterOrEqual(t, fusedData.DOConfidence, 0.0)
-				assert.LessOrEqual(t, fusedData.DOConfidence, 1.0)
-				assert.GreaterOrEqual(t, fusedData.PHConfidence, 0.0)
-				assert.LessOrEqual(t, fusedData.PHConfidence, 1.0)
-				assert.GreaterOrEqual(t, fusedData.TurbidityConf, 0.0)
-				assert.LessOrEqual(t, fusedData.TurbidityConf, 1.0)
 
 				// Validate derived metrics
 				assert.GreaterOrEqual(t, fusedData.WaterQualityIndex, 0.0)
@@ -271,34 +265,19 @@ func TestSensorFusionService_calculateWaterQualityIndex(t *testing.T) {
 		expected float64
 	}{
 		{
-			name: "Optimal conditions",
-			data: &FusedSensorData{
-				Temperature:     25.0,
-				DissolvedOxygen: 8.0,
-				PH:              7.5,
-				Turbidity:       5.0,
-			},
+			name:     "Optimal temperature",
+			data:     &FusedSensorData{Temperature: 25.0},
 			expected: 1.0,
 		},
 		{
-			name: "Poor conditions",
-			data: &FusedSensorData{
-				Temperature:     10.0,
-				DissolvedOxygen: 2.0,
-				PH:              5.0,
-				Turbidity:       100.0,
-			},
-			expected: 0.17, // Calculated: (0.3*0.3 + 0.0*0.4 + 0.3*0.2 + 0.2*0.1) = 0.17
+			name:     "Poor temperature",
+			data:     &FusedSensorData{Temperature: 10.0},
+			expected: 0.3,
 		},
 		{
-			name: "Mixed conditions",
-			data: &FusedSensorData{
-				Temperature:     25.0, // Good
-				DissolvedOxygen: 5.0,  // Medium
-				PH:              7.0,  // Good
-				Turbidity:       20.0, // Medium
-			},
-			expected: 0.8, // Weighted average of good/medium scores
+			name:     "Acceptable temperature",
+			data:     &FusedSensorData{Temperature: 18.0},
+			expected: 0.7,
 		},
 	}
 
@@ -321,35 +300,18 @@ func TestSensorFusionService_calculateFeedingReadiness(t *testing.T) {
 		expected float64
 	}{
 		{
-			name: "Emergency stop - low DO",
-			data: &FusedSensorData{
-				Temperature:       25.0,
-				DissolvedOxygen:   2.5,
-				PH:                7.5,
-				Turbidity:         5.0,
-				WaterQualityIndex: 0.5,
-			},
-			expected: 0.0,
-		},
-		{
-			name: "Poor pH conditions",
-			data: &FusedSensorData{
-				Temperature:       25.0,
-				DissolvedOxygen:   8.0,
-				PH:                5.0,
-				Turbidity:         5.0,
-				WaterQualityIndex: 0.6,
-			},
-			expected: 0.2,
-		},
-		{
-			name: "Suboptimal temperature",
+			name: "Suboptimal temperature (too cold)",
 			data: &FusedSensorData{
 				Temperature:       10.0,
-				DissolvedOxygen:   8.0,
-				PH:                7.5,
-				Turbidity:         5.0,
-				WaterQualityIndex: 0.7,
+				WaterQualityIndex: 0.3,
+			},
+			expected: 0.3,
+		},
+		{
+			name: "Suboptimal temperature (too hot)",
+			data: &FusedSensorData{
+				Temperature:       38.0,
+				WaterQualityIndex: 0.3,
 			},
 			expected: 0.3,
 		},
@@ -357,12 +319,17 @@ func TestSensorFusionService_calculateFeedingReadiness(t *testing.T) {
 			name: "Optimal conditions with boost",
 			data: &FusedSensorData{
 				Temperature:       25.0,
-				DissolvedOxygen:   8.0,
-				PH:                7.5,
-				Turbidity:         5.0,
 				WaterQualityIndex: 1.0,
 			},
-			expected: 1.0, // Boosted and clamped to 1.0
+			expected: 1.0,
+		},
+		{
+			name: "Acceptable non-optimal temp, no boost",
+			data: &FusedSensorData{
+				Temperature:       18.0,
+				WaterQualityIndex: 0.7,
+			},
+			expected: 0.7,
 		},
 	}
 
@@ -429,144 +396,6 @@ func TestSensorFusionService_normalizeTemperature(t *testing.T) {
 	}
 }
 
-func TestSensorFusionService_normalizeDO(t *testing.T) {
-	service := NewSensorFusionService(nil, nil, &config.Config{})
-
-	tests := []struct {
-		name     string
-		do       float64
-		expected float64
-	}{
-		{
-			name:     "Optimal DO",
-			do:       8.0,
-			expected: 1.0,
-		},
-		{
-			name:     "Good DO",
-			do:       6.0,
-			expected: 0.8,
-		},
-		{
-			name:     "Acceptable DO",
-			do:       4.0,
-			expected: 0.4,
-		},
-		{
-			name:     "Critical DO",
-			do:       2.0,
-			expected: 0.0,
-		},
-		{
-			name:     "Very high DO",
-			do:       15.0,
-			expected: 1.0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			normalized := service.normalizeDO(tt.do)
-			assert.Equal(t, tt.expected, normalized)
-		})
-	}
-}
-
-func TestSensorFusionService_normalizePH(t *testing.T) {
-	service := NewSensorFusionService(nil, nil, &config.Config{})
-
-	tests := []struct {
-		name     string
-		ph       float64
-		expected float64
-	}{
-		{
-			name:     "Optimal pH",
-			ph:       7.5,
-			expected: 1.0,
-		},
-		{
-			name:     "Acceptable pH low",
-			ph:       6.8,
-			expected: 0.7,
-		},
-		{
-			name:     "Acceptable pH high",
-			ph:       8.2,
-			expected: 0.7,
-		},
-		{
-			name:     "Poor pH low",
-			ph:       5.0,
-			expected: 0.3,
-		},
-		{
-			name:     "Poor pH high",
-			ph:       10.0,
-			expected: 0.3,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			normalized := service.normalizePH(tt.ph)
-			assert.Equal(t, tt.expected, normalized)
-		})
-	}
-}
-
-func TestSensorFusionService_normalizeTurbidity(t *testing.T) {
-	service := NewSensorFusionService(nil, nil, &config.Config{})
-
-	tests := []struct {
-		name      string
-		turbidity float64
-		expected  float64
-	}{
-		{
-			name:      "Excellent turbidity",
-			turbidity: 2.0,
-			expected:  1.0,
-		},
-		{
-			name:      "Good turbidity",
-			turbidity: 10.0,
-			expected:  0.8,
-		},
-		{
-			name:      "Acceptable turbidity",
-			turbidity: 25.0,
-			expected:  0.5,
-		},
-		{
-			name:      "Poor turbidity",
-			turbidity: 100.0,
-			expected:  0.2,
-		},
-		{
-			name:      "Boundary excellent",
-			turbidity: 5.0,
-			expected:  1.0,
-		},
-		{
-			name:      "Boundary good",
-			turbidity: 15.0,
-			expected:  0.8,
-		},
-		{
-			name:      "Boundary acceptable",
-			turbidity: 50.0,
-			expected:  0.5,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			normalized := service.normalizeTurbidity(tt.turbidity)
-			assert.Equal(t, tt.expected, normalized)
-		})
-	}
-}
 
 func TestSensorFusionService_assessSensorHealth(t *testing.T) {
 	service := NewSensorFusionService(nil, nil, &config.Config{})
@@ -576,24 +405,18 @@ func TestSensorFusionService_assessSensorHealth(t *testing.T) {
 			{NoiseLevel: 0.1, Drift: 0.05},
 			{NoiseLevel: 0.15, Drift: 0.1},
 		},
-		"do": {
-			{NoiseLevel: 0.2, Drift: 0.2},
-		},
-		"ph": {}, // Empty readings
+		"temperature2": {}, // Empty readings → zero health
 	}
 
 	health := service.assessSensorHealth(readingsByType)
 
-	assert.Len(t, health, 3)
+	assert.Len(t, health, 2)
 
 	// Temperature should have good health (low noise/drift, multiple sensors)
 	assert.Greater(t, health["temperature"], 0.5)
 
-	// DO should have lower health (higher noise/drift, single sensor)
-	assert.Less(t, health["do"], health["temperature"])
-
-	// pH should have zero health (no readings)
-	assert.Equal(t, 0.0, health["ph"])
+	// Empty sensor type should have zero health
+	assert.Equal(t, 0.0, health["temperature2"])
 
 	// All health values should be in valid range
 	for sensorType, healthValue := range health {
@@ -614,15 +437,7 @@ func TestSensorFusionService_assessDataQuality(t *testing.T) {
 			name: "Excellent quality",
 			data: &FusedSensorData{
 				TemperatureConf: 0.95,
-				DOConfidence:    0.95,
-				PHConfidence:    0.95,
-				TurbidityConf:   0.95,
-				SensorHealth: map[string]float64{
-					"temperature": 0.95,
-					"do":          0.95,
-					"ph":          0.95,
-					"turbidity":   0.95,
-				},
+				SensorHealth:    map[string]float64{"temperature": 0.95},
 			},
 			expected: "excellent",
 		},
@@ -630,13 +445,7 @@ func TestSensorFusionService_assessDataQuality(t *testing.T) {
 			name: "Good quality",
 			data: &FusedSensorData{
 				TemperatureConf: 0.8,
-				DOConfidence:    0.8,
-				PHConfidence:    0.8,
-				TurbidityConf:   0.8,
-				SensorHealth: map[string]float64{
-					"temperature": 0.8,
-					"do":          0.8,
-				},
+				SensorHealth:    map[string]float64{"temperature": 0.8},
 			},
 			expected: "good",
 		},
@@ -644,12 +453,7 @@ func TestSensorFusionService_assessDataQuality(t *testing.T) {
 			name: "Fair quality",
 			data: &FusedSensorData{
 				TemperatureConf: 0.6,
-				DOConfidence:    0.6,
-				PHConfidence:    0.6,
-				TurbidityConf:   0.6,
-				SensorHealth: map[string]float64{
-					"temperature": 0.6,
-				},
+				SensorHealth:    map[string]float64{"temperature": 0.6},
 			},
 			expected: "fair",
 		},
@@ -657,12 +461,7 @@ func TestSensorFusionService_assessDataQuality(t *testing.T) {
 			name: "Poor quality",
 			data: &FusedSensorData{
 				TemperatureConf: 0.3,
-				DOConfidence:    0.3,
-				PHConfidence:    0.3,
-				TurbidityConf:   0.3,
-				SensorHealth: map[string]float64{
-					"temperature": 0.3,
-				},
+				SensorHealth:    map[string]float64{"temperature": 0.3},
 			},
 			expected: "poor",
 		},
@@ -744,14 +543,10 @@ func TestSensorFusionService_ProcessSensorDataWithKalman(t *testing.T) {
 
 	deviceID := "device-001"
 	temperature := 25.5
-	dissolvedOxygen := 8.2
 	deltaTime := 1.0
 
-	// This will fail due to missing production Kalman filter implementation
-	// but tests the interface
-	_, err := service.ProcessSensorDataWithKalman(deviceID, temperature, dissolvedOxygen, deltaTime)
-
-	// Expected to fail due to missing sensor_fusion package
+	// Expected to fail due to missing sensor_fusion package in test environment
+	_, err := service.ProcessSensorDataWithKalman(deviceID, temperature, deltaTime)
 	assert.Error(t, err)
 }
 
@@ -774,41 +569,25 @@ func TestSensorFusionService_Properties(t *testing.T) {
 
 	// Property: Water quality index should always be between 0 and 1
 	properties.Property("Water quality index bounds", prop.ForAll(
-		func(temp, do, ph, turbidity float64) bool {
-			data := &FusedSensorData{
-				Temperature:     temp,
-				DissolvedOxygen: do,
-				PH:              ph,
-				Turbidity:       turbidity,
-			}
-
+		func(temp float64) bool {
+			data := &FusedSensorData{Temperature: temp}
 			wqi := service.calculateWaterQualityIndex(data)
 			return wqi >= 0.0 && wqi <= 1.0
 		},
 		gen.Float64Range(-10, 50),
-		gen.Float64Range(0, 20),
-		gen.Float64Range(0, 14),
-		gen.Float64Range(0, 200),
 	))
 
 	// Property: Feeding readiness should always be between 0 and 1
 	properties.Property("Feeding readiness bounds", prop.ForAll(
-		func(temp, do, ph, turbidity, wqi float64) bool {
+		func(temp, wqi float64) bool {
 			data := &FusedSensorData{
 				Temperature:       temp,
-				DissolvedOxygen:   do,
-				PH:                ph,
-				Turbidity:         turbidity,
 				WaterQualityIndex: math.Max(0, math.Min(1, wqi)),
 			}
-
 			readiness := service.calculateFeedingReadiness(data)
 			return readiness >= 0.0 && readiness <= 1.0
 		},
 		gen.Float64Range(-10, 50),
-		gen.Float64Range(0, 20),
-		gen.Float64Range(0, 14),
-		gen.Float64Range(0, 200),
 		gen.Float64Range(0, 1),
 	))
 
@@ -850,15 +629,6 @@ func BenchmarkSensorFusionService_FuseSensorData(b *testing.B) {
 			Drift:      0.1,
 			NoiseLevel: 0.05,
 		},
-		{
-			SensorID:   "do-001",
-			SensorType: "do",
-			Value:      8.2,
-			Timestamp:  time.Now(),
-			Accuracy:   0.90,
-			Drift:      0.05,
-			NoiseLevel: 0.08,
-		},
 	}
 
 	b.ResetTimer()
@@ -871,10 +641,7 @@ func BenchmarkSensorFusionService_calculateWaterQualityIndex(b *testing.B) {
 	service := NewSensorFusionService(nil, nil, &config.Config{})
 
 	data := &FusedSensorData{
-		Temperature:     25.0,
-		DissolvedOxygen: 8.0,
-		PH:              7.5,
-		Turbidity:       5.0,
+		Temperature: 25.0,
 	}
 
 	b.ResetTimer()
@@ -967,10 +734,7 @@ func TestSensorFusionService_EdgeCases(t *testing.T) {
 
 	t.Run("NaN and infinity values", func(t *testing.T) {
 		data := &FusedSensorData{
-			Temperature:     math.NaN(),
-			DissolvedOxygen: math.Inf(1),
-			PH:              math.Inf(-1),
-			Turbidity:       25.0,
+			Temperature: math.NaN(),
 		}
 
 		// Should handle NaN/Inf gracefully
@@ -990,9 +754,6 @@ func TestSensorFusionService_EdgeCases(t *testing.T) {
 	t.Run("Empty sensor health map", func(t *testing.T) {
 		data := &FusedSensorData{
 			TemperatureConf: 0.8,
-			DOConfidence:    0.8,
-			PHConfidence:    0.8,
-			TurbidityConf:   0.8,
 			SensorHealth:    map[string]float64{}, // Empty map
 		}
 

@@ -42,10 +42,22 @@ func Recovery(logger *logrus.Logger) gin.HandlerFunc {
 	})
 }
 
-// CORS returns a gin.HandlerFunc for handling CORS
-func CORS() gin.HandlerFunc {
+// CORS returns a gin.HandlerFunc for handling CORS with an explicit allowlist.
+// Pass allowedOrigins from config (e.g. ["http://localhost:3000"]).
+// An empty slice falls back to allowing all origins (development only).
+func CORS(allowedOrigins ...string) gin.HandlerFunc {
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		allowed[o] = struct{}{}
+	}
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		origin := c.GetHeader("Origin")
+		if len(allowed) == 0 {
+			c.Header("Access-Control-Allow-Origin", "*")
+		} else if _, ok := allowed[origin]; ok {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Vary", "Origin")
+		}
 		c.Header("Access-Control-Allow-Credentials", "true")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Header("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")

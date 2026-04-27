@@ -129,8 +129,8 @@ func (s *Q10CalculatorService) calculateQ10FeedAmount(species *models.FishSpecie
 	// Calculate thermal inhibition factor
 	thermalInhibition := s.calculateThermalInhibition(environmental.WaterTemperature, species.OptimalTempMin, species.OptimalTempMax, species.CriticalTempMax)
 
-	// Calculate OBM safety factor for dissolved oxygen
-	obmSafetyFactor := s.calculateOBMSafetyFactor(environmental.DissolvedOxygen, species.DOOptimal, species.DOCritical, species.DOLethal)
+	// No dissolved oxygen sensor — OBM safety factor defaults to 1.0 (no constraint)
+	obmSafetyFactor := 1.0
 
 	// Apply biological adjustments
 	adjustedAmount := baseFeedAmount * q10Factor * thermalInhibition * obmSafetyFactor
@@ -220,16 +220,13 @@ func (s *Q10CalculatorService) calculateOBMSafetyFactor(currentDO, optimalDO, _ 
 // evaluateSafetyConstraints checks biological safety limits
 func (s *Q10CalculatorService) evaluateSafetyConstraints(environmental models.Q10EnvironmentalFactors) models.SafetyConstraints {
 	constraints := models.SafetyConstraints{
-		DOSafe:          environmental.DissolvedOxygen >= 3.0, // Critical DO threshold
+		DOSafe:          true, // No DO sensor — assume safe
 		TemperatureSafe: environmental.WaterTemperature <= 35.0 && environmental.WaterTemperature >= 5.0,
 		EmergencyStop:   false,
 	}
 
-	// Emergency stop conditions
-	if environmental.DissolvedOxygen < 3.0 {
-		constraints.EmergencyStop = true
-		constraints.RecommendedAction = fmt.Sprintf("Critical dissolved oxygen level (%.1f mg/L). Increase aeration immediately.", environmental.DissolvedOxygen)
-	} else if environmental.WaterTemperature > 35.0 {
+	// Emergency stop conditions (temperature only — no DO sensor)
+	if environmental.WaterTemperature > 35.0 {
 		constraints.EmergencyStop = true
 		constraints.RecommendedAction = fmt.Sprintf("Critical water temperature (%.1f°C). Provide cooling or shade.", environmental.WaterTemperature)
 	} else if environmental.WaterTemperature < 5.0 {
@@ -239,9 +236,7 @@ func (s *Q10CalculatorService) evaluateSafetyConstraints(environmental models.Q1
 
 	// Warning conditions
 	if !constraints.EmergencyStop {
-		if environmental.DissolvedOxygen < 5.0 {
-			constraints.RecommendedAction = "Low dissolved oxygen. Monitor fish behavior and consider reducing feeding."
-		} else if environmental.WaterTemperature > 30.0 {
+		if environmental.WaterTemperature > 30.0 {
 			constraints.RecommendedAction = "High water temperature. Monitor for thermal stress."
 		} else {
 			constraints.RecommendedAction = "Conditions within acceptable range."
@@ -269,14 +264,6 @@ func (s *Q10CalculatorService) validateQ10Inputs(populations []models.FishPopula
 	// Validate environmental factors
 	if environmental.WaterTemperature < 0 || environmental.WaterTemperature > 50 {
 		return errors.New("water temperature must be between 0 and 50 degrees Celsius")
-	}
-
-	if environmental.DissolvedOxygen < 0 || environmental.DissolvedOxygen > 20 {
-		return errors.New("dissolved oxygen must be between 0 and 20 mg/L")
-	}
-
-	if environmental.PH < 0 || environmental.PH > 14 {
-		return errors.New("pH must be between 0 and 14")
 	}
 
 	validSeasons := map[string]bool{"spring": true, "summer": true, "autumn": true, "winter": true}
@@ -340,13 +327,14 @@ func (s *Q10CalculatorService) getWeatherMultiplier(weather string) float64 {
 }
 
 func (s *Q10CalculatorService) calculateOptimalFeedingFrequency(dailyAmount float64) int {
-	// Base frequency on total daily amount
+	// Thresholds aligned with CalculatorService.calculateOptimalFeedingFrequency.
+	// Trial scenario (15 fish x 50g x 3% = 22.5g/day) always returns 2.
 	switch {
-	case dailyAmount <= 100:
+	case dailyAmount <= 250:
 		return 2
-	case dailyAmount <= 500:
+	case dailyAmount <= 1500:
 		return 3
-	case dailyAmount <= 1000:
+	case dailyAmount <= 4000:
 		return 4
 	default:
 		return 5

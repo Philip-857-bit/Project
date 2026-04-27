@@ -89,7 +89,7 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
         schedule.id,
         schedule.toJson(),
       );
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         await loadSchedules(deviceId);
         return true;
       }
@@ -102,7 +102,7 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
   Future<bool> deleteSchedule(String deviceId, String scheduleId) async {
     try {
       final response = await _apiService.deleteSchedule(deviceId, scheduleId);
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 204) {
         state = state.copyWith(
           schedules: state.schedules.where((s) => s.id != scheduleId).toList(),
         );
@@ -234,7 +234,7 @@ class ManualFeedNotifier extends StateNotifier<ManualFeedState> {
       final response = await _apiService
           .triggerManualFeed(deviceId, amount)
           .timeout(const Duration(seconds: 20));
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 202) {
         state = state.copyWith(
           isFeeding: false,
           successMessage: 'Feed command sent successfully!',

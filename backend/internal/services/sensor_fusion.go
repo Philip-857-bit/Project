@@ -34,12 +34,9 @@ func NewSensorFusionService(repo *repository.Repository, redisClient *redis.Clie
 		WindowSize:   5,
 	}
 
-	// Create noise filters for each sensor type
+	// Create noise filters for sensors present on the T-A7670 hardware
 	noiseFilters := make(map[string]*signal_processing.DigitalFilter)
 	noiseFilters["temperature"] = signal_processing.NewDigitalFilter(filterConfig)
-	noiseFilters["do"] = signal_processing.NewDigitalFilter(filterConfig)
-	noiseFilters["ph"] = signal_processing.NewDigitalFilter(filterConfig)
-	noiseFilters["turbidity"] = signal_processing.NewDigitalFilter(filterConfig)
 
 	return &SensorFusionService{
 		repo:          repo,
@@ -55,18 +52,9 @@ type FusedSensorData struct {
 	DeviceID  string    `json:"device_id"`
 	Timestamp time.Time `json:"timestamp"`
 
-	// Primary measurements with confidence
+	// Primary measurements with confidence (temperature is the only hardware sensor)
 	Temperature     float64 `json:"temperature"`
 	TemperatureConf float64 `json:"temperature_confidence"`
-
-	DissolvedOxygen float64 `json:"dissolved_oxygen"`
-	DOConfidence    float64 `json:"do_confidence"`
-
-	PH           float64 `json:"ph"`
-	PHConfidence float64 `json:"ph_confidence"`
-
-	Turbidity     float64 `json:"turbidity"`
-	TurbidityConf float64 `json:"turbidity_confidence"`
 
 	// Derived measurements
 	WaterQualityIndex float64 `json:"water_quality_index"`
@@ -120,11 +108,8 @@ func (s *SensorFusionService) FuseSensorData(deviceID string, readings []SensorR
 	// Group readings by sensor type
 	readingsByType := s.groupReadingsByType(readings)
 
-	// Apply Kalman filtering and weighted averaging for each sensor type
+	// Apply Kalman filtering for temperature (the only hardware sensor on T-A7670)
 	fusedData.Temperature, fusedData.TemperatureConf = s.fuseTemperatureReadings(deviceID, readingsByType["temperature"])
-	fusedData.DissolvedOxygen, fusedData.DOConfidence = s.fuseDOReadings(deviceID, readingsByType["do"])
-	fusedData.PH, fusedData.PHConfidence = s.fusePHReadings(deviceID, readingsByType["ph"])
-	fusedData.Turbidity, fusedData.TurbidityConf = s.fuseTurbidityReadings(deviceID, readingsByType["turbidity"])
 
 	// Calculate derived measurements
 	fusedData.WaterQualityIndex = s.calculateWaterQualityIndex(fusedData)
@@ -172,44 +157,6 @@ func (s *SensorFusionService) fuseTemperatureReadings(deviceID string, readings 
 	return fusedValue, confidence
 }
 
-// fuseDOReadings fuses dissolved oxygen sensor readings
-func (s *SensorFusionService) fuseDOReadings(deviceID string, readings []SensorReading) (float64, float64) {
-	if len(readings) == 0 {
-		return 0.0, 0.0
-	}
-
-	filter := s.getLegacyKalmanFilter(deviceID, "do")
-	fusedValue, confidence := s.applyKalmanFusion(filter, readings)
-	s.saveKalmanFilter(deviceID, "do", filter)
-
-	return fusedValue, confidence
-}
-
-// fusePHReadings fuses pH sensor readings
-func (s *SensorFusionService) fusePHReadings(deviceID string, readings []SensorReading) (float64, float64) {
-	if len(readings) == 0 {
-		return 0.0, 0.0
-	}
-
-	filter := s.getLegacyKalmanFilter(deviceID, "ph")
-	fusedValue, confidence := s.applyKalmanFusion(filter, readings)
-	s.saveKalmanFilter(deviceID, "ph", filter)
-
-	return fusedValue, confidence
-}
-
-// fuseTurbidityReadings fuses turbidity sensor readings
-func (s *SensorFusionService) fuseTurbidityReadings(deviceID string, readings []SensorReading) (float64, float64) {
-	if len(readings) == 0 {
-		return 0.0, 0.0
-	}
-
-	filter := s.getLegacyKalmanFilter(deviceID, "turbidity")
-	fusedValue, confidence := s.applyKalmanFusion(filter, readings)
-	s.saveKalmanFilter(deviceID, "turbidity", filter)
-
-	return fusedValue, confidence
-}
 
 // applyKalmanFusion applies Kalman filtering with weighted averaging (legacy method)
 func (s *SensorFusionService) applyKalmanFusion(filter *KalmanFilter, readings []SensorReading) (float64, float64) {
@@ -320,43 +267,22 @@ func (s *SensorFusionService) calculateVariance(readings []SensorReading) float6
 	return variance
 }
 
-// calculateWaterQualityIndex calculates overall water quality index
+// calculateWaterQualityIndex calculates water quality index from temperature
+// (the only sensor present on the T-A7670 hardware)
 func (s *SensorFusionService) calculateWaterQualityIndex(data *FusedSensorData) float64 {
-	// Normalize each parameter to 0-1 scale (1 = optimal)
-	tempScore := s.normalizeTemperature(data.Temperature)
-	doScore := s.normalizeDO(data.DissolvedOxygen)
-	phScore := s.normalizePH(data.PH)
-	turbidityScore := s.normalizeTurbidity(data.Turbidity)
-
-	// Weighted average (DO and temp are most critical)
-	wqi := (tempScore*0.3 + doScore*0.4 + phScore*0.2 + turbidityScore*0.1)
-
-	return math.Max(0.0, math.Min(1.0, wqi))
+	return math.Max(0.0, math.Min(1.0, s.normalizeTemperature(data.Temperature)))
 }
 
-// calculateFeedingReadiness calculates feeding readiness score
+// calculateFeedingReadiness calculates feeding readiness score from temperature
 func (s *SensorFusionService) calculateFeedingReadiness(data *FusedSensorData) float64 {
-	// Critical thresholds for feeding
-	if data.DissolvedOxygen < 3.0 {
-		return 0.0 // Emergency stop
-	}
-
-	if data.PH < 6.5 || data.PH > 8.5 {
-		return 0.2 // Poor conditions
-	}
-
 	if data.Temperature < 15.0 || data.Temperature > 35.0 {
 		return 0.3 // Suboptimal temperature
 	}
 
-	// Calculate readiness based on optimal ranges
 	readiness := data.WaterQualityIndex
 
-	// Boost for optimal conditions
-	if data.Temperature >= 20.0 && data.Temperature <= 30.0 &&
-		data.DissolvedOxygen >= 7.0 &&
-		data.PH >= 7.0 && data.PH <= 8.0 &&
-		data.Turbidity <= 10.0 {
+	// Boost for optimal temperature range
+	if data.Temperature >= 20.0 && data.Temperature <= 30.0 {
 		readiness = math.Min(1.0, readiness*1.2)
 	}
 
@@ -398,9 +324,7 @@ func (s *SensorFusionService) assessSensorHealth(readingsByType map[string][]Sen
 
 // assessDataQuality provides overall data quality assessment
 func (s *SensorFusionService) assessDataQuality(data *FusedSensorData) string {
-	// Calculate average confidence
-	avgConfidence := (data.TemperatureConf + data.DOConfidence +
-		data.PHConfidence + data.TurbidityConf) / 4.0
+	avgConfidence := data.TemperatureConf
 
 	// Calculate average sensor health
 	totalHealth := 0.0
@@ -437,42 +361,6 @@ func (s *SensorFusionService) normalizeTemperature(temp float64) float64 {
 	}
 }
 
-func (s *SensorFusionService) normalizeDO(do float64) float64 {
-	// Optimal: >7 mg/L, Critical: <3 mg/L
-	if do >= 7.0 {
-		return 1.0
-	} else if do >= 5.0 {
-		return 0.8
-	} else if do >= 3.0 {
-		return 0.4
-	} else {
-		return 0.0
-	}
-}
-
-func (s *SensorFusionService) normalizePH(ph float64) float64 {
-	// Optimal range: 7.0-8.0
-	if ph >= 7.0 && ph <= 8.0 {
-		return 1.0
-	} else if ph >= 6.5 && ph <= 8.5 {
-		return 0.7
-	} else {
-		return 0.3
-	}
-}
-
-func (s *SensorFusionService) normalizeTurbidity(turbidity float64) float64 {
-	// Lower is better for turbidity
-	if turbidity <= 5.0 {
-		return 1.0
-	} else if turbidity <= 15.0 {
-		return 0.8
-	} else if turbidity <= 50.0 {
-		return 0.5
-	} else {
-		return 0.2
-	}
-}
 
 // Kalman filter management (legacy methods for backward compatibility)
 func (s *SensorFusionService) getLegacyKalmanFilter(deviceID, sensorType string) *KalmanFilter {
@@ -525,13 +413,13 @@ func (s *SensorFusionService) getKalmanFilter(deviceID string) (*sensor_fusion.K
 		return filter, nil
 	}
 
-	// Create new Kalman filter configuration
+	// Create new Kalman filter configuration (temperature only — single sensor)
 	config := sensor_fusion.KalmanConfig{
-		StateDim:            4,    // [temperature, temp_velocity, DO, DO_velocity]
-		MeasurementDim:      2,    // [temperature, DO]
-		ProcessNoiseVar:     0.01, // Low process noise for stable sensors
-		MeasurementNoiseVar: 0.1,  // Measurement noise based on sensor specs
-		InitialStateVar:     1.0,  // Initial uncertainty
+		StateDim:            2,    // [temperature, temp_velocity]
+		MeasurementDim:      1,    // [temperature]
+		ProcessNoiseVar:     0.01,
+		MeasurementNoiseVar: 0.1,
+		InitialStateVar:     1.0,
 	}
 
 	// Create Kalman filter
@@ -546,96 +434,61 @@ func (s *SensorFusionService) getKalmanFilter(deviceID string) (*sensor_fusion.K
 	return filter, nil
 }
 
-// ProcessSensorDataWithKalman processes sensor data using Kalman filtering
-func (s *SensorFusionService) ProcessSensorDataWithKalman(deviceID string, temperature, dissolvedOxygen float64, deltaTime float64) (*FusedSensorData, error) {
-	// Get Kalman filter for device
+// ProcessSensorDataWithKalman processes temperature with Kalman filtering
+func (s *SensorFusionService) ProcessSensorDataWithKalman(deviceID string, temperature float64, deltaTime float64) (*FusedSensorData, error) {
 	filter, err := s.getKalmanFilter(deviceID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Predict step (if filter is initialized)
 	if filter.IsInitialized() {
-		err = filter.Predict(deltaTime)
-		if err != nil {
+		if err = filter.Predict(deltaTime); err != nil {
 			return nil, err
 		}
 	}
 
-	// Update step with new measurements
-	measurements := []float64{temperature, dissolvedOxygen}
-	err = filter.Update(measurements)
-	if err != nil {
+	if err = filter.Update([]float64{temperature}); err != nil {
 		return nil, err
 	}
 
-	// Get filtered state
 	state, err := filter.GetState()
 	if err != nil {
 		return nil, err
 	}
 
-	// Get uncertainty estimates
 	uncertainty, err := filter.GetUncertainty()
 	if err != nil {
 		return nil, err
 	}
 
-	// Create fused sensor data
 	fusedData := &FusedSensorData{
 		DeviceID:        deviceID,
 		Timestamp:       time.Now(),
-		Temperature:     state[0],                  // Filtered temperature
-		TemperatureConf: 1.0 - uncertainty[0]/10.0, // Convert uncertainty to confidence
-		DissolvedOxygen: state[2],                  // Filtered DO
-		DOConfidence:    1.0 - uncertainty[2]/5.0,  // Convert uncertainty to confidence
+		Temperature:     state[0],
+		TemperatureConf: 1.0 - uncertainty[0]/10.0,
 	}
 
-	// Calculate derived metrics
 	fusedData.WaterQualityIndex = s.calculateWaterQualityIndex(fusedData)
 	fusedData.FeedingReadiness = s.calculateFeedingReadiness(fusedData)
 
 	return fusedData, nil
 }
 
-// ProcessMultiSensorFusion processes multiple sensor readings with weighted averaging
+// ProcessMultiSensorFusion processes temperature sensor readings with weighted averaging
 func (s *SensorFusionService) ProcessMultiSensorFusion(deviceID string, sensorReadings []SensorReading) (*FusedSensorData, error) {
 	if len(sensorReadings) == 0 {
 		return nil, errors.New("no sensor readings provided")
 	}
 
-	// Group readings by sensor type
-	tempReadings := []float64{}
-	doReadings := []float64{}
-	phReadings := []float64{}
-	turbidityReadings := []float64{}
-
-	tempWeights := []float64{}
-	doWeights := []float64{}
-	phWeights := []float64{}
-	turbidityWeights := []float64{}
-
+	var tempReadings, tempWeights []float64
 	for _, reading := range sensorReadings {
-		// Calculate weight based on sensor quality and age
-		weight := s.calculateSensorWeight(reading)
-
-		switch reading.SensorType {
-		case "temperature":
+		if reading.SensorType == "temperature" {
+			weight := s.calculateSensorWeight(reading)
 			tempReadings = append(tempReadings, reading.Value)
 			tempWeights = append(tempWeights, weight)
-		case "dissolved_oxygen":
-			doReadings = append(doReadings, reading.Value)
-			doWeights = append(doWeights, weight)
-		case "ph":
-			phReadings = append(phReadings, reading.Value)
-			phWeights = append(phWeights, weight)
-		case "turbidity":
-			turbidityReadings = append(turbidityReadings, reading.Value)
-			turbidityWeights = append(turbidityWeights, weight)
 		}
 	}
 
-	// Calculate weighted averages
 	fusedData := &FusedSensorData{
 		DeviceID:  deviceID,
 		Timestamp: time.Now(),
@@ -649,31 +502,6 @@ func (s *SensorFusionService) ProcessMultiSensorFusion(deviceID string, sensorRe
 		}
 	}
 
-	if len(doReadings) > 0 {
-		avgDO, err := algmath.WeightedAverage(doReadings, doWeights)
-		if err == nil {
-			fusedData.DissolvedOxygen = avgDO
-			fusedData.DOConfidence = s.calculateWeightedConfidence(doReadings, doWeights)
-		}
-	}
-
-	if len(phReadings) > 0 {
-		avgPH, err := algmath.WeightedAverage(phReadings, phWeights)
-		if err == nil {
-			fusedData.PH = avgPH
-			fusedData.PHConfidence = s.calculateWeightedConfidence(phReadings, phWeights)
-		}
-	}
-
-	if len(turbidityReadings) > 0 {
-		avgTurbidity, err := algmath.WeightedAverage(turbidityReadings, turbidityWeights)
-		if err == nil {
-			fusedData.Turbidity = avgTurbidity
-			fusedData.TurbidityConf = s.calculateWeightedConfidence(turbidityReadings, turbidityWeights)
-		}
-	}
-
-	// Calculate derived metrics
 	fusedData.WaterQualityIndex = s.calculateWaterQualityIndex(fusedData)
 	fusedData.FeedingReadiness = s.calculateFeedingReadiness(fusedData)
 

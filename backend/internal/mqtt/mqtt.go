@@ -201,15 +201,12 @@ func (c *Client) Subscribe(topic string, qos byte, handler MessageHandler) error
 	c.handlers[topic] = handler
 	c.handlersMutex.Unlock()
 
+	// Call handler directly via closure so wildcard topic patterns (e.g. "devices/+/sensors")
+	// work correctly. Looking up by msg.Topic() returns the concrete topic which never matches
+	// a pattern key stored in c.handlers.
 	token := c.client.Subscribe(topic, qos, func(client pahomqtt.Client, msg pahomqtt.Message) {
-		c.handlersMutex.RLock()
-		h, exists := c.handlers[msg.Topic()]
-		c.handlersMutex.RUnlock()
-
-		if exists {
-			if err := h(msg.Topic(), msg.Payload()); err != nil {
-				c.logger.WithError(err).WithField("topic", msg.Topic()).Error("Error handling message")
-			}
+		if err := handler(msg.Topic(), msg.Payload()); err != nil {
+			c.logger.WithError(err).WithField("topic", msg.Topic()).Error("Error handling message")
 		}
 	})
 

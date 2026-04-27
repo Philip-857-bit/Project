@@ -5,13 +5,19 @@
 
 #include "DeviceManager.h"
 #include "../../include/config.h"
+#include <ArduinoJson.h>
 
-DeviceManager::DeviceManager() 
+DeviceManager::DeviceManager()
     : _storage(nullptr)
     , _isProvisioned(false)
     , _provisioningState(ProvisioningState::IDLE)
     , _bleServer(nullptr)
     , _bleService(nullptr)
+    , _charDeviceInfo(nullptr)
+    , _charWifiConfig(nullptr)
+    , _charCellConfig(nullptr)
+    , _charStatus(nullptr)
+    , _charBindingCode(nullptr)
     , _deviceConnected(false)
     , _provisioningStartTime(0) {
 }
@@ -30,8 +36,9 @@ bool DeviceManager::begin(NVSStorage* storage) {
     // Load credentials
     _isProvisioned = loadCredentials();
     
-    // Initialize status LED (T-A7670 R2 has single LED on GPIO2)
+#ifdef PIN_LED_STATUS
     pinMode(PIN_LED_STATUS, OUTPUT);
+#endif
     
     return true;
 }
@@ -101,7 +108,9 @@ void DeviceManager::enterProvisioningMode() {
     initBLE();
     
     // Visual indicator
+#ifdef PIN_LED_STATUS
     digitalWrite(PIN_LED_STATUS, HIGH);
+#endif
 }
 
 void DeviceManager::exitProvisioningMode() {
@@ -113,62 +122,88 @@ void DeviceManager::exitProvisioningMode() {
     }
     
     _provisioningState = ProvisioningState::IDLE;
+#ifdef PIN_LED_STATUS
     digitalWrite(PIN_LED_STATUS, LOW);
+#endif
+}
+
+String DeviceManager::generateBindingCode() {
+    // 6-digit numeric code derived from device ID + timestamp
+    uint32_t seed = 0;
+    for (char c : _deviceID) seed = seed * 31 + c;
+    seed ^= (uint32_t)(millis() & 0xFFFFFF);
+    uint32_t code = seed % 1000000;
+    char buf[7];
+    snprintf(buf, sizeof(buf), "%06u", code);
+    String result(buf);
+    _storage->putString(NVS_KEY_BINDING_CODE, result);
+    return result;
 }
 
 void DeviceManager::initBLE() {
     BLEDevice::init("SmartFishFeeder");
-    
+
     _bleServer = BLEDevice::createServer();
     _bleServer->setCallbacks(this);
-    
+
     _bleService = _bleServer->createService(SERVICE_UUID);
-    
-    // Device ID characteristic (read-only)
-    _charDeviceID = _bleService->createCharacteristic(
+
+    // Device info characteristic (read) — returns JSON with device_id, serial_number, etc.
+    _charDeviceInfo = _bleService->createCharacteristic(
         CHAR_DEVICE_ID_UUID,
         BLECharacteristic::PROPERTY_READ
     );
-    _charDeviceID->setValue(_deviceID.c_str());
-    
-    // WiFi SSID characteristic (write)
-    _charWifiSSID = _bleService->createCharacteristic(
-        CHAR_WIFI_SSID_UUID,
+    JsonDocument infoDoc;
+    infoDoc["device_id"]         = _deviceID;
+    infoDoc["serial_number"]     = _deviceID;
+    infoDoc["firmware_version"]  = FIRMWARE_VERSION;
+    infoDoc["hardware_version"]  = "1.0";
+    infoDoc["mac_address"]       = _deviceID;
+    infoDoc["is_provisioned"]    = _isProvisioned;
+    String infoJson;
+    serializeJson(infoDoc, infoJson);
+    _charDeviceInfo->setValue(infoJson.c_str());
+
+    // WiFi config characteristic (write) — receives JSON: {type, ssid, password}
+    _charWifiConfig = _bleService->createCharacteristic(
+        CHAR_WIFI_CONFIG_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
-    _charWifiSSID->setCallbacks(this);
-    
-    // WiFi Password characteristic (write)
-    _charWifiPass = _bleService->createCharacteristic(
-        CHAR_WIFI_PASS_UUID,
+    _charWifiConfig->setCallbacks(this);
+
+    // Cellular config characteristic (write) — receives JSON: {type, apn, username, password}
+    _charCellConfig = _bleService->createCharacteristic(
+        CHAR_CELL_CONFIG_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
-    _charWifiPass->setCallbacks(this);
-    
-    // MQTT Host characteristic (write)
-    _charMqttHost = _bleService->createCharacteristic(
-        CHAR_MQTT_HOST_UUID,
-        BLECharacteristic::PROPERTY_WRITE
-    );
-    _charMqttHost->setCallbacks(this);
-    
-    // Status characteristic (read/notify)
+    _charCellConfig->setCallbacks(this);
+
+    // Provisioning status characteristic (read/notify) — sends "complete" or "error"
     _charStatus = _bleService->createCharacteristic(
         CHAR_STATUS_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
     _charStatus->addDescriptor(new BLE2902());
-    _charStatus->setValue("READY");
-    
+    _charStatus->setValue("ready");
+
+    // Binding code characteristic (read) — 6-digit code for backend bind
+    _charBindingCode = _bleService->createCharacteristic(
+        CHAR_BINDING_CODE_UUID,
+        BLECharacteristic::PROPERTY_READ
+    );
+    String bindCode = generateBindingCode();
+    _charBindingCode->setValue(bindCode.c_str());
+    Serial.printf("[DeviceManager] Binding code: %s\n", bindCode.c_str());
+
     _bleService->start();
-    
+
     BLEAdvertising* advertising = BLEDevice::getAdvertising();
     advertising->addServiceUUID(SERVICE_UUID);
     advertising->setScanResponse(true);
     advertising->setMinPreferred(0x06);
     advertising->setMinPreferred(0x12);
     BLEDevice::startAdvertising();
-    
+
     Serial.println("[DeviceManager] BLE advertising started");
 }
 
@@ -190,51 +225,57 @@ void DeviceManager::onDisconnect(BLEServer* pServer) {
 
 void DeviceManager::onWrite(BLECharacteristic* pCharacteristic) {
     String uuid = pCharacteristic->getUUID().toString().c_str();
-    String value = pCharacteristic->getValue().c_str();
-    
-    Serial.printf("[DeviceManager] Received write to %s\n", uuid.c_str());
-    
+    uuid.toLowerCase();
+    std::string raw = pCharacteristic->getValue();
+    String value(raw.c_str());
+
+    Serial.printf("[DeviceManager] Received write to %s (%d bytes)\n", uuid.c_str(), value.length());
+
     _provisioningState = ProvisioningState::RECEIVING_CREDENTIALS;
-    
-    if (uuid == CHAR_WIFI_SSID_UUID) {
-        _wifiSSID = value;
-        Serial.printf("[DeviceManager] WiFi SSID set: %s\n", _wifiSSID.c_str());
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, value);
+    if (err) {
+        Serial.printf("[DeviceManager] JSON parse error: %s\n", err.c_str());
+        _charStatus->setValue("error");
+        _charStatus->notify();
+        return;
     }
-    else if (uuid == CHAR_WIFI_PASS_UUID) {
-        _wifiPassword = value;
-        Serial.println("[DeviceManager] WiFi password set");
+
+    String type = doc["type"] | "";
+
+    if (uuid == String(CHAR_WIFI_CONFIG_UUID).c_str()) {
+        _wifiSSID     = doc["ssid"]     | "";
+        _wifiPassword = doc["password"] | "";
+        Serial.printf("[DeviceManager] WiFi config received, SSID: %s\n", _wifiSSID.c_str());
+    } else if (uuid == String(CHAR_CELL_CONFIG_UUID).c_str()) {
+        _cellularAPN = doc["apn"] | "";
+        Serial.printf("[DeviceManager] Cellular config received, APN: %s\n", _cellularAPN.c_str());
+    } else {
+        return;
     }
-    else if (uuid == CHAR_MQTT_HOST_UUID) {
-        _mqttHost = value;
-        Serial.printf("[DeviceManager] MQTT host set: %s\n", _mqttHost.c_str());
-        
-        // MQTT host is the last required field, validate and save
-        if (validateCredentials()) {
-            _provisioningState = ProvisioningState::VALIDATING;
-            _charStatus->setValue("VALIDATING");
+
+    // After receiving either network config, save and complete provisioning
+    if (validateCredentials()) {
+        _provisioningState = ProvisioningState::VALIDATING;
+        if (saveCredentials()) {
+            _isProvisioned = true;
+            _provisioningState = ProvisioningState::COMPLETE;
+            // Send lowercase "complete" — matches mobile _waitForProvisioningComplete check
+            _charStatus->setValue("complete");
             _charStatus->notify();
-            
-            if (saveCredentials()) {
-                _isProvisioned = true;
-                _provisioningState = ProvisioningState::COMPLETE;
-                _charStatus->setValue("SUCCESS");
-                _charStatus->notify();
-                
-                Serial.println("[DeviceManager] Provisioning complete!");
-                
-                // Delay to allow notification to be sent
-                delay(1000);
-                exitProvisioningMode();
-            } else {
-                _provisioningState = ProvisioningState::FAILED;
-                _charStatus->setValue("SAVE_FAILED");
-                _charStatus->notify();
-            }
+            Serial.println("[DeviceManager] Provisioning complete!");
+            delay(500);  // Allow notification delivery before deinit
+            exitProvisioningMode();
         } else {
             _provisioningState = ProvisioningState::FAILED;
-            _charStatus->setValue("INVALID_CREDENTIALS");
+            _charStatus->setValue("error");
             _charStatus->notify();
         }
+    } else {
+        _provisioningState = ProvisioningState::FAILED;
+        _charStatus->setValue("error");
+        _charStatus->notify();
     }
 }
 
@@ -277,7 +318,9 @@ void DeviceManager::updateStatusLED() {
     if (millis() - lastBlink > interval) {
         lastBlink = millis();
         ledState = !ledState;
+#ifdef PIN_LED_STATUS
         digitalWrite(PIN_LED_STATUS, ledState);
+#endif
     }
 }
 

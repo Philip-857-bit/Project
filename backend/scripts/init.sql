@@ -91,11 +91,25 @@ CREATE TABLE IF NOT EXISTS feeding_events (
     device_id VARCHAR(100) NOT NULL,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     quantity_grams DECIMAL(10,2) DEFAULT 0,
+    actual_dispensed DECIMAL(10,2) DEFAULT 0,
     duration_seconds INTEGER DEFAULT 0,
     trigger_type VARCHAR(20) DEFAULT 'MANUAL',
+    result INTEGER DEFAULT 0,
+    error_message TEXT DEFAULT '',
+    temperature DECIMAL(5,2),
+    q10_factor DECIMAL(6,4) DEFAULT 1.0,
+    obm_safety_factor DECIMAL(6,4) DEFAULT 1.0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     deleted_at TIMESTAMP WITH TIME ZONE
 );
+
+-- Migration: add missing columns to existing feeding_events tables
+ALTER TABLE feeding_events ADD COLUMN IF NOT EXISTS actual_dispensed DECIMAL(10,2) DEFAULT 0;
+ALTER TABLE feeding_events ADD COLUMN IF NOT EXISTS result INTEGER DEFAULT 0;
+ALTER TABLE feeding_events ADD COLUMN IF NOT EXISTS error_message TEXT DEFAULT '';
+ALTER TABLE feeding_events ADD COLUMN IF NOT EXISTS temperature DECIMAL(5,2);
+ALTER TABLE feeding_events ADD COLUMN IF NOT EXISTS q10_factor DECIMAL(6,4) DEFAULT 1.0;
+ALTER TABLE feeding_events ADD COLUMN IF NOT EXISTS obm_safety_factor DECIMAL(6,4) DEFAULT 1.0;
 
 -- Sensor data table
 CREATE TABLE IF NOT EXISTS sensor_data (
@@ -105,9 +119,6 @@ CREATE TABLE IF NOT EXISTS sensor_data (
     weight_grams DECIMAL(10,2) DEFAULT 0,
     weight_percentage DECIMAL(5,2) DEFAULT 0,
     water_temperature DECIMAL(5,2),
-    dissolved_oxygen DECIMAL(5,2),
-    ph DECIMAL(4,2),
-    turbidity DECIMAL(10,2),
     battery_level INTEGER DEFAULT 0,
     battery_voltage DECIMAL(5,2) DEFAULT 0,
     power_source VARCHAR(20) DEFAULT 'battery',
@@ -125,12 +136,27 @@ CREATE TABLE IF NOT EXISTS feeding_schedules (
     hour INTEGER NOT NULL CHECK (hour >= 0 AND hour <= 23),
     minute INTEGER NOT NULL CHECK (minute >= 0 AND minute <= 59),
     quantity_grams DECIMAL(10,2) DEFAULT 0,
-    duration_seconds INTEGER DEFAULT 0,
+    duration_seconds INTEGER DEFAULT 10,
+    days_of_week JSONB DEFAULT '[0,1,2,3,4,5,6]'::jsonb,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     deleted_at TIMESTAMP WITH TIME ZONE
 );
+
+ALTER TABLE feeding_schedules
+    ADD COLUMN IF NOT EXISTS days_of_week JSONB DEFAULT '[0,1,2,3,4,5,6]'::jsonb;
+
+ALTER TABLE feeding_schedules
+    ALTER COLUMN duration_seconds SET DEFAULT 10;
+
+UPDATE feeding_schedules
+SET duration_seconds = 10
+WHERE duration_seconds IS NULL OR duration_seconds <= 0;
+
+UPDATE feeding_schedules
+SET days_of_week = '[0,1,2,3,4,5,6]'::jsonb
+WHERE days_of_week IS NULL;
 
 -- Alerts table
 CREATE TABLE IF NOT EXISTS alerts (
@@ -468,10 +494,10 @@ VALUES
     2.1, 26.0, 30.0, 34.0,
     5.5, 3.0, 1.5,
     '[{"min_temp": 20, "max_temp": 24, "multiplier": 0.85}, {"min_temp": 24, "max_temp": 30, "multiplier": 1.0}, {"min_temp": 30, "max_temp": 33, "multiplier": 0.9}, {"min_temp": 33, "max_temp": 36, "multiplier": 0.6}]', '[]', NOW(), NOW()),
-    ('catfish', 'African Catfish', 2.5, 
-    2.0, 26.0, 30.0, 34.0,
-    5.0, 2.5, 1.0,
-    '[{"min_temp": 22, "max_temp": 26, "multiplier": 0.85}, {"min_temp": 26, "max_temp": 30, "multiplier": 1.0}, {"min_temp": 30, "max_temp": 33, "multiplier": 0.85}, {"min_temp": 33, "max_temp": 36, "multiplier": 0.6}]', '[]', NOW(), NOW()),
+    ('catfish', 'African Catfish (Clarias gariepinus)', 5.0,
+    2.1, 26.0, 30.0, 32.0,
+    6.0, 4.0, 2.0,
+    '[{"min_temp": 20, "max_temp": 26, "multiplier": 0.85}, {"min_temp": 26, "max_temp": 30, "multiplier": 1.0}, {"min_temp": 30, "max_temp": 32, "multiplier": 0.7}, {"min_temp": 32, "max_temp": 36, "multiplier": 0.0}]', '[]', NOW(), NOW()),
     ('carp', 'Common Carp', 2.8, 
     2.1, 22.0, 28.0, 32.0,
     6.0, 3.5, 2.0,

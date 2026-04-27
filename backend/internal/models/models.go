@@ -60,8 +60,14 @@ type FeedingEvent struct {
 	DeviceID        string         `json:"device_id" gorm:"not null"`
 	Timestamp       time.Time      `json:"timestamp"`
 	QuantityGrams   float64        `json:"quantity_grams" validate:"min=0"`
+	ActualDispensed float64        `json:"actual_dispensed" validate:"min=0"`
 	DurationSeconds int            `json:"duration_seconds" validate:"min=0"`
 	TriggerType     TriggerType    `json:"trigger_type"`
+	Result          int            `json:"result"`           // FeedingResult firmware enum: 0=SUCCESS 1=PARTIAL 2=TIMEOUT 3=CANCELLED 4=STALL 5=LOW_FEED 6=ERROR
+	ErrorMessage    string         `json:"error_message"`
+	Temperature     float64        `json:"temperature"`
+	Q10Factor       float64        `json:"q10_factor"`
+	OBMSafetyFactor float64        `json:"obm_safety_factor"`
 	CreatedAt       time.Time      `json:"created_at"`
 	DeletedAt       gorm.DeletedAt `json:"-" gorm:"index"`
 }
@@ -74,9 +80,6 @@ type SensorData struct {
 	WeightGrams      float64        `json:"weight_grams" validate:"min=0"`
 	WeightPercentage float64        `json:"weight_percentage" validate:"min=0,max=100"`
 	WaterTemperature float64        `json:"water_temperature"`
-	DissolvedOxygen  float64        `json:"dissolved_oxygen" validate:"min=0,max=20"` // mg/L
-	PH               float64        `json:"ph" validate:"min=0,max=14"`
-	Turbidity        float64        `json:"turbidity" validate:"min=0"` // NTU
 	BatteryLevel     int            `json:"battery_level" validate:"min=0,max=100"`
 	BatteryVoltage   float64        `json:"battery_voltage" validate:"min=0"`
 	PowerSource      PowerSource    `json:"power_source"`
@@ -114,6 +117,7 @@ type FeedingSchedule struct {
 	Minute          int            `json:"minute" validate:"min=0,max=59"`
 	QuantityGrams   float64        `json:"quantity_grams" validate:"min=0"`
 	DurationSeconds int            `json:"duration_seconds" validate:"min=0"`
+	DaysOfWeek      []int          `json:"days_of_week" gorm:"type:jsonb;serializer:json"`
 	IsActive        bool           `json:"is_active" gorm:"default:true"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
@@ -302,9 +306,6 @@ type SensorDataRequest struct {
 	WeightGrams      float64     `json:"weight_grams" validate:"min=0"`
 	WeightPercentage float64     `json:"weight_percentage" validate:"min=0,max=100"`
 	WaterTemperature float64     `json:"water_temperature"`
-	DissolvedOxygen  float64     `json:"dissolved_oxygen" validate:"min=0,max=20"`
-	PH               float64     `json:"ph" validate:"min=0,max=14"`
-	Turbidity        float64     `json:"turbidity" validate:"min=0"`
 	BatteryLevel     int         `json:"battery_level" validate:"min=0,max=100"`
 	BatteryVoltage   float64     `json:"battery_voltage" validate:"min=0"`
 	PowerSource      PowerSource `json:"power_source" validate:"required"`
@@ -349,8 +350,6 @@ type Q10FeedCalculationRequest struct {
 // Q10EnvironmentalFactors represents environmental conditions for Q10 calculations
 type Q10EnvironmentalFactors struct {
 	WaterTemperature float64 `json:"water_temperature" validate:"min=0,max=50"`
-	DissolvedOxygen  float64 `json:"dissolved_oxygen" validate:"min=0,max=20"`
-	PH               float64 `json:"ph" validate:"min=0,max=14"`
 	Season           string  `json:"season" validate:"oneof=spring summer autumn winter"`
 	WeatherCondition string  `json:"weather_condition" validate:"oneof=sunny cloudy rainy"`
 }

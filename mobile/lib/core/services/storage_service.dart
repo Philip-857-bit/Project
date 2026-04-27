@@ -22,8 +22,7 @@ class StorageService {
   static const String _notificationsEnabledKey = 'notifications_enabled';
   static const String _alertNotificationsEnabledKey =
       'alert_notifications_enabled';
-  static const String _feedingRemindersEnabledKey =
-      'feeding_reminders_enabled';
+  static const String _feedingRemindersEnabledKey = 'feeding_reminders_enabled';
   static const String _temperatureUnitKey = 'temperature_unit';
   static const String _weightUnitKey = 'weight_unit';
   static const String _onboardingCompleteKey = 'onboarding_complete';

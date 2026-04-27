@@ -43,6 +43,9 @@ const (
 	// System topics
 	TopicSystemBroadcast = "system/broadcast"
 	TopicSystemStatus    = "system/status"
+
+	// Device self-registration topic (firmware publishes on first MQTT connect)
+	TopicDeviceRegister = "devices/register"
 )
 
 // AlertSeverity represents alert severity levels

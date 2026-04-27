@@ -105,41 +105,69 @@ func (s *DeviceService) GenerateBindingCode(deviceSerial string, userID uint) (s
 	return code, nil
 }
 
-// BindDevice binds a device to a user using a binding code
+// BindDevice binds a device to a user using a binding code.
+// Supports two flows:
+//  1. Backend-generated code: a DeviceBinding record exists for the code (created via GenerateBindingCode).
+//  2. Firmware-generated code: the code is stored on Device.BindingCode directly (set during MQTT self-registration).
 func (s *DeviceService) BindDevice(req *models.DeviceBindRequest, userID uint) (*models.Device, error) {
-	// Get binding by code
+	// First look up by DeviceBinding table (backend-generated flow)
 	binding, err := s.repo.Device.GetBindingByCode(req.BindingCode)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("invalid or expired binding code")
-		}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("failed to get binding: %w", err)
 	}
 
-	// Check if binding is expired
-	if time.Now().After(binding.ExpiresAt) {
-		return nil, errors.New("binding code has expired")
-	}
+	var device *models.Device
 
-	// Check if binding is for the correct user
-	if binding.UserID != userID {
-		return nil, errors.New("binding code is not for this user")
-	}
+	if binding != nil {
+		// Backend-generated code path
+		if time.Now().After(binding.ExpiresAt) {
+			return nil, errors.New("binding code has expired")
+		}
 
-	// Check if device serial matches
-	if binding.DeviceSerial != req.DeviceSerial {
-		return nil, errors.New("device serial does not match binding code")
-	}
+		// Only enforce user ownership when the binding was pre-assigned to a specific user
+		// (UserID != 0 means it was created by GenerateBindingCode for a particular user).
+		if binding.UserID != 0 && binding.UserID != userID {
+			return nil, errors.New("binding code is not for this user")
+		}
 
-	// Get device
-	device, err := s.repo.Device.GetBySerial(req.DeviceSerial)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get device: %w", err)
-	}
+		if binding.DeviceSerial != req.DeviceSerial {
+			return nil, errors.New("device serial does not match binding code")
+		}
 
-	// Check if device is already bound
-	if device.IsBound {
-		return nil, errors.New("device is already bound to a user")
+		device, err = s.repo.Device.GetBySerial(req.DeviceSerial)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get device: %w", err)
+		}
+
+		if device.IsBound {
+			return nil, errors.New("device is already bound to a user")
+		}
+
+		binding.IsUsed = true
+		if err := s.repo.Device.UpdateBinding(binding); err != nil {
+			return nil, fmt.Errorf("failed to update binding: %w", err)
+		}
+	} else {
+		// Firmware-generated code path — look for the code stored on the Device record
+		device, err = s.repo.Device.GetBySerial(req.DeviceSerial)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, errors.New("device not found")
+			}
+			return nil, fmt.Errorf("failed to get device: %w", err)
+		}
+
+		if device.IsBound {
+			return nil, errors.New("device is already bound to a user")
+		}
+
+		if device.BindingCode == nil || *device.BindingCode != req.BindingCode {
+			return nil, errors.New("invalid or expired binding code")
+		}
+
+		if device.BindingExpires != nil && time.Now().After(*device.BindingExpires) {
+			return nil, errors.New("binding code has expired")
+		}
 	}
 
 	// Bind device to user
@@ -148,15 +176,11 @@ func (s *DeviceService) BindDevice(req *models.DeviceBindRequest, userID uint) (
 	device.Name = req.Name
 	device.Location = req.Location
 	device.LastSeen = time.Now()
+	device.BindingCode = nil
+	device.BindingExpires = nil
 
 	if err := s.repo.Device.Update(device); err != nil {
 		return nil, fmt.Errorf("failed to bind device: %w", err)
-	}
-
-	// Mark binding as used
-	binding.IsUsed = true
-	if err := s.repo.Device.UpdateBinding(binding); err != nil {
-		return nil, fmt.Errorf("failed to update binding: %w", err)
 	}
 
 	return device, nil
@@ -248,6 +272,19 @@ func (s *DeviceService) UpdateDeviceLastSeen(deviceID string) error {
 func (s *DeviceService) VerifyDeviceOwnership(deviceID string, userID uint) bool {
 	_, err := s.ValidateDeviceOwnership(deviceID, userID)
 	return err == nil
+}
+
+// StoreDeviceBindingCode stores a firmware-generated binding code on a device record.
+// The code expires after 10 minutes to limit the claim window.
+func (s *DeviceService) StoreDeviceBindingCode(deviceSerial, code string) error {
+	device, err := s.repo.Device.GetBySerial(deviceSerial)
+	if err != nil {
+		return fmt.Errorf("device not found: %w", err)
+	}
+	expires := time.Now().Add(10 * time.Minute)
+	device.BindingCode = &code
+	device.BindingExpires = &expires
+	return s.repo.Device.Update(device)
 }
 
 // Helper functions

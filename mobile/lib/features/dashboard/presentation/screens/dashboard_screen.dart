@@ -81,9 +81,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         onRefresh: _loadData,
         child:
             deviceState.isLoading
-                ? Center(
-                  child: const CircularProgressIndicator(),
-                )
+                ? Center(child: const CircularProgressIndicator())
                 : SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),

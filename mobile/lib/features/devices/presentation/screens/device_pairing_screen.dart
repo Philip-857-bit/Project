@@ -44,6 +44,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   @override
   void dispose() {
     _scanSubscription?.cancel();
+    _bleService.disconnect();
     _apnController.dispose();
     _ssidController.dispose();
     _passwordController.dispose();
@@ -132,24 +133,31 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
         // Get binding code from device
         _bindingCode = await _bleService.getBindingCode();
 
+        if (_bindingCode == null) {
+          setState(
+            () =>
+                _errorMessage =
+                    'Could not retrieve binding code from device. Please try again.',
+          );
+          return;
+        }
+
         // Bind device to user account
-        if (_bindingCode != null) {
-          final bindSuccess = await ref
-              .read(deviceListProvider.notifier)
-              .bindDevice(
-                _scannedSerialNumber ?? '',
-                _bindingCode!,
-                _deviceNameController.text.trim().isEmpty
-                    ? 'My Fish Feeder'
-                    : _deviceNameController.text.trim(),
-              );
-          if (bindSuccess) {
-            setState(() => _currentStep = 3);
-          } else {
-            setState(
-              () => _errorMessage = 'Failed to bind device to your account',
+        final bindSuccess = await ref
+            .read(deviceListProvider.notifier)
+            .bindDevice(
+              _scannedSerialNumber ?? '',
+              _bindingCode!,
+              _deviceNameController.text.trim().isEmpty
+                  ? 'My Fish Feeder'
+                  : _deviceNameController.text.trim(),
             );
-          }
+        if (bindSuccess) {
+          setState(() => _currentStep = 3);
+        } else {
+          setState(
+            () => _errorMessage = 'Failed to bind device to your account',
+          );
         }
       } else {
         setState(() => _errorMessage = 'Failed to provision device');
@@ -505,6 +513,15 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _deviceNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Device Name',
+                    hintText: 'e.g., Pond 1 Feeder',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
 
                 if (_isProvisioning) ...[
                   const SizedBox(height: 24),
@@ -548,27 +565,18 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
           // Step 3: Complete
           Step(
             title: const Text('Complete Setup'),
-            content: Column(
+            content: const Column(
               children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 64),
-                const SizedBox(height: 16),
-                const Text(
+                Icon(Icons.check_circle, color: Colors.green, size: 64),
+                SizedBox(height: 16),
+                Text(
                   'Device Added Successfully!',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
-                const Text(
+                SizedBox(height: 8),
+                Text(
                   'Your SmartAqua feeder is now connected and ready to use.',
                   textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                TextFormField(
-                  controller: _deviceNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Device Name',
-                    hintText: 'e.g., Pond 1 Feeder',
-                    border: OutlineInputBorder(),
-                  ),
                 ),
               ],
             ),

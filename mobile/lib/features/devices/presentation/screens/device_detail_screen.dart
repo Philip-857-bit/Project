@@ -258,35 +258,14 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
             ),
           ],
         ),
-        if (status.dissolvedOxygen != null) ...[
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _StatusCard(
-                  icon: Icons.air,
-                  label: 'Dissolved O₂',
-                  value: '${status.dissolvedOxygen!.toStringAsFixed(1)} mg/L',
-                  subtitle: _getOxygenStatus(status.dissolvedOxygen!),
-                  color: _getOxygenColor(status.dissolvedOxygen!),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatusCard(
-                  icon: Icons.wb_sunny,
-                  label: 'Solar',
-                  value: '${status.solarVoltage.toStringAsFixed(1)}V',
-                  subtitle: status.isSolarCharging ? 'Active' : 'Inactive',
-                  color:
-                      status.isSolarCharging
-                          ? AppTheme.solarActive
-                          : Colors.grey,
-                ),
-              ),
-            ],
-          ),
-        ],
+        const SizedBox(height: 12),
+        _StatusCard(
+          icon: Icons.wb_sunny,
+          label: 'Solar',
+          value: '${status.solarVoltage.toStringAsFixed(1)}V',
+          subtitle: status.isSolarCharging ? 'Active' : 'Inactive',
+          color: status.isSolarCharging ? AppTheme.solarActive : Colors.grey,
+        ),
       ],
     );
   }
@@ -553,18 +532,6 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
     if (strength > 70) return Colors.green;
     if (strength > 40) return Colors.orange;
     return Colors.red;
-  }
-
-  Color _getOxygenColor(double do2) {
-    if (do2 < 3) return Colors.red;
-    if (do2 < 5) return Colors.orange;
-    return Colors.green;
-  }
-
-  String _getOxygenStatus(double do2) {
-    if (do2 < 3) return 'Critical';
-    if (do2 < 5) return 'Low';
-    return 'Normal';
   }
 }
 

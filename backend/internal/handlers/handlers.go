@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"smart-fish-feeder/internal/config"
 	"smart-fish-feeder/internal/services"
 
 	"github.com/sirupsen/logrus"
@@ -24,15 +25,20 @@ type Handlers struct {
 	logger       *logrus.Logger
 }
 
-// New creates a new handlers instance
-func New(services *services.Services, logger *logrus.Logger) *Handlers {
+// New creates a new handlers instance.
+// cfg is used to pass security config (allowed origins, etc.) to handlers.
+func New(services *services.Services, logger *logrus.Logger, cfg ...*config.Config) *Handlers {
+	var allowedOrigins []string
+	if len(cfg) > 0 && cfg[0] != nil {
+		allowedOrigins = cfg[0].Server.AllowedOrigins
+	}
 	h := &Handlers{
 		Health:       NewHealthHandler(services, logger),
 		Auth:         NewAuthHandler(services, logger),
 		User:         NewUserHandler(services, logger),
 		Device:       NewDeviceHandler(services, logger),
 		Feeding:      NewFeedingHandler(services, logger),
-		Monitoring:   NewMonitoringHandler(services, logger),
+		Monitoring:   NewMonitoringHandler(services, logger, allowedOrigins...),
 		Calculator:   NewCalculatorHandler(services, logger),
 		Certificate:  NewCertificateHandler(services, logger),
 		FCRAnalytics: NewFCRAnalyticsHandler(services, logger),

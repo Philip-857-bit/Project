@@ -39,7 +39,7 @@ type Services struct {
 // New creates a new services instance
 func New(repo *repository.Repository, redisClient *redis.Client, cfg *config.Config, logger *logrus.Logger) *Services {
 	// Create WebSocket hub
-	wsHub := NewWebSocketHub(logger)
+	wsHub := NewWebSocketHub(logger, cfg.WebSocket.MaxMessageSize, cfg.WebSocket.ReadTimeout)
 
 	// Start WebSocket hub in a goroutine
 	go wsHub.Run()

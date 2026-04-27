@@ -50,8 +50,9 @@
 #define MODEM_RX            27      // ESP32 RX <- A7670 TX
 #define MODEM_PWRKEY        4       // Power key (LOW pulse to toggle)
 #define MODEM_EN            12      // Enable pin
-#define MODEM_DTR           25      // Data Terminal Ready
-#define MODEM_RI            33      // Ring Indicator
+// MODEM_DTR (GPIO25) and MODEM_RI (GPIO33) intentionally NOT defined.
+// GPIO25 = PIN_DIR (DM542T), GPIO33 = PIN_ULTRASONIC_TRIG per verified schematic.
+// Modem runs without DTR sleep control; RI ring-indicator not used.
 
 // GPS (A7670G variant only - shares UART with modem via AT commands)
 #define GPS_TX              21      // GPS TX (IO21)
@@ -70,7 +71,8 @@
 #define PIN_I2C_SCL         22      // Wire_SCL
 
 // Battery ADC (built-in 18650 monitoring)
-#define PIN_BATTERY_ADC     35      // ADC1_CH7 - Battery voltage
+// GPIO35 is reserved for PIN_FEED_BTN (schematic). Battery ADC moved to GPIO39 (ADC1_CH3).
+#define PIN_BATTERY_ADC     39      // ADC1_CH3 - Battery voltage (input-only, VN)
 
 // VBUS Detection
 #define PIN_VBUS            36      // USB power detection (VP)
@@ -81,11 +83,11 @@
 // Available GPIOs on T-A7670: 0, 32, 33, 34, 35, 39 (input only: 34, 35, 39)
 // =============================================================================
 #ifdef USE_DM542
-#define PIN_STEP            GPIO_NUM_32     // PUL+ (Step pulse)
-#define PIN_DIR             GPIO_NUM_33     // DIR+ (Direction)
-#define PIN_ENABLE          GPIO_NUM_0      // ENA+ (Enable, active LOW)
-// Note: PUL-, DIR-, ENA- connect to GND
-// DM542 requires 5V logic - use level shifter or optocoupler
+#define PIN_STEP    GPIO_NUM_32   // PUL- via R3(1kOhm) series resistor on PCB
+#define PIN_DIR     GPIO_NUM_25   // DIR- via R4(1kOhm) series resistor on PCB
+#define PIN_ENABLE  GPIO_NUM_2    // ENA- (active LOW to enable driver)
+// GPIO2 is shared with the T-A7670 built-in LED; LED blink disabled when USE_DM542 active
+#undef PIN_LED_STATUS
 #endif
 
 #ifdef USE_TB6600
@@ -133,7 +135,7 @@
 // =============================================================================
 // JSN-SR04T Ultrasonic Sensor (Waterproof) - Backup feed level
 // =============================================================================
-#define PIN_ULTRASONIC_TRIG GPIO_NUM_17     // Trigger pin
+#define PIN_ULTRASONIC_TRIG GPIO_NUM_33     // GPIO33 - safe, not modem EN
 #define PIN_ULTRASONIC_ECHO GPIO_NUM_34     // Echo pin (input only)
 
 // Note: If using TMC2209, GPIO17 is TMC_TX - use different pin
@@ -153,7 +155,7 @@
 // =============================================================================
 // Power Monitoring (18650 battery via built-in divider)
 // =============================================================================
-// PIN_BATTERY_ADC already defined above as GPIO35
+// PIN_BATTERY_ADC defined above as GPIO39 (GPIO35 is reserved for PIN_FEED_BTN)
 #define PIN_SOLAR_ADC       GPIO_NUM_36     // Solar panel voltage (VP, with external divider)
 
 // =============================================================================
@@ -164,10 +166,9 @@
 // =============================================================================
 // Communication with ESP32-CAM (Serial1)
 // =============================================================================
-#define PIN_CAM_TX          GPIO_NUM_17     // TX to CAM RX
-#define PIN_CAM_RX          GPIO_NUM_16     // RX from CAM TX
+#define PIN_CAM_TX          GPIO_NUM_18     // CAM_TX -> ESP32-CAM UART RX (UART2)
+#define PIN_CAM_RX          GPIO_NUM_19     // CAM_RX -> ESP32-CAM UART TX (UART2)
 
-// Optional pin remap for schematic-aligned simulation wiring
 #ifdef SCHEMATIC_PINMAP
 #undef PIN_STEP
 #undef PIN_DIR
@@ -178,21 +179,15 @@
 #undef PIN_CAM_TX
 #undef PIN_CAM_RX
 
-// Schematic net mapping:
-// MOTOR_STEP  -> GPIO25
-// MOTOR_STEP2 -> GPIO19
-// TRIG        -> GPIO12
-// ECHO_S      -> GPIO13
-// DATA        -> GPIO14
-// CAM_TX/CAM_RX retained on GPIO17/GPIO16
-#define PIN_STEP            GPIO_NUM_25
-#define PIN_DIR             GPIO_NUM_19
-#define PIN_ENABLE          GPIO_NUM_0
-#define PIN_ULTRASONIC_TRIG GPIO_NUM_12
-#define PIN_ULTRASONIC_ECHO GPIO_NUM_13
-#define PIN_ONEWIRE         GPIO_NUM_14
-#define PIN_CAM_TX          GPIO_NUM_17
-#define PIN_CAM_RX          GPIO_NUM_16
+// Verified schematic pin mapping (DRC-clean, 2026-04-19)
+#define PIN_STEP            GPIO_NUM_32   // MOTOR_STEP -> DM542T PUL- via R3(1kOhm)
+#define PIN_DIR             GPIO_NUM_25   // MOTOR_DIR -> DM542T DIR- via R4(1kOhm)
+#define PIN_ENABLE          GPIO_NUM_2    // ENA -> DM542T ENA- (active LOW)
+#define PIN_ULTRASONIC_TRIG GPIO_NUM_33   // TRIG -> JSN-SR04T (safe GPIO, not modem EN)
+#define PIN_ULTRASONIC_ECHO GPIO_NUM_13   // ECHO_S -> JSN-SR04T via R1/R2 divider
+#define PIN_ONEWIRE         GPIO_NUM_14   // DATA -> DS18B20 adapter module
+#define PIN_CAM_TX          GPIO_NUM_18   // CAM_TX -> ESP32-CAM UART RX (UART2)
+#define PIN_CAM_RX          GPIO_NUM_19   // CAM_RX -> ESP32-CAM UART TX (UART2)
 #endif
 
 #endif // LILYGO_T_A7670
@@ -370,6 +365,13 @@
 
 // =============================================================================
 // Biological Algorithm Parameters
+// Species: Clarias gariepinus (African sharptooth catfish)
+// Life stage: Post-juvenile, 50g+ (sub-adult)
+// References:
+//   - Kasihmuddin et al. (2021) Animals 11(12):3497 - FCR/FCE at 26-32C
+//   - Britz & Hecht (1987) Aquaculture 63:169-185 - optimal temp 30C
+//   - Springer Nature (2025) Biology Bulletin Reviews - optimal range 25-32C
+//   - Brett & Groves (1979) Fish Physiology Vol.8 - Q10 methodology
 // =============================================================================
 
 // Q10 Temperature Coefficients
@@ -379,15 +381,35 @@
 #define Q10_DEFAULT             2.0f
 #define Q10_REFERENCE_TEMP      25.0f
 
-// OBM Thresholds
-#define DO_OPTIMAL_MG_L         6.0f
-#define DO_LETHAL_MG_L          2.0f
-#define DO_EMERGENCY_STOP_MG_L  3.0f
+// Clarias gariepinus specific Q10 parameters - post-juvenile 50g+
+#define Q10_CLARIAS             2.1f    // Brett & Groves (1979)
+#define CLARIAS_OPTIMAL_MIN     26.0f   // Optimal min C - Kasihmuddin (2021)
+#define CLARIAS_OPTIMAL_MAX     30.0f   // Optimal max C - Britz & Hecht (1987)
+#define CLARIAS_CRITICAL_MAX    32.0f   // Reduce feeding above this
+#define CLARIAS_LETHAL_MAX      36.0f   // Stop feeding above this
+#define CLARIAS_TEMP_MIN        20.0f   // Minimum viable temperature
+#define CLARIAS_REFERENCE_TEMP  25.0f   // Q10 reference temperature
 
-// Feeding Rate by Weight
-#define FEED_RATE_FINGERLING    8.0f
-#define FEED_RATE_JUVENILE      4.0f
-#define FEED_RATE_ADULT         1.5f
+// Feeding rates by life stage (% body weight per day)
+// Post-juvenile 50g+ uses FEED_RATE_POST_JUVENILE
+#define FEED_RATE_FINGERLING    8.0f    // <10g
+#define FEED_RATE_JUVENILE      5.0f    // 10-30g
+#define FEED_RATE_POST_JUVENILE 5.0f    // 30-100g (THIS STUDY - 50g+, supervisor: 5% BW/day)
+#define FEED_RATE_SUB_ADULT     2.0f    // >100g
+#define FEED_RATE_ADULT         1.5f    // >300g
+
+
+// HX711 Load Cell - NOT POPULATED in current schematic revision
+#define NO_LOADCELL
+
+// Solar panel - NOT USED in this deployment (battery only)
+// Suppresses solar ADC reads and "no solar" warnings.
+#define NO_SOLAR_INPUT
+
+// Manual feed button and status LED
+#define PIN_FEED_BTN            GPIO_NUM_35
+#define MANUAL_FEED_GRAMS_DEFAULT 18.75f
+// 18.75g = 15 fish x 50g avg x 2.5% per feeding event (5% BW/day / 2 feeds)
 
 // =============================================================================
 // NVS Storage Keys
@@ -403,6 +425,10 @@
 #define NVS_KEY_LOADCELL_CAL    "lc_cal"
 #define NVS_KEY_HOPPER_CAL      "hopper_cal"
 #define NVS_KEY_SCHEDULE        "schedule"
+#define NVS_KEY_BINDING_CODE    "bind_code"
+
+// Feed level alert threshold (separate from battery threshold)
+#define FEED_LEVEL_LOW_THRESHOLD 20.0f
 
 // =============================================================================
 // Buffer Sizes

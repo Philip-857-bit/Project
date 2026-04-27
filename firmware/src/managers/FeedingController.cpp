@@ -33,10 +33,11 @@ FeedingController::FeedingController()
     , _lastExecutedSchedule(-1)
     , _lastScheduleCheck(0) {
     
-    _speciesParams.q10Coefficient = Q10_TILAPIA;
-    _speciesParams.referenceTemp = Q10_REFERENCE_TEMP;
-    _speciesParams.minTemp = 18.0f;
-    _speciesParams.maxTemp = 32.0f;
+    // Clarias gariepinus - post-juvenile 50g+ - Akure Nigeria field trial
+    _speciesParams.q10Coefficient = Q10_CLARIAS;
+    _speciesParams.referenceTemp   = CLARIAS_REFERENCE_TEMP;
+    _speciesParams.minTemp         = CLARIAS_TEMP_MIN;
+    _speciesParams.maxTemp         = CLARIAS_LETHAL_MAX;
     
     memset(&_lastEvent, 0, sizeof(_lastEvent));
     memset(_schedule, 0, sizeof(_schedule));
@@ -165,6 +166,13 @@ bool FeedingController::feedNow(float grams) {
     return true;
 }
 
+bool FeedingController::feedRemote(float adjustedGrams) {
+    if (_feedingActive || adjustedGrams < MIN_FEED_GRAMS || adjustedGrams > MAX_FEED_GRAMS) return false;
+    // Backend already applied Q10/OBM; use REMOTE trigger to bypass firmware Q10
+    dispense(adjustedGrams, FeedingTrigger::REMOTE);
+    return true;
+}
+
 
 FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
     _feedingActive = true;
@@ -175,9 +183,14 @@ FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
     _stallDetected = false;
 #endif
     float temperature = Q10_REFERENCE_TEMP, q10Factor = 1.0f;
-    if (_sensorManager) {
-        SensorData data = _sensorManager->getCurrentData();
-        if (data.temperatureValid) { temperature = data.temperature; q10Factor = calculateQ10Adjustment(1.0f, temperature); }
+    if (trigger != FeedingTrigger::REMOTE) {
+        // REMOTE commands come pre-adjusted from the backend; skip firmware Q10
+        if (_sensorManager) {
+            SensorData data = _sensorManager->getCurrentData();
+            if (data.temperatureValid) { temperature = data.temperature; q10Factor = calculateQ10Adjustment(1.0f, temperature); }
+        }
+    } else if (_sensorManager) {
+        temperature = _sensorManager->getCurrentData().temperature;
     }
     float adjustedGrams = grams * q10Factor;
     digitalWrite(PIN_ENABLE, LOW); delay(10);
@@ -199,7 +212,6 @@ FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
     _lastEvent.trigger = trigger;
     _lastEvent.result = result;
     _lastEvent.temperature = temperature;
-    _lastEvent.dissolvedOxygen = 0;
     _lastEvent.q10Factor = q10Factor;
     _lastEvent.obmSafetyFactor = 1.0f;
     _lastEvent.errorMessage = "";
@@ -234,11 +246,32 @@ void FeedingController::stopFeeding() {
 }
 
 float FeedingController::calculateQ10Adjustment(float baseAmount, float temperature) {
-    float tempDiff = temperature - _speciesParams.referenceTemp;
+    // Clarias gariepinus thermal safety gates (post-juvenile stage)
+    if (temperature >= CLARIAS_LETHAL_MAX) {
+        Serial.printf("[Q10] EMERGENCY STOP - lethal temp %.1fC\n", temperature);
+        return 0.0f;
+    }
+    if (temperature >= CLARIAS_CRITICAL_MAX) {
+        float reduction = 1.0f - ((temperature - CLARIAS_CRITICAL_MAX) /
+                          (CLARIAS_LETHAL_MAX - CLARIAS_CRITICAL_MAX));
+        Serial.printf("[Q10] Critical temp %.1fC - reduced to %.0f%%\n",
+                      temperature, max(0.0f, reduction) * 100.0f);
+        return baseAmount * max(0.0f, reduction);
+    }
+    if (temperature < CLARIAS_TEMP_MIN) {
+        Serial.printf("[Q10] Low temp %.1fC - reduced 80%%\n", temperature);
+        return baseAmount * 0.2f;
+    }
+
+    // Standard Q10 adjustment within viable range
+    // Clarias: higher temp toward optimum = better FCR (Kasihmuddin 2021)
+    float tempDiff  = temperature - _speciesParams.referenceTemp;
     float q10Factor = pow(_speciesParams.q10Coefficient, tempDiff / 10.0f);
-    if (temperature < _speciesParams.minTemp) q10Factor *= max(0.0f, (temperature - (_speciesParams.minTemp - 5)) / 5.0f);
-    else if (temperature > _speciesParams.maxTemp) q10Factor *= max(0.0f, ((_speciesParams.maxTemp + 5) - temperature) / 5.0f);
-    return baseAmount * constrain(q10Factor, 0.3f, 2.5f);
+    q10Factor = constrain(q10Factor, 0.3f, 2.0f);
+
+    Serial.printf("[Q10] Temp %.1fC factor %.3f adjusted %.2fg\n",
+                  temperature, q10Factor, baseAmount * q10Factor);
+    return baseAmount * q10Factor;
 }
 
 long FeedingController::gramsToSteps(float grams) {

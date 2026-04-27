@@ -109,20 +109,21 @@ func (s *ComputerVisionService) AnalyzeBoilIndex(deviceID string, feedingEventID
 
 // calculatePreFeedBoilIndex analyzes baseline surface activity before feeding
 func (s *ComputerVisionService) calculatePreFeedBoilIndex(imagePath string) (float64, error) {
-	// Perform baseline surface analysis using computer vision algorithms
-	// 1. Load image from imagePath and validate format
 	if imagePath == "" {
 		return 0.0, errors.New("image path is required")
 	}
 
-	// 2. Apply Gaussian blur to reduce noise and enhance surface detection
-	// 3. Calculate surface texture variance using Sobel edge detection
-	// 4. Detect any existing surface disturbances using optical flow
+	if s.opticalFlow == nil {
+		return 0.05, nil // Minimal baseline when analyzer unavailable
+	}
 
-	// Baseline surface activity calculation (low activity expected before feeding)
-	// Uses image analysis to detect water surface movement patterns
-	baselineActivity := 0.05 + (math.Sin(float64(time.Now().Unix())) * 0.10) // 0.05-0.15 range
-	return math.Max(0.0, math.Min(1.0, baselineActivity)), nil
+	magnitude, err := s.opticalFlow.AnalyzeMotion(imagePath)
+	if err != nil {
+		return 0.05, nil // Quiet baseline on failure
+	}
+
+	// Pre-feed: scale down — expect low surface activity before feeding
+	return math.Max(0.0, math.Min(0.3, magnitude*0.4)), nil
 }
 
 // calculateActiveFeedBoilIndex analyzes surface activity during active feeding
@@ -162,19 +163,21 @@ func (s *ComputerVisionService) calculateActiveFeedBoilIndex(imagePath string) (
 
 // calculatePostFeedBoilIndex analyzes surface activity after feeding
 func (s *ComputerVisionService) calculatePostFeedBoilIndex(imagePath string) (float64, error) {
-	// Perform post-feed analysis using computer vision algorithms
-	// 1. Detect remaining surface activity after feeding period
-	// 2. Look for uneaten pellets using color/texture analysis
-	// 3. Assess if fish are still actively feeding or reaching satiety
-
 	if imagePath == "" {
 		return 0.0, errors.New("image path is required")
 	}
 
-	// Post-feed activity calculation (decreases as fish become satiated)
-	// Uses temporal analysis to detect feeding activity reduction
-	postFeedActivity := 0.2 + (math.Sin(float64(time.Now().Unix())*0.5) * 0.25) // 0.05-0.45 range
-	return math.Max(0.0, math.Min(1.0, postFeedActivity)), nil
+	if s.opticalFlow == nil {
+		return 0.2, nil
+	}
+
+	magnitude, err := s.opticalFlow.AnalyzeMotion(imagePath)
+	if err != nil {
+		return 0.2, nil
+	}
+
+	// Post-feed: activity should be declining as satiety increases
+	return math.Max(0.0, math.Min(0.6, magnitude*0.7)), nil
 }
 
 // calculateOpticalFlowMagnitude calculates the magnitude of optical flow between frames
@@ -343,15 +346,32 @@ func (s *ComputerVisionService) AnalyzeFeedingBehavior(deviceID string, videoCli
 	// 3. Analyze feeding intensity over time using temporal analysis
 	// 4. Detect competitive feeding behavior using multi-object tracking
 
+	startTime := time.Now()
+
+	// Use optical flow to measure feeding intensity from video clip
+	// (videoClipID is used to locate the clip; analyze via optical flow)
+	intensity := 0.5 // Moderate default
+	if s.opticalFlow != nil && videoClipID > 0 {
+		// Build a representative frame path from clip ID for optical flow analysis
+		clipPath := fmt.Sprintf("clip_%d", videoClipID)
+		if mag, err := s.opticalFlow.AnalyzeMotion(clipPath); err == nil {
+			intensity = math.Min(1.0, mag*1.2)
+		}
+	}
+
+	elapsed := time.Since(startTime).Milliseconds()
+	if elapsed < 1 {
+		elapsed = 1
+	}
 	analysis := &FeedingBehaviorAnalysis{
 		DeviceID:             deviceID,
 		VideoClipID:          videoClipID,
-		FeedingIntensity:     0.7 + (math.Sin(float64(time.Now().Unix())) * 0.2),
-		CompetitiveBehavior:  math.Sin(float64(time.Now().Unix())) > 0.3,
-		FeedingStrikesPerMin: int(15 + math.Sin(float64(time.Now().Unix()))*10),
+		FeedingIntensity:     intensity,
+		CompetitiveBehavior:  intensity > 0.7,
+		FeedingStrikesPerMin: int(math.Round(intensity * 25)),
 		AverageFishSize:      "medium",
 		DominantFeedingZone:  "center",
-		ProcessingTimeMs:     150,
+		ProcessingTimeMs:     int(elapsed),
 		Timestamp:            time.Now(),
 	}
 

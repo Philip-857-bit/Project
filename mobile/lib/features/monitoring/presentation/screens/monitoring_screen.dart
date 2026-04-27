@@ -148,42 +148,6 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                     ),
                   ],
                 ),
-                if (sensorData.dissolvedOxygen != null ||
-                    sensorData.ph != null) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      if (sensorData.dissolvedOxygen != null)
-                        Expanded(
-                          child: _SensorCard(
-                            icon: Icons.air,
-                            label: 'Dissolved O₂',
-                            value:
-                                '${sensorData.dissolvedOxygen!.toStringAsFixed(1)} mg/L',
-                            status: _getOxygenStatus(
-                              sensorData.dissolvedOxygen!,
-                            ),
-                            statusColor: _getOxygenColor(
-                              sensorData.dissolvedOxygen!,
-                            ),
-                          ),
-                        ),
-                      if (sensorData.dissolvedOxygen != null &&
-                          sensorData.ph != null)
-                        const SizedBox(width: 12),
-                      if (sensorData.ph != null)
-                        Expanded(
-                          child: _SensorCard(
-                            icon: Icons.science,
-                            label: 'pH Level',
-                            value: sensorData.ph!.toStringAsFixed(1),
-                            status: _getPhStatus(sensorData.ph!),
-                            statusColor: _getPhColor(sensorData.ph!),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
                 const SizedBox(height: 12),
                 // Connection info
                 Card(
@@ -209,10 +173,7 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
 
                 // Q10 Status Card
                 const SizedBox(height: 16),
-                _Q10StatusCard(
-                  temperature: sensorData.waterTemperature,
-                  dissolvedOxygen: sensorData.dissolvedOxygen,
-                ),
+                _Q10StatusCard(temperature: sensorData.waterTemperature),
 
                 // FCR Tracking Card
                 const SizedBox(height: 16),
@@ -375,28 +336,6 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
     return AppTheme.batteryLow;
   }
 
-  String _getOxygenStatus(double do2) {
-    if (do2 < 3) return 'Critical';
-    if (do2 < 5) return 'Low';
-    return 'Normal';
-  }
-
-  Color _getOxygenColor(double do2) {
-    if (do2 < 3) return Colors.red;
-    if (do2 < 5) return Colors.orange;
-    return Colors.green;
-  }
-
-  String _getPhStatus(double ph) {
-    if (ph < 6.5 || ph > 8.5) return 'Warning';
-    return 'Normal';
-  }
-
-  Color _getPhColor(double ph) {
-    if (ph < 6.5 || ph > 8.5) return Colors.orange;
-    return Colors.green;
-  }
-
   Color _getSignalColor(int strength) {
     if (strength > 70) return Colors.green;
     if (strength > 40) return Colors.orange;
@@ -503,9 +442,8 @@ class _AlertCard extends StatelessWidget {
 /// Q10 Metabolic Status Visualization
 class _Q10StatusCard extends StatelessWidget {
   final double temperature;
-  final double? dissolvedOxygen;
 
-  const _Q10StatusCard({required this.temperature, this.dissolvedOxygen});
+  const _Q10StatusCard({required this.temperature});
 
   // Q10 calculation: Q10^((T - Tref) / 10)
   double _calculateQ10Factor(
@@ -514,18 +452,6 @@ class _Q10StatusCard extends StatelessWidget {
     double tRef = 25.0,
   }) {
     return q10 * ((temp - tRef) / 10);
-  }
-
-  // OBM Safety Factor: max(0, (DO - DO_lethal) / (DO_optimal - DO_lethal))
-  double _calculateOBMFactor(
-    double? do2, {
-    double doOptimal = 7.0,
-    double doLethal = 2.0,
-  }) {
-    if (do2 == null) return 1.0;
-    if (do2 <= doLethal) return 0.0;
-    if (do2 >= doOptimal) return 1.0;
-    return (do2 - doLethal) / (doOptimal - doLethal);
   }
 
   String _getMetabolicStatus(double temp) {
@@ -544,8 +470,6 @@ class _Q10StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final q10Factor = _calculateQ10Factor(temperature);
-    final obmFactor = _calculateOBMFactor(dissolvedOxygen);
-    final combinedFactor = q10Factor * obmFactor;
     final metabolicStatus = _getMetabolicStatus(temperature);
     final statusColor = _getMetabolicColor(temperature);
 
@@ -582,7 +506,7 @@ class _Q10StatusCard extends StatelessWidget {
                     width: 100,
                     height: 100,
                     child: CircularProgressIndicator(
-                      value: (combinedFactor.clamp(0, 2) / 2),
+                      value: (q10Factor.clamp(0, 2) / 2),
                       strokeWidth: 12,
                       backgroundColor: Colors.grey.shade200,
                       valueColor: AlwaysStoppedAnimation(statusColor),
@@ -592,7 +516,7 @@ class _Q10StatusCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        combinedFactor.toStringAsFixed(2),
+                        q10Factor.toStringAsFixed(2),
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
@@ -644,46 +568,8 @@ class _Q10StatusCard extends StatelessWidget {
                     color: _getMetabolicColor(temperature),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _FactorItem(
-                    label: 'OBM Safety',
-                    value: '${(obmFactor * 100).toInt()}%',
-                    icon: Icons.air,
-                    color:
-                        obmFactor > 0.7
-                            ? Colors.green
-                            : obmFactor > 0.3
-                            ? Colors.orange
-                            : Colors.red,
-                  ),
-                ),
               ],
             ),
-
-            if (dissolvedOxygen != null && dissolvedOxygen! < 3.0) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning, color: Colors.red, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Critical DO level! Feeding suspended.',
-                        style: TextStyle(color: Colors.red, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),

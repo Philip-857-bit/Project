@@ -13,6 +13,22 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// buildOriginChecker returns a websocket origin-check function restricted to allowedOrigins.
+// An empty slice allows all origins (development fallback).
+func buildOriginChecker(allowedOrigins []string) func(*http.Request) bool {
+	if len(allowedOrigins) == 0 {
+		return func(_ *http.Request) bool { return true }
+	}
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		allowed[o] = struct{}{}
+	}
+	return func(r *http.Request) bool {
+		_, ok := allowed[r.Header.Get("Origin")]
+		return ok
+	}
+}
+
 // MonitoringHandler handles monitoring-related endpoints
 type MonitoringHandler struct {
 	services *services.Services
@@ -20,17 +36,14 @@ type MonitoringHandler struct {
 	upgrader websocket.Upgrader
 }
 
-// NewMonitoringHandler creates a new monitoring handler
-func NewMonitoringHandler(services *services.Services, logger *logrus.Logger) *MonitoringHandler {
+// NewMonitoringHandler creates a new monitoring handler.
+// Pass allowedOrigins from config to restrict WebSocket connections by origin.
+func NewMonitoringHandler(services *services.Services, logger *logrus.Logger, allowedOrigins ...string) *MonitoringHandler {
 	return &MonitoringHandler{
 		services: services,
 		logger:   logger,
 		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				// Validate origin for security in production environment
-				// Configure allowed origins based on deployment environment
-				return true
-			},
+			CheckOrigin: buildOriginChecker(allowedOrigins),
 		},
 	}
 }
@@ -88,58 +101,10 @@ func (h *MonitoringHandler) ReceiveSensorData(c *gin.Context) {
 		return
 	}
 
-	// Apply sensor fusion for enhanced data quality
-	sensorReadings := []services.SensorReading{
-		{
-			SensorType: "temperature",
-			Value:      request.WaterTemperature,
-			Timestamp:  time.Now(),
-			Accuracy:   0.95,
-		},
-		{
-			SensorType: "do",
-			Value:      request.DissolvedOxygen,
-			Timestamp:  time.Now(),
-			Accuracy:   0.90,
-		},
-		{
-			SensorType: "ph",
-			Value:      request.PH,
-			Timestamp:  time.Now(),
-			Accuracy:   0.92,
-		},
-		{
-			SensorType: "turbidity",
-			Value:      request.Turbidity,
-			Timestamp:  time.Now(),
-			Accuracy:   0.88,
-		},
-	}
-
-	fusedData, fusionErr := h.services.SensorFusion.FuseSensorData(request.DeviceID, sensorReadings)
-
-	response := gin.H{
+	c.JSON(http.StatusCreated, gin.H{
 		"message": "Sensor data received successfully",
 		"data":    sensorData,
-	}
-
-	// Add fused data if sensor fusion succeeded
-	if fusionErr == nil && fusedData != nil {
-		response["fused_data"] = gin.H{
-			"temperature":         fusedData.Temperature,
-			"temperature_conf":    fusedData.TemperatureConf,
-			"dissolved_oxygen":    fusedData.DissolvedOxygen,
-			"do_confidence":       fusedData.DOConfidence,
-			"ph":                  fusedData.PH,
-			"ph_confidence":       fusedData.PHConfidence,
-			"water_quality_index": fusedData.WaterQualityIndex,
-			"feeding_readiness":   fusedData.FeedingReadiness,
-			"data_quality":        fusedData.DataQuality,
-			"sensor_health":       fusedData.SensorHealth,
-		}
-	}
-
-	c.JSON(http.StatusCreated, response)
+	})
 }
 
 // GetDeviceStatus handles getting device status
@@ -171,7 +136,9 @@ func (h *MonitoringHandler) GetDeviceStatus(c *gin.Context) {
 		"water_temperature": latestData.WaterTemperature,
 		"battery_level":     latestData.BatteryLevel,
 		"power_source":      latestData.PowerSource,
-		"status":            "online", // Could be determined by last_seen timestamp
+		"cellular_signal":   latestData.CellularSignal,
+		"solar_voltage":     latestData.SolarVoltage,
+		"status":            "online",
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -401,17 +368,13 @@ func (h *MonitoringHandler) AnalyzeVideoFrame(c *gin.Context) {
 	// Get latest sensor data for combined analysis
 	latestSensorData, sensorErr := h.services.Monitoring.GetLatestSensorData(req.DeviceID)
 	if sensorErr == nil && latestSensorData != nil {
-		// Combine vision analysis with fuzzy logic
+		// Combine vision analysis with fuzzy logic (temperature-only input — no water quality sensors)
 		fuzzyInput := services.FuzzyInput{
-			Temperature:     latestSensorData.WaterTemperature,
-			DissolvedOxygen: latestSensorData.DissolvedOxygen,
-			PH:              latestSensorData.PH,
-			Turbidity:       latestSensorData.Turbidity,
+			Temperature: latestSensorData.WaterTemperature,
 		}
 
 		fuzzyDecision, fuzzyErr := h.services.FuzzyLogic.EvaluateFeedingDecision(fuzzyInput)
 		if fuzzyErr == nil {
-			// Combine vision and fuzzy logic for final recommendation
 			combinedConfidence := (boilAnalysis.FeedingEfficiency + fuzzyDecision.Confidence) / 2
 			shouldContinueFeeding := !boilAnalysis.EarlyCutoffTriggered && fuzzyDecision.FeedingDecision != "stop"
 
@@ -471,43 +434,13 @@ func (h *MonitoringHandler) GetEnhancedDeviceStatus(c *gin.Context) {
 		"weight_grams":      latestData.WeightGrams,
 		"weight_percentage": latestData.WeightPercentage,
 		"water_temperature": latestData.WaterTemperature,
-		"dissolved_oxygen":  latestData.DissolvedOxygen,
-		"ph":                latestData.PH,
-		"turbidity":         latestData.Turbidity,
 		"battery_level":     latestData.BatteryLevel,
 		"power_source":      latestData.PowerSource,
 	}
 
-	// Apply sensor fusion
-	sensorReadings := []services.SensorReading{
-		{SensorType: "temperature", Value: latestData.WaterTemperature, Timestamp: time.Now(), Accuracy: 0.95},
-		{SensorType: "do", Value: latestData.DissolvedOxygen, Timestamp: time.Now(), Accuracy: 0.90},
-		{SensorType: "ph", Value: latestData.PH, Timestamp: time.Now(), Accuracy: 0.92},
-		{SensorType: "turbidity", Value: latestData.Turbidity, Timestamp: time.Now(), Accuracy: 0.88},
-	}
-
-	fusedData, fusionErr := h.services.SensorFusion.FuseSensorData(deviceID, sensorReadings)
-	if fusionErr == nil {
-		response["fused_data"] = gin.H{
-			"temperature":         fusedData.Temperature,
-			"temperature_conf":    fusedData.TemperatureConf,
-			"dissolved_oxygen":    fusedData.DissolvedOxygen,
-			"do_confidence":       fusedData.DOConfidence,
-			"ph":                  fusedData.PH,
-			"ph_confidence":       fusedData.PHConfidence,
-			"water_quality_index": fusedData.WaterQualityIndex,
-			"feeding_readiness":   fusedData.FeedingReadiness,
-			"data_quality":        fusedData.DataQuality,
-			"sensor_health":       fusedData.SensorHealth,
-		}
-	}
-
-	// Apply fuzzy logic
+	// Apply fuzzy logic (temperature-only — no water quality sensors in this version)
 	fuzzyInput := services.FuzzyInput{
-		Temperature:     latestData.WaterTemperature,
-		DissolvedOxygen: latestData.DissolvedOxygen,
-		PH:              latestData.PH,
-		Turbidity:       latestData.Turbidity,
+		Temperature: latestData.WaterTemperature,
 	}
 
 	fuzzyDecision, fuzzyErr := h.services.FuzzyLogic.EvaluateFeedingDecision(fuzzyInput)
@@ -522,10 +455,8 @@ func (h *MonitoringHandler) GetEnhancedDeviceStatus(c *gin.Context) {
 
 	// Get DDPG optimal action
 	ddpgState := services.DDPGState{
-		Temperature:     latestData.WaterTemperature,
-		DissolvedOxygen: latestData.DissolvedOxygen,
-		PH:              latestData.PH,
-		TimeOfDay:       float64(time.Now().Hour()),
+		Temperature: latestData.WaterTemperature,
+		TimeOfDay:   float64(time.Now().Hour()),
 	}
 
 	ddpgAction, ddpgErr := h.services.DDPG.GetOptimalAction(deviceID, ddpgState)

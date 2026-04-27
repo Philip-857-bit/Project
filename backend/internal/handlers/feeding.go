@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
 
 	"smart-fish-feeder/internal/models"
+	"smart-fish-feeder/internal/mqtt"
 	"smart-fish-feeder/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -14,8 +17,9 @@ import (
 
 // FeedingHandler handles feeding-related endpoints
 type FeedingHandler struct {
-	services *services.Services
-	logger   *logrus.Logger
+	services   *services.Services
+	logger     *logrus.Logger
+	mqttClient *mqtt.Client
 }
 
 // NewFeedingHandler creates a new feeding handler
@@ -23,6 +27,58 @@ func NewFeedingHandler(services *services.Services, logger *logrus.Logger) *Feed
 	return &FeedingHandler{
 		services: services,
 		logger:   logger,
+	}
+}
+
+// SetMQTTClient attaches the MQTT client used to dispatch feed commands to devices.
+func (h *FeedingHandler) SetMQTTClient(client *mqtt.Client) {
+	h.mqttClient = client
+}
+
+// pushSchedule publishes the full schedule for a device to its config topic.
+// The firmware config callback replaces its in-memory schedule on receipt.
+func (h *FeedingHandler) pushSchedule(deviceID string) {
+	if h.mqttClient == nil || !h.mqttClient.IsConnected() {
+		return
+	}
+	schedules, err := h.services.Feeding.GetSchedulesByDeviceID(deviceID)
+	if err != nil {
+		h.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to fetch schedules for push")
+		return
+	}
+
+	type entry struct {
+		Hour          int     `json:"hour"`
+		Minute        int     `json:"minute"`
+		QuantityGrams float64 `json:"quantity_grams"`
+		DaysBitmask   int     `json:"days_bitmask"`
+		IsActive      bool    `json:"is_active"`
+	}
+	entries := make([]entry, 0, len(schedules))
+	for _, s := range schedules {
+		mask := 0
+		for _, d := range s.DaysOfWeek {
+			if d >= 0 && d <= 6 {
+				mask |= 1 << d
+			}
+		}
+		entries = append(entries, entry{
+			Hour:          s.Hour,
+			Minute:        s.Minute,
+			QuantityGrams: s.QuantityGrams,
+			DaysBitmask:   mask,
+			IsActive:      s.IsActive,
+		})
+	}
+
+	payload, err := json.Marshal(map[string]interface{}{"schedules": entries})
+	if err != nil {
+		h.logger.WithError(err).Warn("Failed to marshal schedule push payload")
+		return
+	}
+	topic := mqtt.NewTopicBuilder(deviceID).Config()
+	if err := h.mqttClient.Publish(context.Background(), topic, payload, 1, true); err != nil {
+		h.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to push schedule to device")
 	}
 }
 
@@ -86,6 +142,8 @@ func (h *FeedingHandler) CreateSchedule(c *gin.Context) {
 		return
 	}
 
+	h.pushSchedule(schedule.DeviceID)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message":  "Feeding schedule created successfully",
 		"schedule": schedule,
@@ -131,6 +189,8 @@ func (h *FeedingHandler) UpdateSchedule(c *gin.Context) {
 		return
 	}
 
+	h.pushSchedule(schedule.DeviceID)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Feeding schedule updated successfully",
 		"schedule": schedule,
@@ -166,6 +226,8 @@ func (h *FeedingHandler) DeleteSchedule(c *gin.Context) {
 		return
 	}
 
+	deviceID := schedule.DeviceID
+
 	if err := h.services.Feeding.DeleteSchedule(uint(id)); err != nil {
 		h.logger.WithError(err).Error("Failed to delete feeding schedule")
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -173,6 +235,8 @@ func (h *FeedingHandler) DeleteSchedule(c *gin.Context) {
 		})
 		return
 	}
+
+	h.pushSchedule(deviceID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Feeding schedule deleted successfully",
@@ -207,10 +271,7 @@ func (h *FeedingHandler) ManualFeed(c *gin.Context) {
 	// Apply fuzzy logic validation if sensor data is available
 	if sensorErr == nil && latestSensorData != nil {
 		fuzzyInput := services.FuzzyInput{
-			Temperature:     latestSensorData.WaterTemperature,
-			DissolvedOxygen: latestSensorData.DissolvedOxygen,
-			PH:              latestSensorData.PH,
-			Turbidity:       latestSensorData.Turbidity,
+			Temperature: latestSensorData.WaterTemperature,
 		}
 
 		fuzzyDecision, fuzzyErr := h.services.FuzzyLogic.EvaluateFeedingDecision(fuzzyInput)
@@ -230,11 +291,9 @@ func (h *FeedingHandler) ManualFeed(c *gin.Context) {
 			}
 		}
 
-		// Apply sensor fusion for enhanced data quality
+		// Apply sensor fusion for enhanced data quality (temperature only)
 		sensorReadings := []services.SensorReading{
 			{SensorType: "temperature", Value: latestSensorData.WaterTemperature, Timestamp: time.Now(), Accuracy: 0.95},
-			{SensorType: "do", Value: latestSensorData.DissolvedOxygen, Timestamp: time.Now(), Accuracy: 0.90},
-			{SensorType: "ph", Value: latestSensorData.PH, Timestamp: time.Now(), Accuracy: 0.92},
 		}
 
 		fusedData, fusionErr := h.services.SensorFusion.FuseSensorData(request.DeviceID, sensorReadings)
@@ -252,7 +311,7 @@ func (h *FeedingHandler) ManualFeed(c *gin.Context) {
 		}
 	}
 
-	// Execute the manual feeding
+	// Execute the manual feeding (log event in DB)
 	event, err := h.services.Feeding.ExecuteManualFeeding(&request)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to execute manual feeding")
@@ -260,6 +319,22 @@ func (h *FeedingHandler) ManualFeed(c *gin.Context) {
 			"error": "Failed to execute manual feeding",
 		})
 		return
+	}
+
+	// Dispatch MQTT command to device
+	// Backend is the authority for Q10/OBM; the amount in the request is sent as-is.
+	// Firmware uses REMOTE trigger and skips its own Q10 re-application.
+	if h.mqttClient != nil && h.mqttClient.IsConnected() {
+		cmd := map[string]interface{}{
+			"type":  1, // CommandType::FEED_NOW
+			"grams": request.QuantityGrams,
+		}
+		if payload, marshalErr := json.Marshal(cmd); marshalErr == nil {
+			topic := mqtt.NewTopicBuilder(request.DeviceID).Command()
+			if pubErr := h.mqttClient.Publish(context.Background(), topic, payload, 1, false); pubErr != nil {
+				h.logger.WithError(pubErr).WithField("device_id", request.DeviceID).Warn("Failed to dispatch feed command via MQTT")
+			}
+		}
 	}
 
 	response["message"] = "Manual feeding executed successfully"
@@ -360,10 +435,8 @@ func (h *FeedingHandler) GetAnalytics(c *gin.Context) {
 
 		// Get DDPG-based optimization suggestion
 		ddpgState := services.DDPGState{
-			Temperature:     latestSensorData.WaterTemperature,
-			DissolvedOxygen: latestSensorData.DissolvedOxygen,
-			PH:              latestSensorData.PH,
-			TimeOfDay:       float64(time.Now().Hour()),
+			Temperature: latestSensorData.WaterTemperature,
+			TimeOfDay:   float64(time.Now().Hour()),
 		}
 
 		ddpgAction, ddpgErr := h.services.DDPG.GetOptimalAction(deviceID, ddpgState)
@@ -376,10 +449,7 @@ func (h *FeedingHandler) GetAnalytics(c *gin.Context) {
 
 		// Get fuzzy logic assessment
 		fuzzyInput := services.FuzzyInput{
-			Temperature:     latestSensorData.WaterTemperature,
-			DissolvedOxygen: latestSensorData.DissolvedOxygen,
-			PH:              latestSensorData.PH,
-			Turbidity:       latestSensorData.Turbidity,
+			Temperature: latestSensorData.WaterTemperature,
 		}
 
 		fuzzyDecision, fuzzyErr := h.services.FuzzyLogic.EvaluateFeedingDecision(fuzzyInput)

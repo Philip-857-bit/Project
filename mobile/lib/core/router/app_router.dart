@@ -186,6 +186,11 @@ class MainShell extends StatelessWidget {
             label: 'Monitor',
           ),
           NavigationDestination(
+            icon: Icon(Icons.videocam_outlined),
+            selectedIcon: Icon(Icons.videocam),
+            label: 'Video',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings),
             label: 'Settings',
@@ -203,7 +208,8 @@ class MainShell extends StatelessWidget {
       return 2;
     }
     if (location.startsWith('/monitoring')) return 3;
-    if (location.startsWith('/settings')) return 4;
+    if (location.startsWith('/video')) return 4;
+    if (location.startsWith('/settings')) return 5;
     return 0;
   }
 
@@ -222,6 +228,9 @@ class MainShell extends StatelessWidget {
         context.goNamed('monitoring');
         break;
       case 4:
+        context.goNamed('video');
+        break;
+      case 5:
         context.goNamed('settings');
         break;
     }

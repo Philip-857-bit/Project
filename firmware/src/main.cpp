@@ -41,6 +41,7 @@ NVSStorage nvsStorage;
 // Timing variables
 unsigned long lastTelemetryTime = 0;
 unsigned long lastSensorReadTime = 0;
+unsigned long lastAlertTime = 0;
 #ifdef WOKWI_SIM
 unsigned long lastSimHeartbeatTime = 0;
 #endif
@@ -88,11 +89,17 @@ void setup() {
         Serial.println("[ERROR] Failed to initialize power manager");
     }
     powerManager.printStatus();
+#ifdef NO_SOLAR_INPUT
+    // Battery-only deployment: deep sleep would trigger on every low-battery check
+    // because there is never solar to recharge mid-run. Keep running until critical.
+    powerManager.setDeepSleepEnabled(false);
+#endif
     
     // Initialize sensor manager
     if (!sensorManager.begin()) {
         Serial.println("[ERROR] Failed to initialize sensor manager");
     }
+    pinMode(PIN_FEED_BTN, INPUT);  // External pull-up R7(10kOhm) on PCB - do NOT use INPUT_PULLUP
     
     // Initialize feeding controller
     if (!feedingController.begin(&sensorManager, &nvsStorage)) {
@@ -103,6 +110,39 @@ void setup() {
     if (!commManager.begin(&deviceManager, &nvsStorage)) {
         Serial.println("[ERROR] Failed to initialize communication manager");
     }
+
+    // Wire MQTT command handler
+    commManager.setCommandCallback([](CommandType type, const JsonDocument& doc) {
+        if (type == CommandType::FEED_NOW) {
+            float grams = doc["grams"] | MANUAL_FEED_GRAMS_DEFAULT;
+            feedingController.feedRemote(grams);
+        } else if (type == CommandType::STOP_FEEDING) {
+            feedingController.stopFeeding();
+        }
+    });
+
+    // Wire config callback - backend pushes full schedule on every create/update/delete
+    commManager.setConfigCallback([](const JsonDocument& doc) {
+        JsonArrayConst entries = doc["schedules"].as<JsonArrayConst>();
+        if (entries.isNull()) return;
+
+        int count = 0;
+        ScheduleEntry newSchedule[SCHEDULE_MAX_ENTRIES];
+        memset(newSchedule, 0, sizeof(newSchedule));
+
+        for (JsonObjectConst entry : entries) {
+            if (count >= SCHEDULE_MAX_ENTRIES) break;
+            newSchedule[count].hour         = entry["hour"]           | 0;
+            newSchedule[count].minute       = entry["minute"]         | 0;
+            newSchedule[count].quantityGrams = entry["quantity_grams"] | MANUAL_FEED_GRAMS_DEFAULT;
+            newSchedule[count].daysOfWeek   = entry["days_bitmask"]   | 0x7F; // all days default
+            newSchedule[count].enabled      = entry["is_active"]      | true;
+            count++;
+        }
+
+        feedingController.setSchedule(newSchedule, count);
+        Serial.printf("[Config] Schedule updated: %d entries\n", count);
+    });
     
     // Create communication task on Core 0
     xTaskCreatePinnedToCore(
@@ -170,10 +210,9 @@ void communicationTaskFunc(void* parameter) {
             SensorData data = sensorManager.getCurrentData();
             PowerStatus power = powerManager.getStatus();
             Serial.printf(
-                "[SIM] uptime=%lus temp=%.2fC do=%.2fmg/L feed=%.1f%% battery=%.1f%% mqtt=%s buffered=%d\n",
+                "[SIM] uptime=%lus temp=%.2fC feed=%.1f%% battery=%.1f%% mqtt=%s buffered=%d\n",
                 now / 1000,
                 data.temperature,
-                data.dissolvedOxygen,
                 data.feedLevelPercent,
                 power.batteryPercent,
                 commManager.isConnected() ? "connected" : "disconnected",
@@ -213,9 +252,25 @@ void controlTaskFunc(void* parameter) {
             checkSensorAlerts();
         }
         
+        // Manual feed button polling (200ms debounce)
+        static bool lastBtnState = HIGH;
+        static unsigned long lastTriggerMs = 0;
+        bool currentBtnState = digitalRead(PIN_FEED_BTN);
+        if (lastBtnState == HIGH && currentBtnState == LOW) {
+            if (millis() - lastTriggerMs > 200) {
+                Serial.println("[SW1] Manual feed button pressed");
+                feedingController.feedNow(MANUAL_FEED_GRAMS_DEFAULT);
+                lastTriggerMs = millis();
+            }
+        }
+        lastBtnState = currentBtnState;
+
+        // Update device manager (provisioning timeout + status LED)
+        deviceManager.update();
+
         // Update feeding controller
         feedingController.update();
-        
+
         // Update power manager
         powerManager.update();
         
@@ -224,43 +279,75 @@ void controlTaskFunc(void* parameter) {
 }
 
 /**
- * Check sensor readings and generate alerts if needed
+ * Check sensor readings and generate alerts if needed.
+ * Rate-limited to once per 5 minutes to avoid alert spam.
  */
 void checkSensorAlerts() {
-    SensorData data = sensorManager.getCurrentData();
-    
-    // Check dissolved oxygen - emergency stop if critical
-    if (data.dissolvedOxygen < DO_EMERGENCY_STOP_MG_L && data.dissolvedOxygen > 0) {
-        Serial.println("[ALERT] Critical DO level - emergency feeding stop!");
-        feedingController.stopFeeding();
-        commManager.sendAlert(AlertType::LOW_OXYGEN, AlertSeverity::SEVERITY_CRITICAL,
-            "Dissolved oxygen critically low: " + String(data.dissolvedOxygen) + " mg/L");
+    unsigned long now = millis();
+    // Suppress duplicate alerts for 5 minutes
+    if (now - lastAlertTime < 300000UL && lastAlertTime != 0) {
+        return;
     }
-    
-    // Check temperature bounds
-    if (data.temperature < TEMP_MIN_VALID || data.temperature > TEMP_MAX_VALID) {
-        if (data.temperature > 0) {  // Valid reading
+
+    SensorData data = sensorManager.getCurrentData();
+    bool alertSent = false;
+
+    // Temperature: lethal range (>= CLARIAS_LETHAL_MAX or < CLARIAS_TEMP_MIN)
+    if (data.temperatureValid) {
+        if (data.temperature >= CLARIAS_LETHAL_MAX) {
             commManager.sendAlert(
-                data.temperature > TEMP_MAX_VALID ? AlertType::HIGH_TEMPERATURE : AlertType::LOW_TEMPERATURE,
-                AlertSeverity::SEVERITY_HIGH,
-                "Temperature out of range: " + String(data.temperature) + "°C"
+                AlertType::HIGH_TEMPERATURE,
+                AlertSeverity::SEVERITY_CRITICAL,
+                "LETHAL temperature: " + String(data.temperature, 1) + "C - stop feeding immediately"
             );
+            alertSent = true;
+        } else if (data.temperature > CLARIAS_CRITICAL_MAX) {
+            commManager.sendAlert(
+                AlertType::HIGH_TEMPERATURE,
+                AlertSeverity::SEVERITY_HIGH,
+                "High temperature stress: " + String(data.temperature, 1) + "C (optimal max " + String(CLARIAS_OPTIMAL_MAX, 0) + "C)"
+            );
+            alertSent = true;
+        } else if (data.temperature < CLARIAS_TEMP_MIN) {
+            commManager.sendAlert(
+                AlertType::LOW_TEMPERATURE,
+                AlertSeverity::SEVERITY_HIGH,
+                "Low temperature: " + String(data.temperature, 1) + "C (min viable " + String(CLARIAS_TEMP_MIN, 0) + "C)"
+            );
+            alertSent = true;
         }
     }
-    
-    // Check feed level
-    if (data.feedLevelPercent < BATTERY_LOW_THRESHOLD) {
-        commManager.sendAlert(AlertType::LOW_FEED, AlertSeverity::SEVERITY_MEDIUM,
-            "Feed level low: " + String(data.feedLevelPercent) + "%");
+
+    // Feed level
+    if (data.feedLevelValid && data.feedLevelPercent < FEED_LEVEL_LOW_THRESHOLD) {
+        commManager.sendAlert(
+            AlertType::LOW_FEED,
+            AlertSeverity::SEVERITY_MEDIUM,
+            "Feed level low: " + String(data.feedLevelPercent, 1) + "%"
+        );
+        alertSent = true;
     }
-    
-    // Check battery
+
+    // Battery
     PowerStatus power = powerManager.getStatus();
-    if (power.batteryPercent < BATTERY_LOW_THRESHOLD) {
-        AlertSeverity severity = power.batteryPercent < BATTERY_CRITICAL ? 
-            AlertSeverity::SEVERITY_CRITICAL : AlertSeverity::SEVERITY_HIGH;
-        commManager.sendAlert(AlertType::LOW_BATTERY, severity,
-            "Battery low: " + String(power.batteryPercent) + "%");
+    if (power.batteryPercent < BATTERY_CRITICAL) {
+        commManager.sendAlert(
+            AlertType::LOW_BATTERY,
+            AlertSeverity::SEVERITY_CRITICAL,
+            "Battery critical: " + String(power.batteryPercent, 1) + "%"
+        );
+        alertSent = true;
+    } else if (power.batteryPercent < BATTERY_LOW_THRESHOLD) {
+        commManager.sendAlert(
+            AlertType::LOW_BATTERY,
+            AlertSeverity::SEVERITY_HIGH,
+            "Battery low: " + String(power.batteryPercent, 1) + "%"
+        );
+        alertSent = true;
+    }
+
+    if (alertSent) {
+        lastAlertTime = now;
     }
 }
 

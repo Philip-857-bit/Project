@@ -38,9 +38,7 @@ class _DeviceListScreenState extends ConsumerState<DeviceListScreen> {
         onRefresh: () => ref.read(deviceListProvider.notifier).loadDevices(),
         child:
             deviceState.isLoading
-                ? Center(
-                  child: const CircularProgressIndicator(),
-                )
+                ? Center(child: const CircularProgressIndicator())
                 : deviceState.error != null
                 ? Center(
                   child: Column(

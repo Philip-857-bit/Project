@@ -6,6 +6,7 @@
 
 #include "CommunicationManager.h"
 #include "../../include/config.h"
+#include <time.h>
 
 // TinyGSM configuration - must be before include
 #define TINY_GSM_RX_BUFFER 1024
@@ -106,6 +107,7 @@ CommunicationManager::CommunicationManager()
     , _offlineBufferTail(0)
     , _offlineBufferCount(0)
     , _commandCallback(nullptr)
+    , _configCallback(nullptr)
     , _gsmSerial(nullptr)
     , _cellularSignal(0) {
     
@@ -169,11 +171,15 @@ bool CommunicationManager::initGSM() {
     // Configure power pins
     pinMode(MODEM_PWRKEY, OUTPUT);
     pinMode(MODEM_EN, OUTPUT);
+#ifdef MODEM_DTR
     pinMode(MODEM_DTR, OUTPUT);
-    
+#endif
+
     // Enable modem
     digitalWrite(MODEM_EN, HIGH);
-    digitalWrite(MODEM_DTR, LOW);
+#ifdef MODEM_DTR
+    digitalWrite(MODEM_DTR, LOW);  // Keep modem awake
+#endif
     
     // Power on sequence for A7670
     Serial.println("[CommManager] Powering on A7670...");
@@ -400,11 +406,29 @@ bool CommunicationManager::connectMQTT() {
     
     if (connected) {
         Serial.println("[CommManager] MQTT connected");
+        publishSelfRegistration();
         return true;
     }
-    
+
     Serial.printf("[CommManager] MQTT connection failed, state: %d\n", _mqttClient.state());
     return false;
+}
+
+void CommunicationManager::publishSelfRegistration() {
+    String bindCode = _storage->getString(NVS_KEY_BINDING_CODE);
+
+    JsonDocument doc;
+    doc["device_serial"]    = _deviceManager->getDeviceID();
+    doc["firmware_version"] = FIRMWARE_VERSION;
+    if (!bindCode.isEmpty()) {
+        doc["binding_code"] = bindCode;
+    }
+
+    String json;
+    serializeJson(doc, json);
+
+    _mqttClient.publish("devices/register", json.c_str());
+    Serial.println("[CommManager] Self-registration published");
 }
 
 void CommunicationManager::subscribeTopics() {
@@ -435,52 +459,77 @@ void CommunicationManager::handleMessage(const char* topic, uint8_t* payload, un
     // Handle commands
     if (String(topic) == _topicCommands) {
         int cmdType = doc["type"] | 0;
-        
         if (_commandCallback != nullptr) {
             _commandCallback((CommandType)cmdType, doc);
         }
+        return;
+    }
+
+    // Handle config push (schedule updates from backend)
+    if (String(topic) == _topicConfig) {
+        if (_configCallback != nullptr) {
+            _configCallback(doc);
+        }
+    }
+}
+
+static const char* powerSourceString(uint8_t source) {
+    switch (source) {
+        case 1:  return "solar";
+        case 2:  return "battery";
+        case 3:  return "electric";
+        default: return "battery";  // UNKNOWN falls back to battery
     }
 }
 
 bool CommunicationManager::sendTelemetry(const SensorData& sensorData, const PowerStatus& powerStatus) {
     JsonDocument doc;
-    
-    doc["device_id"] = _deviceManager->getDeviceID();
-    doc["timestamp"] = millis();
-    doc["temperature"] = sensorData.temperature;
-    doc["dissolved_oxygen"] = sensorData.dissolvedOxygen;
-    doc["ph"] = sensorData.pH;
-    doc["turbidity"] = sensorData.turbidity;
-    doc["weight_grams"] = sensorData.feedWeightGrams;
+
+    doc["device_id"]         = _deviceManager->getDeviceID();
+    doc["timestamp"]         = (int64_t)time(nullptr);
+    doc["water_temperature"] = sensorData.temperature;
+    doc["weight_grams"]      = sensorData.feedWeightGrams;
     doc["weight_percentage"] = sensorData.feedLevelPercent;
-    doc["battery_level"] = (int)powerStatus.batteryPercent;
-    doc["battery_voltage"] = powerStatus.batteryVoltage;
-    doc["power_source"] = (int)powerStatus.source;
-    doc["solar_voltage"] = powerStatus.solarVoltage;
-    doc["cellular_signal"] = _cellularSignal;
-    doc["wifi_rssi"] = WiFi.RSSI();
-    doc["status"] = 1;  // Online
+    doc["battery_level"]     = (int)powerStatus.batteryPercent;
+    doc["battery_voltage"]   = powerStatus.batteryVoltage;
+    doc["power_source"]      = powerSourceString(static_cast<uint8_t>(powerStatus.source));
+    doc["solar_voltage"]     = powerStatus.solarVoltage;
+    doc["cellular_signal"]   = _cellularSignal;
+    doc["wifi_rssi"]         = WiFi.RSSI();
+    doc["status"]            = 1;  // Online
     
     String json;
     serializeJson(doc, json);
-    
+
+    // Publish on both topics:
+    // - "sensors" is consumed by the backend to persist SensorData to the DB
+    // - "telemetry" is the keep-alive broadcast (logged only)
+    String topicSensors = buildTopic("sensors");
+    publish(topicSensors, (uint8_t*)json.c_str(), json.length(), 2);
     return publish(_topicTelemetry, (uint8_t*)json.c_str(), json.length(), 2);
+}
+
+static const char* triggerTypeString(FeedingTrigger t) {
+    switch (t) {
+        case FeedingTrigger::SCHEDULED: return "SCHEDULED";
+        case FeedingTrigger::REMOTE:    return "MANUAL";   // remote-triggered = user-initiated manual
+        default:                        return "MANUAL";
+    }
 }
 
 bool CommunicationManager::sendFeedingEvent(const FeedingEvent& event) {
     JsonDocument doc;
-    
-    doc["device_id"] = _deviceManager->getDeviceID();
-    doc["timestamp"] = event.timestamp;
-    doc["quantity_grams"] = event.quantityGrams;
+
+    doc["device_id"]        = _deviceManager->getDeviceID();
+    doc["timestamp"]        = event.timestamp;
+    doc["quantity_grams"]   = event.quantityGrams;
     doc["actual_dispensed"] = event.actualDispensed;
     doc["duration_seconds"] = event.durationMs / 1000;
-    doc["trigger"] = (int)event.trigger;
-    doc["result"] = (int)event.result;
-    doc["error_message"] = event.errorMessage;
-    doc["temperature"] = event.temperature;
-    doc["dissolved_oxygen"] = event.dissolvedOxygen;
-    doc["q10_factor"] = event.q10Factor;
+    doc["trigger_type"]     = triggerTypeString(event.trigger);
+    doc["result"]           = (int)event.result;
+    doc["error_message"]    = event.errorMessage;
+    doc["temperature"]      = event.temperature;
+    doc["q10_factor"]       = event.q10Factor;
     doc["obm_safety_factor"] = event.obmSafetyFactor;
     
     String json;
@@ -493,7 +542,7 @@ bool CommunicationManager::sendAlert(AlertType type, AlertSeverity severity, con
     JsonDocument doc;
     
     doc["device_id"] = _deviceManager->getDeviceID();
-    doc["timestamp"] = millis();
+    doc["timestamp"] = (int64_t)time(nullptr);
     doc["severity"] = (int)severity;
     doc["type"] = (int)type;
     doc["message"] = message;
@@ -509,7 +558,7 @@ bool CommunicationManager::sendDiagnostics() {
     JsonDocument doc;
     
     doc["device_id"] = _deviceManager->getDeviceID();
-    doc["timestamp"] = millis();
+    doc["timestamp"] = (int64_t)time(nullptr);
     doc["firmware_version"] = FIRMWARE_VERSION;
     doc["uptime_seconds"] = millis() / 1000;
     doc["free_heap_bytes"] = ESP.getFreeHeap();
@@ -626,3 +675,4 @@ int CommunicationManager::getWiFiRSSI() const { return WiFi.RSSI(); }
 int CommunicationManager::getCellularSignal() const { return _cellularSignal; }
 int CommunicationManager::getOfflineBufferCount() const { return _offlineBufferCount; }
 void CommunicationManager::setCommandCallback(CommandCallback callback) { _commandCallback = callback; }
+void CommunicationManager::setConfigCallback(ConfigCallback callback)   { _configCallback  = callback; }

@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"smart-fish-feeder/internal/config"
@@ -9,6 +10,10 @@ import (
 	"smart-fish-feeder/internal/redis"
 	"smart-fish-feeder/internal/repository"
 )
+
+var defaultDaysOfWeek = []int{0, 1, 2, 3, 4, 5, 6}
+
+const defaultFeedDurationSeconds = 10
 
 // FeedingService handles feeding business logic
 type FeedingService struct {
@@ -80,7 +85,7 @@ func (s *FeedingService) ExecuteManualFeeding(request *models.ManualFeedRequest)
 		return nil, fmt.Errorf("quantity must be greater than 0")
 	}
 	if request.DurationSeconds <= 0 {
-		return nil, fmt.Errorf("duration must be greater than 0")
+		request.DurationSeconds = defaultFeedDurationSeconds
 	}
 
 	// Create feeding event
@@ -227,9 +232,43 @@ func (s *FeedingService) validateSchedule(schedule *models.FeedingSchedule) erro
 	if schedule.QuantityGrams <= 0 {
 		return fmt.Errorf("quantity must be greater than 0")
 	}
+
 	if schedule.DurationSeconds <= 0 {
-		return fmt.Errorf("duration must be greater than 0")
+		schedule.DurationSeconds = defaultFeedDurationSeconds
 	}
+
+	if err := normalizeScheduleDays(schedule); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func normalizeScheduleDays(schedule *models.FeedingSchedule) error {
+	if len(schedule.DaysOfWeek) == 0 {
+		schedule.DaysOfWeek = append([]int(nil), defaultDaysOfWeek...)
+	}
+
+	normalizedDays := make([]int, 0, len(schedule.DaysOfWeek))
+	seenDays := make(map[int]struct{}, len(schedule.DaysOfWeek))
+	for _, day := range schedule.DaysOfWeek {
+		if day < 0 || day > 6 {
+			return fmt.Errorf("days_of_week values must be between 0 and 6")
+		}
+		if _, exists := seenDays[day]; exists {
+			continue
+		}
+		seenDays[day] = struct{}{}
+		normalizedDays = append(normalizedDays, day)
+	}
+
+	if len(normalizedDays) == 0 {
+		return fmt.Errorf("at least one day_of_week is required")
+	}
+
+	sort.Ints(normalizedDays)
+	schedule.DaysOfWeek = normalizedDays
+
 	return nil
 }
 

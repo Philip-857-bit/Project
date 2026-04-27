@@ -136,11 +136,12 @@ type PowerConfig struct {
 
 // ServerConfig holds server-related configuration
 type ServerConfig struct {
-	Host         string        `mapstructure:"host"`
-	Port         int           `mapstructure:"port"`
-	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout time.Duration `mapstructure:"write_timeout"`
-	Debug        bool          `mapstructure:"debug"`
+	Host           string        `mapstructure:"host"`
+	Port           int           `mapstructure:"port"`
+	ReadTimeout    time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout   time.Duration `mapstructure:"write_timeout"`
+	Debug          bool          `mapstructure:"debug"`
+	AllowedOrigins []string      `mapstructure:"allowed_origins"`
 }
 
 // DatabaseConfig holds database connection configuration
@@ -385,6 +386,7 @@ func setDefaults() {
 	viper.SetDefault("server.read_timeout", "30s")
 	viper.SetDefault("server.write_timeout", "30s")
 	viper.SetDefault("server.debug", false)
+	viper.SetDefault("server.allowed_origins", []string{"http://localhost:3000", "http://localhost:8080"})
 
 	// Database defaults
 	viper.SetDefault("database.host", "localhost")
@@ -449,7 +451,7 @@ func setDefaults() {
 	viper.SetDefault("websocket.ping_interval", "54s")
 	viper.SetDefault("websocket.write_timeout", "10s")
 	viper.SetDefault("websocket.read_timeout", "60s")
-	viper.SetDefault("websocket.max_message_size", 512)
+	viper.SetDefault("websocket.max_message_size", 4096)
 	viper.SetDefault("websocket.buffer_size", 256)
 
 	// Offline sync defaults

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"smart-fish-feeder/internal/database"
 	"smart-fish-feeder/internal/handlers"
 	"smart-fish-feeder/internal/middleware"
+	"smart-fish-feeder/internal/models"
 	"smart-fish-feeder/internal/mqtt"
 	"smart-fish-feeder/internal/redis"
 	"smart-fish-feeder/internal/repository"
@@ -83,8 +85,7 @@ func (a *App) Run() error {
 				a.mqttClient = mqttClient
 				a.logger.Info("MQTT client connected successfully")
 
-				// Setup MQTT message handlers
-				a.setupMQTTHandlers()
+				// Setup MQTT message handlers (wired after services are ready below)
 			}
 			cancel()
 		}
@@ -103,12 +104,16 @@ func (a *App) Run() error {
 		return fmt.Errorf("failed to seed default fish species: %w", err)
 	}
 
+	// Wire MQTT handlers now that services are available
+	a.setupMQTTHandlers(services)
+
 	// Initialize handlers
-	handlers := handlers.New(services, a.logger)
+	handlers := handlers.New(services, a.logger, a.config)
 	handlers.Device.SetMQTTClient(a.mqttClient)
+	handlers.Feeding.SetMQTTClient(a.mqttClient)
 
 	// Setup router
-	router := a.setupRouter(handlers)
+	router := a.setupRouter(handlers, services.Auth)
 
 	// Create HTTP server
 	a.server = &http.Server{
@@ -151,77 +156,177 @@ func (a *App) Run() error {
 	return nil
 }
 
-// setupMQTTHandlers configures MQTT topic subscriptions and message handlers
-func (a *App) setupMQTTHandlers() {
+// setupMQTTHandlers configures MQTT topic subscriptions and persists incoming data.
+func (a *App) setupMQTTHandlers(svc *services.Services) {
 	if a.mqttClient == nil {
 		return
 	}
 
-	// Subscribe to device telemetry
-	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceTelemetryAll, 1, func(topic string, payload []byte) error {
-		deviceID := mqtt.ExtractDeviceID(topic)
-		a.logger.WithFields(logrus.Fields{
-			"device_id": deviceID,
-			"topic":     topic,
-		}).Debug("Received device telemetry")
-		return nil
-	}); err != nil {
-		a.logger.WithError(err).Error("Failed to subscribe to device telemetry")
-	}
-
-	// Subscribe to device sensor data
+	// Subscribe to device sensor data - persist to database
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceSensorDataAll, 1, func(topic string, payload []byte) error {
 		deviceID := mqtt.ExtractDeviceID(topic)
-		a.logger.WithFields(logrus.Fields{
-			"device_id": deviceID,
-			"topic":     topic,
-		}).Debug("Received sensor data via MQTT")
+		var req models.SensorDataRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			a.logger.WithError(err).Warn("Failed to parse sensor MQTT payload")
+			return nil
+		}
+		req.DeviceID = deviceID
+		if _, err := svc.Monitoring.ProcessSensorData(&req); err != nil {
+			a.logger.WithError(err).Error("Failed to persist sensor data from MQTT")
+		}
 		return nil
 	}); err != nil {
 		a.logger.WithError(err).Error("Failed to subscribe to sensor data")
 	}
 
-	// Subscribe to device feeding events
+	// Subscribe to device feeding events - persist to database
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceFeedingAll, 1, func(topic string, payload []byte) error {
 		deviceID := mqtt.ExtractDeviceID(topic)
-		a.logger.WithFields(logrus.Fields{
-			"device_id": deviceID,
-			"topic":     topic,
-		}).Debug("Received feeding event via MQTT")
+		var event models.FeedingEvent
+		if err := json.Unmarshal(payload, &event); err != nil {
+			a.logger.WithError(err).Warn("Failed to parse feeding MQTT payload")
+			return nil
+		}
+		event.DeviceID = deviceID
+		if err := svc.Feeding.LogFeedingEvent(&event); err != nil {
+			a.logger.WithError(err).Error("Failed to persist feeding event from MQTT")
+		}
 		return nil
 	}); err != nil {
 		a.logger.WithError(err).Error("Failed to subscribe to feeding events")
 	}
 
-	// Subscribe to device status updates
+	// Subscribe to device telemetry - log only (full telemetry blob, no dedicated model)
+	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceTelemetryAll, 1, func(topic string, payload []byte) error {
+		deviceID := mqtt.ExtractDeviceID(topic)
+		a.logger.WithFields(logrus.Fields{"device_id": deviceID, "topic": topic}).Debug("Received device telemetry")
+		return nil
+	}); err != nil {
+		a.logger.WithError(err).Error("Failed to subscribe to device telemetry")
+	}
+
+	// Subscribe to device status updates - log only
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceStatusAll, 1, func(topic string, payload []byte) error {
 		deviceID := mqtt.ExtractDeviceID(topic)
-		a.logger.WithFields(logrus.Fields{
-			"device_id": deviceID,
-			"topic":     topic,
-		}).Debug("Received device status update")
+		a.logger.WithFields(logrus.Fields{"device_id": deviceID, "topic": topic}).Debug("Received device status update")
 		return nil
 	}); err != nil {
 		a.logger.WithError(err).Error("Failed to subscribe to device status")
 	}
 
-	// Subscribe to device alerts
+	// Subscribe to device alerts - persist to database and broadcast via WebSocket
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceAlertAll, 1, func(topic string, payload []byte) error {
 		deviceID := mqtt.ExtractDeviceID(topic)
-		a.logger.WithFields(logrus.Fields{
-			"device_id": deviceID,
-			"topic":     topic,
-		}).Warn("Received device alert via MQTT")
+		var raw struct {
+			Severity int    `json:"severity"`
+			Type     int    `json:"type"`
+			Message  string `json:"message"`
+		}
+		if err := json.Unmarshal(payload, &raw); err != nil {
+			a.logger.WithError(err).Warn("Failed to parse alert MQTT payload")
+			return nil
+		}
+		alertType := firmwareAlertTypeName(raw.Type)
+		alert := &models.Alert{
+			DeviceID:  deviceID,
+			Type:      alertType,
+			Message:   raw.Message,
+			Severity:  firmwareSeverityName(raw.Severity),
+			Timestamp: time.Now(),
+		}
+		if err := svc.Monitoring.PersistAlert(alert); err != nil {
+			a.logger.WithError(err).Error("Failed to persist firmware alert")
+		}
 		return nil
 	}); err != nil {
 		a.logger.WithError(err).Error("Failed to subscribe to device alerts")
 	}
 
+	// Subscribe to device diagnostics - log only for now
+	if err := a.mqttClient.Subscribe("devices/+/diagnostics", 1, func(topic string, payload []byte) error {
+		deviceID := mqtt.ExtractDeviceID(topic)
+		a.logger.WithFields(logrus.Fields{"device_id": deviceID, "bytes": len(payload)}).Debug("Received device diagnostics")
+		return nil
+	}); err != nil {
+		a.logger.WithError(err).Error("Failed to subscribe to device diagnostics")
+	}
+
+	// Subscribe to device self-registration - firmware publishes here on first MQTT connect.
+	// Payload: {"device_serial":"SFF-AABBCCDD", "firmware_version":"1.0.0", "binding_code":"123456"}
+	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceRegister, 1, func(topic string, payload []byte) error {
+		var req struct {
+			models.DeviceRegisterRequest
+			BindingCode string `json:"binding_code"`
+		}
+		if err := json.Unmarshal(payload, &req); err != nil {
+			a.logger.WithError(err).Warn("Failed to parse device register MQTT payload")
+			return nil
+		}
+		device, err := svc.Device.RegisterDevice(&req.DeviceRegisterRequest)
+		if err != nil {
+			a.logger.WithError(err).Error("Failed to self-register device via MQTT")
+			return nil
+		}
+		if req.BindingCode != "" {
+			if err := svc.Device.StoreDeviceBindingCode(req.DeviceSerial, req.BindingCode); err != nil {
+				a.logger.WithError(err).Warn("Failed to store firmware binding code")
+			}
+		}
+		a.logger.WithField("device_id", device.DeviceID).Info("Device self-registered via MQTT")
+		return nil
+	}); err != nil {
+		a.logger.WithError(err).Error("Failed to subscribe to device register topic")
+	}
+
 	a.logger.Info("MQTT handlers configured successfully")
 }
 
+// firmwareSeverityName converts the firmware AlertSeverity int enum to a backend string.
+// Firmware enum: SEVERITY_INFO=1, SEVERITY_LOW=2, SEVERITY_MEDIUM=3, SEVERITY_HIGH=4, SEVERITY_CRITICAL=5
+func firmwareSeverityName(v int) string {
+	switch v {
+	case 1:
+		return "info"
+	case 2:
+		return "warning"
+	case 3:
+		return "warning"
+	case 4:
+		return "high"
+	case 5:
+		return "critical"
+	default:
+		return "warning"
+	}
+}
+
+// firmwareAlertTypeName converts the firmware AlertType int enum to a backend string.
+// Firmware enum: LOW_FEED=1, LOW_BATTERY=2, HIGH_TEMPERATURE=4, LOW_TEMPERATURE=5, FEEDER_JAMMED=7, SENSOR_ERROR=8
+func firmwareAlertTypeName(v int) string {
+	switch v {
+	case 1:
+		return "LOW_FEED"
+	case 2:
+		return "LOW_BATTERY"
+	case 4:
+		return "HIGH_TEMPERATURE"
+	case 5:
+		return "LOW_TEMPERATURE"
+	case 7:
+		return "FEEDER_JAMMED"
+	case 8:
+		return "SENSOR_ERROR"
+	case 9:
+		return "CONNECTIVITY_LOST"
+	case 10:
+		return "POWER_FAILURE"
+	default:
+		return "DEVICE_ALERT"
+	}
+}
+
 // setupRouter configures the Gin router with all routes and middleware
-func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
+func (a *App) setupRouter(h *handlers.Handlers, authService *services.AuthService) *gin.Engine {
 	// Allow explicit GIN_MODE override, otherwise derive from server debug flag.
 	if mode := os.Getenv("GIN_MODE"); mode != "" {
 		gin.SetMode(mode)
@@ -236,7 +341,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 	// Global middleware
 	router.Use(middleware.Logger(a.logger))
 	router.Use(middleware.Recovery(a.logger))
-	router.Use(middleware.CORS())
+	router.Use(middleware.CORS(a.config.Server.AllowedOrigins...))
 	router.Use(middleware.RequestID())
 
 	// Health check endpoints
@@ -255,7 +360,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 			auth.POST("/register", h.Auth.Register)
 			auth.POST("/login", h.Auth.Login)
 			auth.POST("/refresh", h.Auth.RefreshToken)
-			auth.POST("/logout", middleware.AuthRequired(), h.Auth.Logout)
+			auth.POST("/logout", middleware.AuthMiddleware(authService), h.Auth.Logout)
 			auth.POST("/password-reset/request", h.Auth.RequestPasswordReset)
 			auth.POST("/password-reset/verify", h.Auth.VerifyPasswordResetCode)
 			auth.POST("/password-reset/confirm", h.Auth.ConfirmPasswordReset)
@@ -263,7 +368,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 
 		// User routes
 		users := v1.Group("/users")
-		users.Use(middleware.AuthRequired())
+		users.Use(middleware.AuthMiddleware(authService))
 		{
 			users.GET("/profile", h.User.GetProfile)
 			users.PUT("/profile", h.User.UpdateProfile)
@@ -273,18 +378,18 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 		devices := v1.Group("/devices")
 		{
 			devices.POST("/register", h.Device.Register) // Arduino registration
-			devices.GET("/binding-code", middleware.AuthRequired(), h.Device.GenerateBindingCode)
-			devices.POST("/bind", middleware.AuthRequired(), h.Device.Bind)
-			devices.GET("", middleware.AuthRequired(), h.Device.List)
-			devices.GET("/:id", middleware.AuthRequired(), h.Device.Get)
-			devices.POST("/:id/capture-video", middleware.AuthRequired(), h.Device.CaptureVideo)
-			devices.PUT("/:id", middleware.AuthRequired(), h.Device.Update)
-			devices.DELETE("/:id", middleware.AuthRequired(), h.Device.Delete)
+			devices.GET("/binding-code", middleware.AuthMiddleware(authService), h.Device.GenerateBindingCode)
+			devices.POST("/bind", middleware.AuthMiddleware(authService), h.Device.Bind)
+			devices.GET("", middleware.AuthMiddleware(authService), h.Device.List)
+			devices.GET("/:id", middleware.AuthMiddleware(authService), h.Device.Get)
+			devices.POST("/:id/capture-video", middleware.AuthMiddleware(authService), h.Device.CaptureVideo)
+			devices.PUT("/:id", middleware.AuthMiddleware(authService), h.Device.Update)
+			devices.DELETE("/:id", middleware.AuthMiddleware(authService), h.Device.Delete)
 		}
 
 		// Feeding routes
 		feeding := v1.Group("/feeding")
-		feeding.Use(middleware.AuthRequired())
+		feeding.Use(middleware.AuthMiddleware(authService))
 		{
 			feeding.GET("/schedules", h.Feeding.GetSchedules)
 			feeding.POST("/schedules", h.Feeding.CreateSchedule)
@@ -297,7 +402,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 
 		// Monitoring routes
 		monitoring := v1.Group("/monitoring")
-		monitoring.Use(middleware.AuthRequired())
+		monitoring.Use(middleware.AuthMiddleware(authService))
 		{
 			monitoring.GET("/sensors", h.Monitoring.GetSensorData)
 			monitoring.POST("/sensors", h.Monitoring.ReceiveSensorData) // Arduino endpoint
@@ -311,7 +416,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 
 		// Calculator routes
 		calculator := v1.Group("/calculator")
-		calculator.Use(middleware.AuthRequired())
+		calculator.Use(middleware.AuthMiddleware(authService))
 		{
 			calculator.POST("/recommend", h.Calculator.CalculateRecommendation)
 			calculator.GET("/species", h.Calculator.GetSpecies)
@@ -323,7 +428,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 
 		// Certificate management routes
 		certificates := v1.Group("/certificates")
-		certificates.Use(middleware.AuthRequired())
+		certificates.Use(middleware.AuthMiddleware(authService))
 		{
 			certificates.POST("/issue", h.Certificate.IssueCertificate)
 			certificates.POST("/verify", h.Certificate.VerifyCertificate)
@@ -339,7 +444,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 
 		// FCR Analytics routes
 		fcr := v1.Group("/fcr")
-		fcr.Use(middleware.AuthRequired())
+		fcr.Use(middleware.AuthMiddleware(authService))
 		{
 			fcr.POST("/feeding", h.FCRAnalytics.RecordFeedingData)
 			fcr.POST("/growth", h.FCRAnalytics.RecordGrowthData)
@@ -353,7 +458,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 
 		// Vision/Video routes (ESP32-CAM uploads)
 		vision := v1.Group("/vision")
-		vision.Use(middleware.AuthRequired())
+		vision.Use(middleware.AuthMiddleware(authService))
 		{
 			vision.POST("/upload", h.Vision.UploadVideo)
 			vision.POST("/upload/chunk", h.Vision.UploadVideoChunk)
@@ -372,14 +477,14 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 		}
 
 		feedingEvents := v1.Group("/feeding-events")
-		feedingEvents.Use(middleware.AuthRequired())
+		feedingEvents.Use(middleware.AuthMiddleware(authService))
 		{
 			feedingEvents.GET("/:feeding_event_id/verification", h.Vision.GetFeedingVerification)
 		}
 
 		// Power management routes
 		power := v1.Group("/power")
-		power.Use(middleware.AuthRequired())
+		power.Use(middleware.AuthMiddleware(authService))
 		{
 			power.GET("/:device_id/status", h.Power.GetPowerStatus)
 			power.POST("/:device_id/status", h.Power.UpdatePowerStatus)
@@ -392,7 +497,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 
 		// Cellular connectivity routes
 		cellular := v1.Group("/cellular")
-		cellular.Use(middleware.AuthRequired())
+		cellular.Use(middleware.AuthMiddleware(authService))
 		{
 			cellular.GET("/:device_id/status", h.Cellular.GetCellularStatus)
 			cellular.POST("/:device_id/signal", h.Cellular.UpdateSignalStrength)
@@ -404,7 +509,7 @@ func (a *App) setupRouter(h *handlers.Handlers) *gin.Engine {
 
 		// Device diagnostics routes
 		diagnostics := v1.Group("/diagnostics")
-		diagnostics.Use(middleware.AuthRequired())
+		diagnostics.Use(middleware.AuthMiddleware(authService))
 		{
 			diagnostics.GET("/:device_id/health", h.Power.GetDeviceHealth)
 			diagnostics.POST("/:device_id", h.Power.RecordDiagnostics)

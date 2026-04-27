@@ -130,7 +130,10 @@ class RealtimeNotifier extends StateNotifier<RealtimeState> {
       error: null,
     );
 
-    state = state.copyWith(connectionState: AppMqttState.connected, error: null);
+    state = state.copyWith(
+      connectionState: AppMqttState.connected,
+      error: null,
+    );
     _startPolling(runImmediately: true);
     return true;
   }

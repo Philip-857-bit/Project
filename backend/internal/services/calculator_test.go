@@ -775,8 +775,6 @@ func TestProperty_Q10MetabolicAccuracy(t *testing.T) {
 		// Test different temperatures with same other conditions
 		baseEnv := models.Q10EnvironmentalFactors{
 			WaterTemperature: 25.0,
-			DissolvedOxygen:  6.0,
-			PH:               7.0,
 			Season:           "summer",
 			WeatherCondition: "sunny",
 		}
@@ -900,35 +898,30 @@ func TestProperty_OBMSafetyFactorCorrectness(t *testing.T) {
 		assert.InDelta(t, expected, factor, 0.01, "Safety factor should be linear interpolation between lethal and optimal")
 	})
 
-	// Test emergency stop conditions
+	// Test emergency stop conditions (temperature-based, no DO sensor)
 	t.Run("emergency_stop_conditions", func(t *testing.T) {
 		testCount++
 
 		q10Service := service.q10Calculator
 
-		// Test critical DO threshold (3.0 mg/L)
+		// Critical high temperature
 		env := models.Q10EnvironmentalFactors{
-			WaterTemperature: 25.0,
-			DissolvedOxygen:  2.5, // Below critical threshold
-			PH:               7.0,
+			WaterTemperature: 40.0,
 			Season:           "summer",
 			WeatherCondition: "sunny",
 		}
 
 		constraints := q10Service.evaluateSafetyConstraints(env)
-		assert.True(t, constraints.EmergencyStop, "Emergency stop should be triggered for low DO")
-		assert.False(t, constraints.DOSafe, "DO should not be safe below 3.0 mg/L")
-		assert.Contains(t, constraints.RecommendedAction, "Critical dissolved oxygen",
-			"Recommended action should mention critical DO")
+		assert.True(t, constraints.EmergencyStop, "Emergency stop should be triggered for critical temperature")
+		assert.True(t, constraints.DOSafe, "DO should always be safe (no sensor)")
 
-		// Test safe DO level
-		env.DissolvedOxygen = 5.0
+		// Safe temperature
+		env.WaterTemperature = 25.0
 		constraints = q10Service.evaluateSafetyConstraints(env)
-		assert.False(t, constraints.EmergencyStop, "Emergency stop should not be triggered for safe DO")
-		assert.True(t, constraints.DOSafe, "DO should be safe above 3.0 mg/L")
+		assert.False(t, constraints.EmergencyStop, "Emergency stop should not be triggered for safe temperature")
 	})
 
-	// Test OBM integration with feeding calculations
+	// Test temperature-based feeding integration
 	t.Run("OBM_feeding_integration", func(t *testing.T) {
 		testCount++
 
@@ -936,36 +929,15 @@ func TestProperty_OBMSafetyFactorCorrectness(t *testing.T) {
 			{SpeciesID: "tilapia", Count: 100, AverageWeight: 50.0},
 		}
 
-		// Base environment with good DO
 		goodEnv := models.Q10EnvironmentalFactors{
 			WaterTemperature: 27.0,
-			DissolvedOxygen:  6.0, // Optimal
-			PH:               7.0,
 			Season:           "summer",
 			WeatherCondition: "sunny",
 		}
 
 		goodRecommendation, err := service.q10Calculator.CalculateQ10FeedRecommendation(populations, goodEnv)
 		assert.NoError(t, err)
-		assert.Greater(t, goodRecommendation.DailyAmount, 0.0, "Should recommend feeding with good DO")
-
-		// Low DO environment
-		lowDOEnv := goodEnv
-		lowDOEnv.DissolvedOxygen = 4.0 // Below optimal but above critical
-
-		lowDORecommendation, err := service.q10Calculator.CalculateQ10FeedRecommendation(populations, lowDOEnv)
-		assert.NoError(t, err)
-		assert.Less(t, lowDORecommendation.DailyAmount, goodRecommendation.DailyAmount,
-			"Lower DO should reduce feeding recommendation")
-
-		// Critical DO environment (should trigger emergency stop)
-		criticalEnv := goodEnv
-		criticalEnv.DissolvedOxygen = 2.0 // Below critical threshold
-
-		criticalRecommendation, err := service.q10Calculator.CalculateQ10FeedRecommendation(populations, criticalEnv)
-		assert.NoError(t, err)
-		assert.Equal(t, 0.0, criticalRecommendation.DailyAmount, "Critical DO should stop all feeding")
-		assert.True(t, criticalRecommendation.SafetyConstraints.EmergencyStop, "Emergency stop should be active")
+		assert.Greater(t, goodRecommendation.DailyAmount, 0.0, "Should recommend feeding at optimal temperature")
 	})
 
 	// Test OBM mathematical properties
@@ -1197,8 +1169,6 @@ func TestProperty_FCROptimizationAccuracy(t *testing.T) {
 
 		optimalEnv := models.Q10EnvironmentalFactors{
 			WaterTemperature: 28.0,
-			DissolvedOxygen:  6.0,
-			PH:               7.0,
 		}
 
 		optimalFCR := q10Service.generateFCROptimization(optimalBiological, optimalEnv)
@@ -1217,8 +1187,6 @@ func TestProperty_FCROptimizationAccuracy(t *testing.T) {
 
 		suboptimalEnv := models.Q10EnvironmentalFactors{
 			WaterTemperature: 18.0,
-			DissolvedOxygen:  3.5,
-			PH:               6.5,
 		}
 
 		suboptimalFCR := q10Service.generateFCROptimization(suboptimalBiological, suboptimalEnv)
@@ -1242,7 +1210,6 @@ func TestProperty_FCROptimizationAccuracy(t *testing.T) {
 
 		coldEnv := models.Q10EnvironmentalFactors{
 			WaterTemperature: 20.0,
-			DissolvedOxygen:  6.0,
 		}
 
 		coldFCR := q10Service.generateFCROptimization(coldBiological, coldEnv)
@@ -1266,7 +1233,6 @@ func TestProperty_FCROptimizationAccuracy(t *testing.T) {
 
 		lowDOEnv := models.Q10EnvironmentalFactors{
 			WaterTemperature: 28.0,
-			DissolvedOxygen:  4.0,
 		}
 
 		lowDOFCR := q10Service.generateFCROptimization(lowDOBiological, lowDOEnv)
@@ -1300,7 +1266,6 @@ func TestProperty_FCROptimizationAccuracy(t *testing.T) {
 
 			env := models.Q10EnvironmentalFactors{
 				WaterTemperature: 25.0,
-				DissolvedOxygen:  5.0,
 			}
 
 			fcr := q10Service.generateFCROptimization(biological, env)
@@ -1330,8 +1295,6 @@ func TestProperty_FCROptimizationAccuracy(t *testing.T) {
 
 		env := models.Q10EnvironmentalFactors{
 			WaterTemperature: 28.0,
-			DissolvedOxygen:  6.0,
-			PH:               7.0,
 			Season:           "summer",
 			WeatherCondition: "sunny",
 		}

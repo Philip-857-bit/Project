@@ -13,13 +13,13 @@
 #include <BLE2902.h>
 #include "../storage/NVSStorage.h"
 
-// BLE Service and Characteristic UUIDs
-#define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHAR_DEVICE_ID_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define CHAR_WIFI_SSID_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26a9"
-#define CHAR_WIFI_PASS_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26aa"
-#define CHAR_MQTT_HOST_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26ab"
-#define CHAR_STATUS_UUID       "beb5483e-36e1-4688-b7f5-ea07361b26ac"
+// BLE Service and Characteristic UUIDs — must match mobile ble_service.dart
+#define SERVICE_UUID            "12345678-1234-5678-1234-56789abcdef0"
+#define CHAR_WIFI_CONFIG_UUID   "12345678-1234-5678-1234-56789abcdef1"  // JSON blob: {type,ssid,password}
+#define CHAR_CELL_CONFIG_UUID   "12345678-1234-5678-1234-56789abcdef2"  // JSON blob: {type,apn,username,password}
+#define CHAR_DEVICE_ID_UUID     "12345678-1234-5678-1234-56789abcdef3"  // read: device info JSON
+#define CHAR_STATUS_UUID        "12345678-1234-5678-1234-56789abcdef4"  // notify: "complete"/"error"
+#define CHAR_BINDING_CODE_UUID  "12345678-1234-5678-1234-56789abcdef5"  // read: 6-digit binding code
 
 // Provisioning states
 enum class ProvisioningState {
@@ -147,11 +147,11 @@ private:
     
     BLEServer* _bleServer;
     BLEService* _bleService;
-    BLECharacteristic* _charDeviceID;
-    BLECharacteristic* _charWifiSSID;
-    BLECharacteristic* _charWifiPass;
-    BLECharacteristic* _charMqttHost;
+    BLECharacteristic* _charDeviceInfo;
+    BLECharacteristic* _charWifiConfig;
+    BLECharacteristic* _charCellConfig;
     BLECharacteristic* _charStatus;
+    BLECharacteristic* _charBindingCode;
     
     bool _deviceConnected;
     unsigned long _provisioningStartTime;
@@ -162,6 +162,12 @@ private:
      * @return Device ID string
      */
     String generateDeviceID();
+
+    /**
+     * Generate 6-digit binding code and store it in NVS
+     * @return Binding code string
+     */
+    String generateBindingCode();
     
     /**
      * Load credentials from NVS

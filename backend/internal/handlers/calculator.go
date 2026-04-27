@@ -141,27 +141,17 @@ func (h *CalculatorHandler) CalculateRecommendation(c *gin.Context) {
 		}
 	}
 
-	// Use Q10 algorithm if requested or if we have dissolved oxygen data
-	if req.UseQ10Algorithm || (response.FusedSensorData != nil && response.FusedSensorData.DissolvedOxygen > 0) {
+	// Use Q10 algorithm if requested
+	if req.UseQ10Algorithm {
 		q10Env := services.Q10EnvironmentalFactors{
 			WaterTemperature: req.Environmental.WaterTemperature,
-			DissolvedOxygen:  6.0, // Sensible default when sensor DO is not provided.
 			Season:           req.Environmental.Season,
 			WeatherCondition: req.Environmental.WeatherCondition,
-			PH:               7.0, // Default pH
 		}
 
-		// Use fused sensor data if available
-		if response.FusedSensorData != nil {
-			if response.FusedSensorData.Temperature > 0 {
-				q10Env.WaterTemperature = response.FusedSensorData.Temperature
-			}
-			if response.FusedSensorData.DissolvedOxygen > 0 {
-				q10Env.DissolvedOxygen = response.FusedSensorData.DissolvedOxygen
-			}
-			if response.FusedSensorData.PH > 0 {
-				q10Env.PH = response.FusedSensorData.PH
-			}
+		// Use fused sensor data temperature if available
+		if response.FusedSensorData != nil && response.FusedSensorData.Temperature > 0 {
+			q10Env.WaterTemperature = response.FusedSensorData.Temperature
 		}
 
 		q10Recommendation, err := h.services.Calculator.CalculateQ10Recommendation(req.Populations, q10Env)
@@ -193,20 +183,9 @@ func (h *CalculatorHandler) CalculateRecommendation(c *gin.Context) {
 			Temperature: req.Environmental.WaterTemperature,
 		}
 
-		// Use fused sensor data if available
-		if response.FusedSensorData != nil {
-			if response.FusedSensorData.Temperature > 0 {
-				fuzzyInput.Temperature = response.FusedSensorData.Temperature
-			}
-			if response.FusedSensorData.DissolvedOxygen > 0 {
-				fuzzyInput.DissolvedOxygen = response.FusedSensorData.DissolvedOxygen
-			}
-			if response.FusedSensorData.PH > 0 {
-				fuzzyInput.PH = response.FusedSensorData.PH
-			}
-			if response.FusedSensorData.Turbidity > 0 {
-				fuzzyInput.Turbidity = response.FusedSensorData.Turbidity
-			}
+		// Use fused sensor data temperature if available
+		if response.FusedSensorData != nil && response.FusedSensorData.Temperature > 0 {
+			fuzzyInput.Temperature = response.FusedSensorData.Temperature
 		}
 
 		fuzzyDecision, err := h.services.FuzzyLogic.EvaluateFeedingDecision(fuzzyInput)
@@ -237,17 +216,9 @@ func (h *CalculatorHandler) CalculateRecommendation(c *gin.Context) {
 			TimeOfDay:   float64(time.Now().Hour()),
 		}
 
-		// Use fused sensor data if available
-		if response.FusedSensorData != nil {
-			if response.FusedSensorData.Temperature > 0 {
-				ddpgState.Temperature = response.FusedSensorData.Temperature
-			}
-			if response.FusedSensorData.DissolvedOxygen > 0 {
-				ddpgState.DissolvedOxygen = response.FusedSensorData.DissolvedOxygen
-			}
-			if response.FusedSensorData.PH > 0 {
-				ddpgState.PH = response.FusedSensorData.PH
-			}
+		// Use fused sensor data temperature if available
+		if response.FusedSensorData != nil && response.FusedSensorData.Temperature > 0 {
+			ddpgState.Temperature = response.FusedSensorData.Temperature
 		}
 
 		// Calculate total biomass for DDPG state

@@ -11,8 +11,9 @@ import '../config/env_config.dart';
 import 'storage_service.dart';
 
 class ApiService {
-  static final ValueNotifier<ApiDebugInfo> debugNotifier =
-      ValueNotifier(ApiDebugInfo.initial());
+  static final ValueNotifier<ApiDebugInfo> debugNotifier = ValueNotifier(
+    ApiDebugInfo.initial(),
+  );
   static const _redacted = '***';
   static const _sensitiveKeys = {
     'password',
@@ -354,7 +355,7 @@ class ApiService {
         data: {'refresh_token': refreshToken},
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final newAccessToken = response.data['access_token'];
         final newRefreshToken = response.data['refresh_token'];
 
@@ -533,10 +534,20 @@ class ApiService {
     return _dio.delete('/feeding/schedules/$scheduleId');
   }
 
-  Future<Response> triggerManualFeed(String deviceId, double amount) async {
+  Future<Response> triggerManualFeed(
+    String deviceId,
+    double amount, {
+    int durationSeconds = 10,
+  }) async {
+    final safeDuration = durationSeconds > 0 ? durationSeconds : 10;
+
     return _dio.post(
       '/feeding/manual',
-      data: {'device_id': deviceId, 'quantity_grams': amount},
+      data: {
+        'device_id': deviceId,
+        'quantity_grams': amount,
+        'duration_seconds': safeDuration,
+      },
     );
   }
 
@@ -550,6 +561,7 @@ class ApiService {
       queryParameters: {
         'device_id': deviceId,
         if (limit != null) 'limit': limit,
+        if (offset != null) 'offset': offset,
       },
     );
   }

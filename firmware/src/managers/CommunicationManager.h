@@ -78,6 +78,9 @@ struct OfflineMessage {
 // Command callback type
 typedef void (*CommandCallback)(CommandType type, const JsonDocument& payload);
 
+// Config callback type (receives full config payload from backend)
+typedef void (*ConfigCallback)(const JsonDocument& payload);
+
 class CommunicationManager {
 public:
     CommunicationManager();
@@ -159,6 +162,12 @@ public:
      * @param callback Function to call on command receipt
      */
     void setCommandCallback(CommandCallback callback);
+
+    /**
+     * Set config callback
+     * @param callback Function to call when a config push is received
+     */
+    void setConfigCallback(ConfigCallback callback);
     
     /**
      * Get WiFi signal strength
@@ -210,6 +219,7 @@ private:
     String _topicDiagnostics;
     
     CommandCallback _commandCallback;
+    ConfigCallback  _configCallback;
     
     // GSM module
     HardwareSerial* _gsmSerial;
@@ -291,6 +301,11 @@ private:
      * @return Full topic string
      */
     String buildTopic(const char* suffix);
+
+    /**
+     * Publish self-registration message after MQTT connect
+     */
+    void publishSelfRegistration();
     
     // Singleton instance for static callback
     static CommunicationManager* _instance;

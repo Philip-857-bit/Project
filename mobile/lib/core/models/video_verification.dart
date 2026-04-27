@@ -91,16 +91,24 @@ class BoilIndexAnalysis extends Equatable {
 
   factory BoilIndexAnalysis.fromJson(Map<String, dynamic> json) {
     return BoilIndexAnalysis(
-      boilIndex: (json['boil_index'] ?? 0).toDouble(),
-      satietyLevel: (json['satiety_level'] ?? 0).toDouble(),
+      boilIndex:
+          (json['boil_index'] ?? json['active_feed_boil_index'] ?? 0)
+              .toDouble(),
+      satietyLevel:
+          (json['satiety_level'] ?? json['surface_activity_level'] ?? 0)
+              .toDouble(),
       pelletCoverage: (json['pellet_coverage'] ?? 0).toDouble(),
-      strikeRate: (json['strike_rate'] ?? 0).toDouble(),
+      strikeRate:
+          (json['strike_rate'] ?? json['feeding_efficiency'] ?? 0).toDouble(),
       opticalFlowMagnitude: (json['optical_flow_magnitude'] ?? 0).toDouble(),
-      feedingComplete: json['feeding_complete'] ?? false,
+      feedingComplete:
+          json['feeding_complete'] ?? json['early_cutoff_triggered'] ?? false,
       recommendation: json['recommendation'] ?? '',
       confidenceScore: (json['confidence_score'] ?? 0).toDouble(),
       analyzedAt: DateTime.parse(
-        json['analyzed_at'] ?? DateTime.now().toIso8601String(),
+        json['analyzed_at'] ??
+            json['timestamp'] ??
+            DateTime.now().toIso8601String(),
       ),
     );
   }

@@ -27,7 +27,9 @@ type WebSocketHub struct {
 	// Mutex for thread-safe operations
 	mutex sync.RWMutex
 
-	logger *logrus.Logger
+	logger         *logrus.Logger
+	maxMessageSize int64
+	readTimeout    time.Duration
 }
 
 // WebSocketClient represents a WebSocket client connection
@@ -58,13 +60,21 @@ type SensorDataBroadcast struct {
 }
 
 // NewWebSocketHub creates a new WebSocket hub
-func NewWebSocketHub(logger *logrus.Logger) *WebSocketHub {
+func NewWebSocketHub(logger *logrus.Logger, maxMessageSize int64, readTimeout time.Duration) *WebSocketHub {
+	if maxMessageSize <= 0 {
+		maxMessageSize = 4096
+	}
+	if readTimeout <= 0 {
+		readTimeout = 60 * time.Second
+	}
 	return &WebSocketHub{
-		clients:    make(map[string]map[*WebSocketClient]bool),
-		register:   make(chan *WebSocketClient),
-		unregister: make(chan *WebSocketClient),
-		broadcast:  make(chan *SensorDataBroadcast),
-		logger:     logger,
+		clients:        make(map[string]map[*WebSocketClient]bool),
+		register:       make(chan *WebSocketClient),
+		unregister:     make(chan *WebSocketClient),
+		broadcast:      make(chan *SensorDataBroadcast),
+		logger:         logger,
+		maxMessageSize: maxMessageSize,
+		readTimeout:    readTimeout,
 	}
 }
 
@@ -249,10 +259,10 @@ func (c *WebSocketClient) readPump() {
 		_ = c.conn.Close() // #nosec G104 - best effort cleanup
 	}()
 
-	c.conn.SetReadLimit(512)
-	_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.conn.SetReadLimit(c.hub.maxMessageSize)
+	_ = c.conn.SetReadDeadline(time.Now().Add(c.hub.readTimeout))
 	c.conn.SetPongHandler(func(string) error {
-		_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.conn.SetReadDeadline(time.Now().Add(c.hub.readTimeout))
 		return nil
 	})
 

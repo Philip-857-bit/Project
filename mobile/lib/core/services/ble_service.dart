@@ -196,6 +196,7 @@ class BleService {
   BleConnectionState get currentState => _currentState;
 
   List<BleDevice> _scanResults = [];
+  StreamSubscription? _scanResultsSubscription;
 
   Future<bool> isBluetoothAvailable() async {
     return await FlutterBluePlus.isSupported;
@@ -222,7 +223,8 @@ class BleService {
     _updateState(BleConnectionState.scanning);
     _scanResults.clear();
 
-    FlutterBluePlus.scanResults.listen((results) {
+    await _scanResultsSubscription?.cancel();
+    _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
       _scanResults =
           results
               .where((r) {
@@ -254,6 +256,8 @@ class BleService {
   }
 
   Future<void> stopScan() async {
+    await _scanResultsSubscription?.cancel();
+    _scanResultsSubscription = null;
     await FlutterBluePlus.stopScan();
     _updateState(BleConnectionState.disconnected);
   }
@@ -558,6 +562,7 @@ class BleService {
   }
 
   void dispose() {
+    _scanResultsSubscription?.cancel();
     disconnect();
     _stateController.close();
     _devicesController.close();

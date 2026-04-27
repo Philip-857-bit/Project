@@ -143,11 +143,9 @@ func (h *MQTTHandlers) handleTelemetryMessage(ctx context.Context, deviceID stri
 	// Update shadow with latest telemetry
 	if h.shadowService != nil {
 		_, _ = h.shadowService.UpdateReportedState(ctx, deviceID, map[string]interface{}{
-			"temperature":      telemetry.Temperature,
-			"dissolved_oxygen": telemetry.DissolvedOxygen,
-			"ph":               telemetry.PH,
-			"battery_level":    telemetry.BatteryLevel,
-			"status":           telemetry.Status,
+			"temperature":   telemetry.Temperature,
+			"battery_level": telemetry.BatteryLevel,
+			"status":        telemetry.Status,
 		})
 	}
 

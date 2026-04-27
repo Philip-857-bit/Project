@@ -46,7 +46,6 @@ struct FeedingEvent {
     FeedingTrigger trigger;
     FeedingResult result;
     float temperature;
-    float dissolvedOxygen;
     float q10Factor;
     float obmSafetyFactor;
     String errorMessage;
@@ -93,6 +92,13 @@ public:
      * @return true if feeding started
      */
     bool feedNow(float grams);
+
+    /**
+     * Trigger remote feeding with backend-adjusted amount (no firmware Q10 applied)
+     * @param adjustedGrams Amount already Q10-adjusted by the backend
+     * @return true if feeding started
+     */
+    bool feedRemote(float adjustedGrams);
     
     /**
      * Stop current feeding operation

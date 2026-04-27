@@ -46,7 +46,10 @@ func (s *MonitoringService) ProcessSensorData(request *models.SensorDataRequest)
 		WeightPercentage: request.WeightPercentage,
 		WaterTemperature: request.WaterTemperature,
 		BatteryLevel:     request.BatteryLevel,
+		BatteryVoltage:   request.BatteryVoltage,
 		PowerSource:      request.PowerSource,
+		CellularSignal:   request.CellularSignal,
+		SolarVoltage:     request.SolarVoltage,
 		CreatedAt:        time.Now(),
 	}
 
@@ -172,17 +175,18 @@ func (s *MonitoringService) generateAlert(deviceID, alertType, message string) {
 	}
 }
 
-// getAlertSeverity determines alert severity based on alert type
+// getAlertSeverity determines alert severity based on alert type.
+// Values must match mobile _parseSeverity: "critical", "warning", or anything else → info.
 func (s *MonitoringService) getAlertSeverity(alertType string) string {
 	switch alertType {
 	case "LOW_FEED":
-		return "medium"
+		return "warning"
 	case "LOW_BATTERY":
-		return "high"
+		return "critical"
 	case "WATER_TEMP":
-		return "high"
+		return "warning"
 	default:
-		return "low"
+		return "warning"
 	}
 }
 
@@ -198,6 +202,24 @@ func (s *MonitoringService) GetAlerts(deviceID string) ([]models.Alert, error) {
 // MarkAlertAsRead marks an alert as read
 func (s *MonitoringService) MarkAlertAsRead(alertID uint) error {
 	return s.repo.Monitoring.MarkAlertAsRead(alertID)
+}
+
+// PersistAlert stores a firmware-originated alert (already fully formed) and broadcasts it.
+func (s *MonitoringService) PersistAlert(alert *models.Alert) error {
+	if err := s.repo.Monitoring.CreateAlert(alert); err != nil {
+		return fmt.Errorf("failed to store firmware alert: %w", err)
+	}
+	if s.alertBroadcaster != nil {
+		alertData := map[string]interface{}{
+			"device_id": alert.DeviceID,
+			"type":      alert.Type,
+			"message":   alert.Message,
+			"severity":  alert.Severity,
+			"timestamp": alert.Timestamp,
+		}
+		go s.alertBroadcaster.BroadcastAlert(alert.DeviceID, alertData)
+	}
+	return nil
 }
 
 // SensorDataAggregation represents aggregated sensor data

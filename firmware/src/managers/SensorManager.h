@@ -31,9 +31,6 @@ struct SensorData {
     float feedDistanceCm;       // Distance to feed surface (cm)
     float feedLevelPercent;     // Feed level percentage (0-100)
     FeedLevelSource levelSource;// Which sensor provided feed level
-    float dissolvedOxygen;      // DO (mg/L) - requires DO sensor (Atlas Scientific, etc.)
-    float pH;                   // pH level - requires pH sensor (Atlas Scientific, etc.)
-    float turbidity;            // Turbidity (NTU) - requires turbidity sensor
     bool loadCellValid;
     bool ultrasonicValid;
     bool temperatureValid;

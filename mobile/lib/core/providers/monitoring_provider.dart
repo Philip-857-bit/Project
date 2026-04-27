@@ -126,7 +126,12 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
           .getSensorHistory(deviceId, sensorType, hours: hours)
           .timeout(const Duration(seconds: 20));
       if (response.statusCode == 200) {
-        final history = SensorHistory.fromJson(response.data);
+        final body = response.data;
+        final payload =
+            body is Map<String, dynamic> ? (body['data'] ?? body) : body;
+        final history = SensorHistory.fromJson(
+          payload is Map<String, dynamic> ? payload : body,
+        );
         state = state.copyWith(
           histories: {...state.histories, sensorType: history},
           isLoading: false,
@@ -152,12 +157,7 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final sensorTypes = [
-        'temperature',
-        'feed_level',
-        'battery',
-        'dissolved_oxygen',
-      ];
+      final sensorTypes = ['temperature', 'feed_level', 'battery'];
       final Map<String, SensorHistory> histories = {};
 
       for (final type in sensorTypes) {
@@ -166,7 +166,11 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
               .getSensorHistory(deviceId, type, hours: hours)
               .timeout(const Duration(seconds: 20));
           if (response.statusCode == 200) {
-            histories[type] = SensorHistory.fromJson(response.data);
+            final b = response.data;
+            final p = b is Map<String, dynamic> ? (b['data'] ?? b) : b;
+            histories[type] = SensorHistory.fromJson(
+              p is Map<String, dynamic> ? p : b,
+            );
           }
         } catch (_) {
           // Skip failed sensor types

@@ -49,9 +49,6 @@ DateTime _parseTimestamp(dynamic raw) {
 class SensorData extends Equatable {
   final String deviceId;
   final double waterTemperature;
-  final double? dissolvedOxygen;
-  final double? ph;
-  final double? turbidity;
   final double feedLevel;
   final double batteryLevel;
   final double solarVoltage;
@@ -63,9 +60,6 @@ class SensorData extends Equatable {
   const SensorData({
     required this.deviceId,
     required this.waterTemperature,
-    this.dissolvedOxygen,
-    this.ph,
-    this.turbidity,
     required this.feedLevel,
     required this.batteryLevel,
     required this.solarVoltage,
@@ -82,20 +76,14 @@ class SensorData extends Equatable {
       waterTemperature: _doubleValue(
         json['water_temperature'] ?? json['temperature'],
       ),
-      dissolvedOxygen:
-          json['dissolved_oxygen'] == null
-              ? null
-              : _doubleValue(json['dissolved_oxygen']),
-      ph: json['ph'] == null ? null : _doubleValue(json['ph']),
-      turbidity:
-          json['turbidity'] == null ? null : _doubleValue(json['turbidity']),
-      feedLevel:
-          _doubleValue(json['feed_level'] ?? json['weight_percentage'] ?? 0),
+      feedLevel: _doubleValue(
+        json['feed_level'] ?? json['weight_percentage'] ?? 0,
+      ),
       batteryLevel: _doubleValue(json['battery_level']),
       solarVoltage: _doubleValue(json['solar_voltage']),
       isSolarCharging:
           json['is_solar_charging'] ??
-          ((json['power_source'] ?? '') == 'SOLAR'),
+          ((json['power_source'] ?? '').toString().toLowerCase() == 'solar'),
       signalStrength: json['signal_strength'] ?? json['cellular_signal'] ?? 0,
       connectionType:
           json['connection_type'] ?? json['power_source'] ?? 'unknown',
@@ -106,9 +94,6 @@ class SensorData extends Equatable {
   Map<String, dynamic> toJson() => {
     'device_id': deviceId,
     'water_temperature': waterTemperature,
-    'dissolved_oxygen': dissolvedOxygen,
-    'ph': ph,
-    'turbidity': turbidity,
     'feed_level': feedLevel,
     'battery_level': batteryLevel,
     'solar_voltage': solarVoltage,
@@ -219,8 +204,10 @@ class DeviceAlert extends Equatable {
   static AlertSeverity _parseSeverity(String? severity) {
     switch (severity) {
       case 'critical':
+      case 'high':
         return AlertSeverity.critical;
       case 'warning':
+      case 'medium':
         return AlertSeverity.warning;
       default:
         return AlertSeverity.info;

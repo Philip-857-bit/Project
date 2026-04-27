@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
@@ -444,16 +445,31 @@ class _HistoryItem extends StatelessWidget {
               ),
           ],
         ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: _getStatusColor().withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            _getStatusText(),
-            style: TextStyle(color: _getStatusColor(), fontSize: 12),
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _getStatusColor().withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _getStatusText(),
+                style: TextStyle(color: _getStatusColor(), fontSize: 12),
+              ),
+            ),
+            if (event.id.isNotEmpty) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.videocam_outlined, size: 20),
+                tooltip: 'View Feeding Video',
+                onPressed: () => context.go('/video/${event.id}'),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ],
         ),
       ),
     );

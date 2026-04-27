@@ -1,13 +1,13 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
 
 	"smart-fish-feeder/internal/models"
 	"smart-fish-feeder/internal/mqtt"
-	"smart-fish-feeder/internal/mqtt/protobuf"
 	"smart-fish-feeder/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -425,8 +425,11 @@ func (h *DeviceHandler) CaptureVideo(c *gin.Context) {
 		return
 	}
 
-	command := protobuf.NewDeviceCommand(deviceID, protobuf.CommandTypeCaptureImage)
-	payload, err := command.Marshal()
+	// Send JSON so firmware's ArduinoJson parser can handle it (binary protobuf would crash it)
+	cmdPayload := map[string]interface{}{
+		"type": 10, // CommandType::CAPTURE_IMAGE
+	}
+	payload, err := json.Marshal(cmdPayload)
 	if err != nil {
 		h.logger.WithError(err).WithField("device_id", deviceID).Error("Failed to marshal capture command")
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -434,6 +437,7 @@ func (h *DeviceHandler) CaptureVideo(c *gin.Context) {
 		})
 		return
 	}
+	commandID := time.Now().Format("20060102150405")
 
 	if err := h.mqttClient.Publish(
 		c.Request.Context(),
@@ -452,7 +456,7 @@ func (h *DeviceHandler) CaptureVideo(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":      "Capture command dispatched successfully",
 		"device_id":    deviceID,
-		"command_id":   command.CommandID,
+		"command_id":   commandID,
 		"command_type": "capture_image",
 		"accepted_at":  time.Now().UTC(),
 	})
@@ -755,30 +759,9 @@ func (h *DeviceHandler) GetDeviceWithAlgorithmInsights(c *gin.Context) {
 	if sensorErr == nil && latestSensorData != nil {
 		insights := gin.H{}
 
-		// Apply sensor fusion for data quality assessment
-		sensorReadings := []services.SensorReading{
-			{SensorType: "temperature", Value: latestSensorData.WaterTemperature, Timestamp: time.Now(), Accuracy: 0.95},
-			{SensorType: "do", Value: latestSensorData.DissolvedOxygen, Timestamp: time.Now(), Accuracy: 0.90},
-			{SensorType: "ph", Value: latestSensorData.PH, Timestamp: time.Now(), Accuracy: 0.92},
-			{SensorType: "turbidity", Value: latestSensorData.Turbidity, Timestamp: time.Now(), Accuracy: 0.88},
-		}
-
-		fusedData, fusionErr := h.services.SensorFusion.FuseSensorData(deviceID, sensorReadings)
-		if fusionErr == nil {
-			insights["water_quality"] = gin.H{
-				"water_quality_index": fusedData.WaterQualityIndex,
-				"feeding_readiness":   fusedData.FeedingReadiness,
-				"data_quality":        fusedData.DataQuality,
-				"sensor_health":       fusedData.SensorHealth,
-			}
-		}
-
 		// Get fuzzy logic assessment
 		fuzzyInput := services.FuzzyInput{
-			Temperature:     latestSensorData.WaterTemperature,
-			DissolvedOxygen: latestSensorData.DissolvedOxygen,
-			PH:              latestSensorData.PH,
-			Turbidity:       latestSensorData.Turbidity,
+			Temperature: latestSensorData.WaterTemperature,
 		}
 
 		fuzzyDecision, fuzzyErr := h.services.FuzzyLogic.EvaluateFeedingDecision(fuzzyInput)
@@ -793,10 +776,8 @@ func (h *DeviceHandler) GetDeviceWithAlgorithmInsights(c *gin.Context) {
 
 		// Get DDPG optimization suggestion
 		ddpgState := services.DDPGState{
-			Temperature:     latestSensorData.WaterTemperature,
-			DissolvedOxygen: latestSensorData.DissolvedOxygen,
-			PH:              latestSensorData.PH,
-			TimeOfDay:       float64(time.Now().Hour()),
+			Temperature: latestSensorData.WaterTemperature,
+			TimeOfDay:   float64(time.Now().Hour()),
 		}
 
 		ddpgAction, ddpgErr := h.services.DDPG.GetOptimalAction(deviceID, ddpgState)
