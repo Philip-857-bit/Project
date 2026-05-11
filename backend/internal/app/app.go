@@ -111,6 +111,7 @@ func (a *App) Run() error {
 	handlers := handlers.New(services, a.logger, a.config)
 	handlers.Device.SetMQTTClient(a.mqttClient)
 	handlers.Feeding.SetMQTTClient(a.mqttClient)
+	handlers.Health.SetMQTTClient(a.mqttClient)
 
 	// Setup router
 	router := a.setupRouter(handlers, services.Auth)
@@ -251,6 +252,54 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 		a.logger.WithError(err).Error("Failed to subscribe to device diagnostics")
 	}
 
+	// Subscribe to device diagnostics report - store for system-health endpoint
+	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceDiagReportAll, 1, func(topic string, payload []byte) error {
+		deviceID := mqtt.ExtractDeviceID(topic)
+		a.logger.WithFields(logrus.Fields{"device_id": deviceID}).Info("Received device diagnostics report")
+		// The MQTTHandlers will store this in shadow via handleDiagnosticsReport
+		return nil
+	}); err != nil {
+		a.logger.WithError(err).Error("Failed to subscribe to diagnostics reports")
+	}
+
+	// Subscribe to device diagnostics ping - reply with pong for pipeline verification
+	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceDiagPingAll, 1, func(topic string, payload []byte) error {
+		deviceID := mqtt.ExtractDeviceID(topic)
+		a.logger.WithFields(logrus.Fields{"device_id": deviceID}).Info("Received diagnostics ping — sending pong")
+
+		// Parse ping
+		var ping map[string]interface{}
+		if err := json.Unmarshal(payload, &ping); err != nil {
+			a.logger.WithError(err).Warn("Failed to parse diagnostics ping")
+			return nil
+		}
+
+		// Build pong
+		pong := map[string]interface{}{
+			"nonce":              ping["nonce"],
+			"backend_ok":         true,
+			"backend_timestamp":  time.Now().Unix(),
+			"backend_latency_ms": 0,
+		}
+		pongPayload, err := json.Marshal(pong)
+		if err != nil {
+			a.logger.WithError(err).Warn("Failed to marshal pong")
+			return nil
+		}
+
+		// Publish pong
+		pongTopic := mqtt.NewTopicBuilder(deviceID).DiagPong()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if pubErr := a.mqttClient.Publish(ctx, pongTopic, pongPayload, 1, false); pubErr != nil {
+			a.logger.WithError(pubErr).Warn("Failed to publish pong")
+		}
+
+		return nil
+	}); err != nil {
+		a.logger.WithError(err).Error("Failed to subscribe to diagnostics pings")
+	}
+
 	// Subscribe to device self-registration - firmware publishes here on first MQTT connect.
 	// Payload: {"device_serial":"SFF-AABBCCDD", "firmware_version":"1.0.0", "binding_code":"123456"}
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceRegister, 1, func(topic string, payload []byte) error {
@@ -385,6 +434,13 @@ func (a *App) setupRouter(h *handlers.Handlers, authService *services.AuthServic
 			devices.POST("/:id/capture-video", middleware.AuthMiddleware(authService), h.Device.CaptureVideo)
 			devices.PUT("/:id", middleware.AuthMiddleware(authService), h.Device.Update)
 			devices.DELETE("/:id", middleware.AuthMiddleware(authService), h.Device.Delete)
+
+			// System health / diagnostics
+			devices.GET("/:id/system-health", middleware.AuthMiddleware(authService), func(c *gin.Context) {
+				// Map :id to device_id expected by GetSystemHealth
+				c.Params = append(c.Params, gin.Param{Key: "device_id", Value: c.Param("id")})
+				h.Health.GetSystemHealth(c)
+			})
 		}
 
 		// Feeding routes

@@ -137,12 +137,15 @@ bool CommunicationManager::begin(DeviceManager* deviceManager, NVSStorage* stora
     
     // Build topic strings
     String deviceID = _deviceManager->getDeviceID();
-    _topicTelemetry = buildTopic("telemetry");
-    _topicFeeding = buildTopic("feeding");
-    _topicAlerts = buildTopic("alerts");
-    _topicCommands = buildTopic("commands");
-    _topicConfig = buildTopic("config");
+    _topicTelemetry   = buildTopic("telemetry");
+    _topicFeeding     = buildTopic("feeding");
+    _topicAlerts      = buildTopic("alerts");
+    _topicCommands    = buildTopic("commands");
+    _topicConfig      = buildTopic("config");
     _topicDiagnostics = buildTopic("diagnostics");
+    _topicDiagPing    = buildTopic("diagnostics/ping");
+    _topicDiagPong    = buildTopic("diagnostics/pong");
+    _topicDiagReport  = buildTopic("diagnostics/report");
     
     // Configure MQTT client
     _mqttClient.setBufferSize(MQTT_BUFFER_SIZE);
@@ -434,8 +437,9 @@ void CommunicationManager::publishSelfRegistration() {
 void CommunicationManager::subscribeTopics() {
     _mqttClient.subscribe(_topicCommands.c_str(), MQTT_QOS);
     _mqttClient.subscribe(_topicConfig.c_str(), MQTT_QOS);
+    _mqttClient.subscribe(_topicDiagPong.c_str(), MQTT_QOS);
     
-    Serial.println("[CommManager] Subscribed to topics");
+    Serial.println("[CommManager] Subscribed to topics (commands, config, diagnostics/pong)");
 }
 
 void CommunicationManager::mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -469,6 +473,17 @@ void CommunicationManager::handleMessage(const char* topic, uint8_t* payload, un
     if (String(topic) == _topicConfig) {
         if (_configCallback != nullptr) {
             _configCallback(doc);
+        }
+        return;
+    }
+
+    // Handle diagnostics pong (pipeline health)
+    if (String(topic) == _topicDiagPong) {
+        Serial.println("[CommManager] Received diagnostics pong");
+        // Will be handled by SystemDiagnostics via main.cpp callback
+        if (_commandCallback != nullptr) {
+            // Re-use command callback with a special type
+            _commandCallback(CommandType::RUN_DIAGNOSTICS, doc);
         }
     }
 }
@@ -572,6 +587,32 @@ bool CommunicationManager::sendDiagnostics() {
     serializeJson(doc, json);
     
     return publish(_topicDiagnostics, (uint8_t*)json.c_str(), json.length(), 2);
+}
+
+bool CommunicationManager::sendDiagnosticsReport(const SystemDiagnostics& diagnostics) {
+    JsonDocument doc;
+    doc["device_id"] = _deviceManager->getDeviceID();
+    doc["type"] = "diagnostics_report";
+    diagnostics.toJson(doc);
+    
+    String json;
+    serializeJson(doc, json);
+    
+    return publish(_topicDiagReport, (uint8_t*)json.c_str(), json.length(), 3);
+}
+
+bool CommunicationManager::sendPipelinePing(uint32_t nonce) {
+    if (!_mqttClient.connected()) return false;
+
+    JsonDocument doc;
+    doc["device_id"] = _deviceManager->getDeviceID();
+    doc["nonce"]     = nonce;
+    doc["timestamp"] = (int64_t)millis();
+    
+    String json;
+    serializeJson(doc, json);
+    
+    return _mqttClient.publish(_topicDiagPing.c_str(), json.c_str());
 }
 
 bool CommunicationManager::publish(const String& topic, uint8_t* payload, size_t length, uint8_t priority) {

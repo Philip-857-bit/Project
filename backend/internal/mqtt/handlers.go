@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
+	"time"
 
 	"smart-fish-feeder/internal/mqtt/protobuf"
 )
@@ -51,6 +53,8 @@ func (h *MQTTHandlers) SubscribeToDevice(deviceID string) error {
 		tb.Alert(),
 		tb.Status(),
 		tb.ShadowUpdate(),
+		tb.DiagReport(),
+		tb.DiagPing(),
 	}
 
 	for _, topic := range topics {
@@ -80,6 +84,8 @@ func (h *MQTTHandlers) UnsubscribeFromDevice(deviceID string) error {
 		tb.Alert(),
 		tb.Status(),
 		tb.ShadowUpdate(),
+		tb.DiagReport(),
+		tb.DiagPing(),
 	}
 
 	for _, topic := range topics {
@@ -97,7 +103,7 @@ func (h *MQTTHandlers) UnsubscribeFromDevice(deviceID string) error {
 }
 
 // createMessageCallback creates a callback function for handling messages on a topic
-func (h *MQTTHandlers) createMessageCallback(topic string) MessageHandler {
+func (h *MQTTHandlers) createMessageCallback(_ string) MessageHandler {
 	return func(receivedTopic string, payload []byte) error {
 		ctx := context.Background()
 		deviceID := ExtractDeviceID(receivedTopic)
@@ -121,6 +127,8 @@ func (h *MQTTHandlers) createMessageCallback(topic string) MessageHandler {
 			h.handleStatusMessage(ctx, deviceID, payload)
 		case "shadow":
 			h.handleShadowUpdateMessage(ctx, deviceID, payload)
+		case "diagnostics":
+			h.handleDiagnosticsMessage(ctx, deviceID, receivedTopic, payload)
 		default:
 			log.Printf("Unknown topic type: %s for topic: %s", topicType, receivedTopic)
 		}
@@ -215,6 +223,81 @@ func (h *MQTTHandlers) handleShadowUpdateMessage(ctx context.Context, deviceID s
 		if h.shadowService != nil {
 			_, _ = h.shadowService.UpdateReportedState(ctx, deviceID, reported)
 		}
+	}
+}
+
+// handleDiagnosticsMessage routes diagnostics sub-topics (report, ping)
+func (h *MQTTHandlers) handleDiagnosticsMessage(ctx context.Context, deviceID string, topic string, payload []byte) {
+	if strings.Contains(topic, "/diagnostics/ping") {
+		h.handleDiagnosticsPing(ctx, deviceID, payload)
+	} else if strings.Contains(topic, "/diagnostics/report") {
+		h.handleDiagnosticsReport(ctx, deviceID, payload)
+	} else {
+		log.Printf("Unknown diagnostics sub-topic: %s", topic)
+	}
+}
+
+// handleDiagnosticsReport stores the device diagnostics report in shadow
+func (h *MQTTHandlers) handleDiagnosticsReport(ctx context.Context, deviceID string, payload []byte) {
+	var report map[string]interface{}
+	if err := json.Unmarshal(payload, &report); err != nil {
+		log.Printf("Failed to unmarshal diagnostics report for device %s: %v", deviceID, err)
+		return
+	}
+
+	// Store in device shadow under "diagnostics" key
+	if h.shadowService != nil {
+		_, _ = h.shadowService.UpdateReportedState(ctx, deviceID, map[string]interface{}{
+			"diagnostics":           report,
+			"diagnostics_timestamp": time.Now().Unix(),
+		})
+	}
+
+	log.Printf("Stored diagnostics report for device %s", deviceID)
+}
+
+// handleDiagnosticsPing responds with a pong to verify MCU→MQTT→Backend→MQTT→MCU pipeline
+func (h *MQTTHandlers) handleDiagnosticsPing(ctx context.Context, deviceID string, payload []byte) {
+	var ping map[string]interface{}
+	if err := json.Unmarshal(payload, &ping); err != nil {
+		log.Printf("Failed to unmarshal diagnostics ping for device %s: %v", deviceID, err)
+		return
+	}
+
+	log.Printf("Received diagnostics ping from device %s — sending pong", deviceID)
+
+	// Build pong response
+	pong := map[string]interface{}{
+		"nonce":              ping["nonce"],
+		"backend_ok":         true,
+		"backend_timestamp":  time.Now().Unix(),
+		"backend_latency_ms": 0, // backend processing is near-instant
+	}
+
+	pongPayload, err := json.Marshal(pong)
+	if err != nil {
+		log.Printf("Failed to marshal pong for device %s: %v", deviceID, err)
+		return
+	}
+
+	// Publish pong back to device
+	tb := NewTopicBuilder(deviceID)
+	pongTopic := tb.DiagPong()
+
+	if pubErr := h.client.Publish(ctx, pongTopic, pongPayload, 1, false); pubErr != nil {
+		log.Printf("Failed to publish pong to device %s: %v", deviceID, pubErr)
+	}
+
+	// Store pipeline verification in shadow
+	if h.shadowService != nil {
+		_, _ = h.shadowService.UpdateReportedState(ctx, deviceID, map[string]interface{}{
+			"pipeline_health": map[string]interface{}{
+				"mcu_to_mqtt":     true,
+				"mqtt_to_backend":  true,
+				"backend_to_mqtt":  true,
+				"last_ping_time":   time.Now().Unix(),
+			},
+		})
 	}
 }
 

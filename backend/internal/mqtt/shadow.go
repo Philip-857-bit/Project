@@ -331,7 +331,7 @@ func (s *DeviceShadowService) handleShadowDelete(topic string, payload []byte) e
 }
 
 // Helper methods
-func (s *DeviceShadowService) createNewShadow(deviceID string) *DeviceShadow {
+func (s *DeviceShadowService) createNewShadow(_ string) *DeviceShadow {
 	return &DeviceShadow{
 		State: ShadowState{
 			Desired:  make(map[string]interface{}),

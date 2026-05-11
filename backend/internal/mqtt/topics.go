@@ -40,6 +40,13 @@ const (
 	TopicDeviceAlertAll = "devices/+/alerts"
 	TopicCriticalAlert  = "alerts/critical/%s"
 
+	// Device diagnostics topics
+	TopicDeviceDiagReport    = "devices/%s/diagnostics/report"
+	TopicDeviceDiagReportAll = "devices/+/diagnostics/report"
+	TopicDeviceDiagPing      = "devices/%s/diagnostics/ping"
+	TopicDeviceDiagPingAll   = "devices/+/diagnostics/ping"
+	TopicDeviceDiagPong      = "devices/%s/diagnostics/pong"
+
 	// System topics
 	TopicSystemBroadcast = "system/broadcast"
 	TopicSystemStatus    = "system/status"
@@ -139,6 +146,21 @@ func (tb *TopicBuilder) ShadowDelete() string {
 	return fmt.Sprintf(TopicShadowDelete, tb.deviceID)
 }
 
+// DiagReport returns the diagnostics report topic for the device
+func (tb *TopicBuilder) DiagReport() string {
+	return fmt.Sprintf(TopicDeviceDiagReport, tb.deviceID)
+}
+
+// DiagPing returns the diagnostics ping topic for the device
+func (tb *TopicBuilder) DiagPing() string {
+	return fmt.Sprintf(TopicDeviceDiagPing, tb.deviceID)
+}
+
+// DiagPong returns the diagnostics pong topic for the device
+func (tb *TopicBuilder) DiagPong() string {
+	return fmt.Sprintf(TopicDeviceDiagPong, tb.deviceID)
+}
+
 // ExtractDeviceID extracts the device ID from a topic string
 func ExtractDeviceID(topic string) string {
 	parts := strings.Split(topic, "/")
@@ -201,6 +223,9 @@ func GetTopicType(topic string) string {
 	}
 	if strings.Contains(topic, "/alerts") || strings.HasPrefix(topic, "alerts/") {
 		return "alert"
+	}
+	if strings.Contains(topic, "/diagnostics") {
+		return "diagnostics"
 	}
 	return "unknown"
 }

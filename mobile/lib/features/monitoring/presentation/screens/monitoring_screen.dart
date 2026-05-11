@@ -7,6 +7,7 @@ import '../../../../core/models/device.dart';
 import '../../../../core/models/sensor_data.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
+import '../../../../core/providers/system_health_provider.dart';
 
 class MonitoringScreen extends ConsumerStatefulWidget {
   const MonitoringScreen({super.key});
@@ -38,6 +39,7 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
     await Future.wait([
       ref.read(sensorDataProvider.notifier).loadSensorData(_selectedDeviceId!),
       ref.read(alertsProvider.notifier).loadAlerts(_selectedDeviceId!),
+      ref.read(systemHealthProvider.notifier).loadSystemHealth(_selectedDeviceId!),
     ]);
   }
 
@@ -46,6 +48,7 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
     final deviceState = ref.watch(deviceListProvider);
     final sensorState = ref.watch(sensorDataProvider);
     final alertsState = ref.watch(alertsProvider);
+    final healthState = ref.watch(systemHealthProvider);
     final sensorData = sensorState.currentData;
 
     return Scaffold(
@@ -72,6 +75,23 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                   onTap:
                       () => _showDeviceSelector(context, deviceState.devices),
                 ),
+              ),
+              const SizedBox(height: 16),
+
+              // ---- System Health Section ----
+              _SystemHealthSection(
+                healthState: healthState,
+                deviceId: _selectedDeviceId,
+                onRefresh: () {
+                  if (_selectedDeviceId != null) {
+                    ref.read(systemHealthProvider.notifier).loadSystemHealth(_selectedDeviceId!);
+                  }
+                },
+                onRunDiagnostics: () {
+                  if (_selectedDeviceId != null) {
+                    ref.read(systemHealthProvider.notifier).triggerDiagnostics(_selectedDeviceId!);
+                  }
+                },
               ),
               const SizedBox(height: 16),
 
@@ -907,6 +927,419 @@ class _LegendItem extends StatelessWidget {
         const SizedBox(width: 4),
         Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
       ],
+    );
+  }
+}
+
+// =============================================================================
+// System Health Section
+// =============================================================================
+
+class _SystemHealthSection extends StatefulWidget {
+  final SystemHealthState healthState;
+  final String? deviceId;
+  final VoidCallback onRefresh;
+  final VoidCallback onRunDiagnostics;
+
+  const _SystemHealthSection({
+    required this.healthState,
+    required this.deviceId,
+    required this.onRefresh,
+    required this.onRunDiagnostics,
+  });
+
+  @override
+  State<_SystemHealthSection> createState() => _SystemHealthSectionState();
+}
+
+class _SystemHealthSectionState extends State<_SystemHealthSection> {
+  bool _isExpanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final h = widget.healthState;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Header
+          InkWell(
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.health_and_safety,
+                    color: h.allComponentsHealthy
+                        ? AppTheme.deviceOnline
+                        : (h.errorCount > 0 ? AppTheme.feedLevelLow : Colors.grey),
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'System Health',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        if (h.components.isNotEmpty)
+                          Text(
+                            '${h.okCount}/${h.components.length} components OK',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: h.allComponentsHealthy
+                                  ? AppTheme.deviceOnline
+                                  : AppTheme.feedLevelLow,
+                            ),
+                          )
+                        else if (h.isLoading)
+                          Text(
+                            'Loading...',
+                            style: theme.textTheme.bodySmall,
+                          )
+                        else
+                          Text(
+                            h.message ?? 'No diagnostics yet',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    _isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (_isExpanded) ...[
+            const Divider(height: 1),
+
+            if (h.isLoading)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              )
+            else if (h.error != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Icon(Icons.error_outline, color: AppTheme.feedLevelLow, size: 32),
+                    const SizedBox(height: 8),
+                    Text(h.error!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: widget.onRefresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+            else ...[
+              // ---- Pipeline Connectivity Chain ----
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                  'Pipeline Connectivity',
+                  style: theme.textTheme.labelLarge,
+                ),
+              ),
+              _PipelineChain(pipeline: h.pipeline),
+
+              const Divider(height: 1),
+
+              // ---- Hardware Components ----
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                  'Hardware Components',
+                  style: theme.textTheme.labelLarge,
+                ),
+              ),
+              if (h.components.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Awaiting diagnostics report from device...',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                )
+              else
+                ...h.components.map(
+                  (c) => _ComponentTile(component: c),
+                ),
+
+              // ---- ESP32-CAM Independence ----
+              if (h.canWorkWithoutCam == true)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: Colors.blue[400]),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'System works without ESP32-CAM — camera is optional for visual feeding verification only.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.blue[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const Divider(height: 1),
+
+              // ---- Backend Services ----
+              if (h.backendHealth.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Text(
+                    'Backend Services',
+                    style: theme.textTheme.labelLarge,
+                  ),
+                ),
+                ...h.backendHealth.map((b) => ListTile(
+                      dense: true,
+                      leading: Icon(
+                        b.isOk ? Icons.check_circle : Icons.error,
+                        color: b.isOk ? AppTheme.deviceOnline : AppTheme.feedLevelLow,
+                        size: 20,
+                      ),
+                      title: Text(_capitalise(b.name), style: const TextStyle(fontSize: 14)),
+                      subtitle: Text(b.message, style: const TextStyle(fontSize: 12)),
+                    )),
+                const Divider(height: 1),
+              ],
+
+              // ---- Actions ----
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: widget.onRefresh,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Refresh'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: widget.onRunDiagnostics,
+                        icon: const Icon(Icons.play_arrow, size: 18),
+                        label: const Text('Run Diagnostics'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _capitalise(String s) {
+    if (s.isEmpty) return s;
+    return s[0].toUpperCase() + s.substring(1);
+  }
+}
+
+// =============================================================================
+// Hardware Component Tile
+// =============================================================================
+
+class _ComponentTile extends StatelessWidget {
+  final ComponentStatus component;
+
+  const _ComponentTile({required this.component});
+
+  @override
+  Widget build(BuildContext context) {
+    IconData icon;
+    Color color;
+
+    switch (component.status) {
+      case 'ok':
+        icon = Icons.check_circle;
+        color = AppTheme.deviceOnline;
+        break;
+      case 'error':
+        icon = Icons.cancel;
+        color = AppTheme.feedLevelLow;
+        break;
+      case 'neutral':
+        icon = Icons.remove_circle_outline;
+        color = Colors.grey;
+        break;
+      case 'skipped':
+        icon = Icons.block;
+        color = Colors.grey[400]!;
+        break;
+      default:
+        icon = Icons.help_outline;
+        color = Colors.grey;
+    }
+
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, color: color, size: 22),
+      title: Text(
+        component.name,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        component.message,
+        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Pipeline Connectivity Chain
+// =============================================================================
+
+class _PipelineChain extends StatelessWidget {
+  final PipelineHealth pipeline;
+
+  const _PipelineChain({required this.pipeline});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _PipelineNode(
+            label: 'MCU',
+            icon: Icons.memory,
+            isConnected: pipeline.mcuToMqtt,
+          ),
+          _PipelineConnector(isConnected: pipeline.mcuToMqtt),
+          _PipelineNode(
+            label: 'MQTT',
+            icon: Icons.cloud_queue,
+            isConnected: pipeline.mqttToBackend,
+          ),
+          _PipelineConnector(isConnected: pipeline.mqttToBackend),
+          _PipelineNode(
+            label: 'Backend',
+            icon: Icons.dns,
+            isConnected: pipeline.backendToApp,
+          ),
+          _PipelineConnector(isConnected: pipeline.appToBackend),
+          _PipelineNode(
+            label: 'App',
+            icon: Icons.phone_android,
+            isConnected: pipeline.appToBackend,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PipelineNode extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool? isConnected;
+
+  const _PipelineNode({
+    required this.label,
+    required this.icon,
+    required this.isConnected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    if (isConnected == true) {
+      color = AppTheme.deviceOnline;
+    } else if (isConnected == false) {
+      color = AppTheme.feedLevelLow;
+    } else {
+      color = Colors.grey;
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+            border: Border.all(color: color, width: 2),
+          ),
+          child: Icon(icon, size: 20, color: color),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PipelineConnector extends StatelessWidget {
+  final bool? isConnected;
+
+  const _PipelineConnector({required this.isConnected});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    if (isConnected == true) {
+      color = AppTheme.deviceOnline;
+    } else if (isConnected == false) {
+      color = AppTheme.feedLevelLow;
+    } else {
+      color = Colors.grey[300]!;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: SizedBox(
+        width: 24,
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(height: 2, color: color),
+            ),
+            Icon(
+              isConnected == true
+                  ? Icons.arrow_forward_ios
+                  : Icons.remove,
+              size: 8,
+              color: color,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -15,6 +15,7 @@
 #include "SensorManager.h"
 #include "PowerManager.h"
 #include "FeedingController.h"
+#include "SystemDiagnostics.h"
 #include "../storage/NVSStorage.h"
 
 // Connection state
@@ -141,10 +142,24 @@ public:
     bool sendAlert(AlertType type, AlertSeverity severity, const String& message);
     
     /**
-     * Send diagnostics report
+     * Send diagnostics report (legacy)
      * @return true if sent or buffered
      */
     bool sendDiagnostics();
+
+    /**
+     * Send full system diagnostics report from SystemDiagnostics
+     * @param diagnostics System diagnostics instance
+     * @return true if sent or buffered
+     */
+    bool sendDiagnosticsReport(const SystemDiagnostics& diagnostics);
+
+    /**
+     * Send a pipeline ping message
+     * @param nonce Random nonce for matching pong response
+     * @return true if sent
+     */
+    bool sendPipelinePing(uint32_t nonce);
     
     /**
      * Process incoming messages
@@ -217,6 +232,9 @@ private:
     String _topicCommands;
     String _topicConfig;
     String _topicDiagnostics;
+    String _topicDiagPing;
+    String _topicDiagPong;
+    String _topicDiagReport;
     
     CommandCallback _commandCallback;
     ConfigCallback  _configCallback;

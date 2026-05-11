@@ -24,6 +24,7 @@
 #include "managers/FeedingController.h"
 #include "managers/PowerManager.h"
 #include "managers/CommunicationManager.h"
+#include "managers/SystemDiagnostics.h"
 #include "storage/NVSStorage.h"
 
 // Task handles for dual-core operation
@@ -36,6 +37,7 @@ SensorManager sensorManager;
 FeedingController feedingController;
 PowerManager powerManager;
 CommunicationManager commManager;
+SystemDiagnostics systemDiagnostics;
 NVSStorage nvsStorage;
 
 // Timing variables
@@ -118,6 +120,15 @@ void setup() {
             feedingController.feedRemote(grams);
         } else if (type == CommandType::STOP_FEEDING) {
             feedingController.stopFeeding();
+        } else if (type == CommandType::RUN_DIAGNOSTICS) {
+            // Check if this is a pong response
+            if (doc["nonce"].is<uint32_t>()) {
+                systemDiagnostics.handlePong(doc);
+            } else {
+                // On-demand diagnostics request from mobile app
+                systemDiagnostics.runFullCheck();
+                commManager.sendDiagnosticsReport(systemDiagnostics);
+            }
         }
     });
 
@@ -143,6 +154,9 @@ void setup() {
         feedingController.setSchedule(newSchedule, count);
         Serial.printf("[Config] Schedule updated: %d entries\n", count);
     });
+    
+    // Initialize system diagnostics (runs full hardware check)
+    systemDiagnostics.begin(&sensorManager, &powerManager, &feedingController, &commManager);
     
     // Create communication task on Core 0
     xTaskCreatePinnedToCore(
@@ -224,9 +238,20 @@ void communicationTaskFunc(void* parameter) {
         // Process incoming commands
         commManager.processIncomingMessages();
         
+        // Update system diagnostics (handles ping timeouts, periodic checks)
+        systemDiagnostics.update();
+        
         // Flush offline buffer if connected
         if (commManager.isConnected()) {
             commManager.flushOfflineBuffer();
+            
+            // Send diagnostics report periodically (piggyback on telemetry cycle)
+            static unsigned long lastDiagReportTime = 0;
+            if (now - lastDiagReportTime >= 300000UL) {  // Every 5 minutes
+                lastDiagReportTime = now;
+                commManager.sendDiagnosticsReport(systemDiagnostics);
+                systemDiagnostics.sendPipelinePing();
+            }
         }
         
         vTaskDelay(pdMS_TO_TICKS(100));

@@ -595,6 +595,15 @@ class ApiService {
     );
   }
 
+  // System Health endpoints
+  Future<Response> getSystemHealth(String deviceId) async {
+    return _dio.get('/devices/$deviceId/system-health');
+  }
+
+  Future<Response> triggerDiagnostics(String deviceId) async {
+    return _dio.post('/devices/$deviceId/system-health/run');
+  }
+
   // Calculator endpoints
   Future<Response> calculateFeed(Map<String, dynamic> params) async {
     return _dio.post('/calculator/recommend', data: params);
