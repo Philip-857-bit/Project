@@ -68,6 +68,7 @@ void SystemDiagnostics::runFullCheck() {
     checkGSM();
     checkWiFi();
     checkMQTT();
+    checkSDCard();
 
     _report.canWorkWithoutCam = canWorkWithoutCam();
 }
@@ -186,6 +187,10 @@ void SystemDiagnostics::checkUltrasonic() {
     s.name      = "JSN-SR04T Ultrasonic";
     s.component = "ultrasonic";
 
+#ifdef NO_ULTRASONIC_SENSOR
+    s.health  = ComponentHealth::SKIPPED;
+    s.message = "Disabled via NO_ULTRASONIC_SENSOR flag";
+#else
     if (!_sensorMgr) {
         s.health  = ComponentHealth::ERROR;
         s.message = "SensorManager not available";
@@ -201,6 +206,7 @@ void SystemDiagnostics::checkUltrasonic() {
         s.health  = ComponentHealth::ERROR;
         s.message = "Sensor not responding";
     }
+#endif
 }
 
 void SystemDiagnostics::checkLoadCell() {
@@ -234,15 +240,10 @@ void SystemDiagnostics::checkStepperMotor() {
     s.name      = "NEMA 23 + DM542 Motor";
     s.component = "stepper_motor";
 
-#if defined(PIN_STEP) && defined(PIN_DIR) && defined(PIN_ENABLE)
+#if defined(PIN_STEP) && defined(PIN_DIR)
     // Verify pin configuration
     pinMode(PIN_STEP, OUTPUT);
     pinMode(PIN_DIR, OUTPUT);
-    pinMode(PIN_ENABLE, OUTPUT);
-
-    // Enable driver (active LOW)
-    digitalWrite(PIN_ENABLE, LOW);
-    delay(5);
 
     // Set direction
     digitalWrite(PIN_DIR, HIGH);
@@ -254,24 +255,28 @@ void SystemDiagnostics::checkStepperMotor() {
     digitalWrite(PIN_STEP, LOW);
     delayMicroseconds(MOTOR_PULSE_WIDTH_US);
 
-    // Disable driver after test
-    digitalWrite(PIN_ENABLE, HIGH);
-
     s.health  = ComponentHealth::OK;
-    s.message = "Step/Dir/Enable pins OK, pulse test passed";
+#ifdef NO_ENA_PIN
+    s.message = "Step/Dir pins OK (ENA pin skipped), pulse test passed";
+#else
+    s.message = "Step/Dir pins OK, pulse test passed";
+#endif
 #else
     s.health  = ComponentHealth::ERROR;
     s.message = "Motor pins not defined";
 #endif
 }
-
 void SystemDiagnostics::checkBatteryADC() {
     ComponentStatus& s = _report.batteryAdc;
     s.name      = "Battery ADC";
     s.component = "battery_adc";
 
-#ifdef PIN_BATTERY_ADC
+#ifdef NO_BATTERY_ADC
+    s.health  = ComponentHealth::SKIPPED;
+    s.message = "Disabled via NO_BATTERY_ADC flag (regulated adapter)";
+#elif defined(PIN_BATTERY_ADC)
     int rawValue = analogRead(PIN_BATTERY_ADC);
+...
     if (rawValue > 0) {
         float voltage = (rawValue / (float)ADC_MAX_VALUE) * ADC_VREF * BATTERY_DIVIDER_RATIO;
         s.health  = ComponentHealth::OK;
@@ -316,7 +321,10 @@ void SystemDiagnostics::checkESP32Cam() {
     s.name      = "ESP32-CAM Module";
     s.component = "esp32_cam";
 
-#if defined(PIN_CAM_TX) && defined(PIN_CAM_RX)
+#ifdef NO_ESP32_CAM
+    s.health  = ComponentHealth::SKIPPED;
+    s.message = "Disabled via NO_ESP32_CAM flag";
+#elif defined(PIN_CAM_TX) && defined(PIN_CAM_RX)
     // Try a UART ping to the ESP32-CAM
     // Send a simple heartbeat byte and wait for response
     Serial2.begin(INTERBOARD_BAUD, SERIAL_8N1, PIN_CAM_RX, PIN_CAM_TX);
@@ -411,6 +419,33 @@ void SystemDiagnostics::checkMQTT() {
     }
 }
 
+void SystemDiagnostics::checkSDCard() {
+    ComponentStatus& s = _report.sdCard;
+    s.name      = "SD Card Slot";
+    s.component = "sd_card";
+
+#ifdef NO_SD_CARD
+    s.health  = ComponentHealth::SKIPPED;
+    s.message = "Disabled via NO_SD_CARD flag";
+#else
+    // Basic check: can we initialise the SD card?
+    // Using default pins defined in config.h
+    #include <SD.h>
+    #include <SPI.h>
+    
+    SPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS);
+    if (SD.begin(SD_CS)) {
+        uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+        s.health  = ComponentHealth::OK;
+        s.message = "Initialised, " + String((uint32_t)cardSize) + " MB";
+        SD.end();
+    } else {
+        s.health  = ComponentHealth::ERROR;
+        s.message = "Failed to initialise SD card";
+    }
+#endif
+}
+
 // ---------------------------------------------------------------------------
 // Can the system operate without ESP32-CAM?
 // ---------------------------------------------------------------------------
@@ -475,6 +510,7 @@ void SystemDiagnostics::toJson(JsonDocument& doc) const {
     JsonObject c7 = components.add<JsonObject>(); componentToJson(c7, _report.gsmModule);
     JsonObject c8 = components.add<JsonObject>(); componentToJson(c8, _report.wifiModule);
     JsonObject c9 = components.add<JsonObject>(); componentToJson(c9, _report.mqttBroker);
+    JsonObject c10 = components.add<JsonObject>(); componentToJson(c10, _report.sdCard);
 
     // Pipeline array
     JsonArray pipeline = doc["pipeline"].to<JsonArray>();
@@ -509,6 +545,7 @@ void SystemDiagnostics::printReport() const {
     printComponent(_report.gsmModule);
     printComponent(_report.wifiModule);
     printComponent(_report.mqttBroker);
+    printComponent(_report.sdCard);
 
     Serial.printf("\n[Diagnostics] Can work without ESP32-CAM: %s\n",
                   _report.canWorkWithoutCam ? "YES" : "NO");

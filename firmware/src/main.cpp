@@ -40,6 +40,14 @@ CommunicationManager commManager;
 SystemDiagnostics systemDiagnostics;
 NVSStorage nvsStorage;
 
+// RTC Memory for persistent state during deep sleep
+struct RTCFeedingTime {
+    uint16_t hour;
+    uint16_t minute;
+    bool valid;
+};
+RTC_DATA_ATTR RTCFeedingTime rtcNextFeeds[2] = {{0,0,false}, {0,0,false}};
+
 // Timing variables
 unsigned long lastTelemetryTime = 0;
 unsigned long lastSensorReadTime = 0;
@@ -153,6 +161,62 @@ void setup() {
 
         feedingController.setSchedule(newSchedule, count);
         Serial.printf("[Config] Schedule updated: %d entries\n", count);
+
+        // Update RTC next feed times for deep sleep planning
+        time_t now; struct tm ti; time(&now); localtime_r(&now, &ti);
+        int currentMin = ti.tm_hour * 60 + ti.tm_min;
+        
+        // Reset rtcNextFeeds
+        rtcNextFeeds[0].valid = false;
+        rtcNextFeeds[1].valid = false;
+
+        // Find next two feeds
+        // Note: For simplicity, we find the next two based on hour/minute only
+        // in a 24h cycle, ignoring days_bitmask for the sleep timer itself
+        struct TempFeed { int mins; int h; int m; };
+        TempFeed sorted[SCHEDULE_MAX_ENTRIES];
+        int sCount = 0;
+        for(int i=0; i<count; i++) {
+            if (newSchedule[i].enabled) {
+                sorted[sCount++] = {newSchedule[i].hour * 60 + newSchedule[i].minute, newSchedule[i].hour, newSchedule[i].minute};
+            }
+        }
+        
+        // Sort
+        for(int i=0; i<sCount-1; i++) {
+            for(int j=i+1; j<sCount; j++) {
+                if(sorted[i].mins > sorted[j].mins) {
+                    TempFeed tmp = sorted[i]; sorted[i] = sorted[j]; sorted[j] = tmp;
+                }
+            }
+        }
+
+        if (sCount > 0) {
+            int found = 0;
+            // First pass: today's remaining feeds
+            for(int i=0; i<sCount; i++) {
+                if(sorted[i].mins > currentMin) {
+                    rtcNextFeeds[found].hour = sorted[i].h;
+                    rtcNextFeeds[found].minute = sorted[i].m;
+                    rtcNextFeeds[found].valid = true;
+                    found++;
+                    if(found >= 2) break;
+                }
+            }
+            // Second pass: tomorrow's first feeds if needed
+            if(found < 2) {
+                for(int i=0; i<sCount; i++) {
+                    rtcNextFeeds[found].hour = sorted[i].h;
+                    rtcNextFeeds[found].minute = sorted[i].m;
+                    rtcNextFeeds[found].valid = true;
+                    found++;
+                    if(found >= 2) break;
+                }
+            }
+            Serial.printf("[Config] RTC Next Feeds: %02d:%02d, %02d:%02d\n", 
+                rtcNextFeeds[0].valid ? rtcNextFeeds[0].hour : 0, rtcNextFeeds[0].valid ? rtcNextFeeds[0].minute : 0,
+                rtcNextFeeds[1].valid ? rtcNextFeeds[1].hour : 0, rtcNextFeeds[1].valid ? rtcNextFeeds[1].minute : 0);
+        }
     });
     
     // Initialize system diagnostics (runs full hardware check)
@@ -354,6 +418,7 @@ void checkSensorAlerts() {
     }
 
     // Battery
+#ifndef NO_BATTERY_ADC
     PowerStatus power = powerManager.getStatus();
     if (power.batteryPercent < BATTERY_CRITICAL) {
         commManager.sendAlert(
@@ -370,6 +435,7 @@ void checkSensorAlerts() {
         );
         alertSent = true;
     }
+#endif
 
     if (alertSent) {
         lastAlertTime = now;
@@ -404,25 +470,42 @@ void handleWakeupReason() {
 void enterDeepSleep() {
     Serial.println("[INFO] Entering deep sleep...");
     
-    // Calculate sleep duration based on next feeding
-    uint64_t sleepDuration = feedingController.getTimeToNextFeeding();
-    if (sleepDuration > DEEP_SLEEP_DURATION_US) {
-        sleepDuration = DEEP_SLEEP_DURATION_US;
-    }
-    
-    // Wake up before feeding time
-    if (sleepDuration > WAKE_BEFORE_FEED_MS * 1000) {
-        sleepDuration -= WAKE_BEFORE_FEED_MS * 1000;
+    // Default sleep: 30 minutes
+    uint64_t sleepDurationUs = DEEP_SLEEP_DURATION_US;
+
+    // Adaptive sleep: check RTC memory for next feed
+    if (rtcNextFeeds[0].valid) {
+        time_t now; struct tm ti; time(&now); localtime_r(&now, &ti);
+        int currentMin = ti.tm_hour * 60 + ti.tm_min;
+        int targetMin = rtcNextFeeds[0].hour * 60 + rtcNextFeeds[0].minute;
+        
+        int diffMins = targetMin - currentMin;
+        if (diffMins <= 0) diffMins += 24 * 60; // Next day
+        
+        // Target: wake 5 minutes before feed
+        int sleepMins = diffMins - 5;
+        if (sleepMins < 0) sleepMins = 0; // Already in the 5min window
+        
+        uint64_t adaptiveSleepUs = (uint64_t)sleepMins * 60 * 1000000ULL;
+        
+        // Duration: min(30_minutes, adaptiveSleep)
+        if (adaptiveSleepUs < sleepDurationUs) {
+            sleepDurationUs = adaptiveSleepUs;
+        }
+        
+        Serial.printf("[Sleep] Next feed %02d:%02d (%d min away). Sleeping for %d min.\n", 
+                      rtcNextFeeds[0].hour, rtcNextFeeds[0].minute, diffMins, (int)(sleepDurationUs / 60000000ULL));
+    } else {
+        Serial.println("[Sleep] No schedule received yet. Using default 30 min interval.");
     }
     
     // Disconnect cleanly
     commManager.disconnect();
     
     // Configure wake-up timer
-    esp_sleep_enable_timer_wakeup(sleepDuration);
+    esp_sleep_enable_timer_wakeup(sleepDurationUs);
     
     // Enter deep sleep
-    Serial.printf("[INFO] Sleeping for %llu seconds\n", sleepDuration / 1000000);
     esp_deep_sleep_start();
 }
 

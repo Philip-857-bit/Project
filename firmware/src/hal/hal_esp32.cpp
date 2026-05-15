@@ -51,17 +51,14 @@ void halDelayUs(uint32_t us) {
 void halMotorInit() {
     pinMode(PIN_STEP, OUTPUT);
     pinMode(PIN_DIR, OUTPUT);
-    pinMode(PIN_ENABLE, OUTPUT);
     
-    // Start with motor disabled
-    digitalWrite(PIN_ENABLE, HIGH);
     digitalWrite(PIN_STEP, LOW);
     digitalWrite(PIN_DIR, LOW);
 }
 
 void halMotorEnable(bool enable) {
-    // DM542: LOW = enabled, HIGH = disabled
-    digitalWrite(PIN_ENABLE, enable ? LOW : HIGH);
+    // DM542 ENA pin not connected, driver always enabled
+    (void)enable;
 }
 
 void halMotorSetDirection(bool forward) {

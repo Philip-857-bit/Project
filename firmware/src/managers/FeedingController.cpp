@@ -66,8 +66,6 @@ bool FeedingController::begin(SensorManager* sensorManager, NVSStorage* storage)
 bool FeedingController::initMotor() {
     pinMode(PIN_STEP, OUTPUT);
     pinMode(PIN_DIR, OUTPUT);
-    pinMode(PIN_ENABLE, OUTPUT);
-    digitalWrite(PIN_ENABLE, HIGH);
     digitalWrite(PIN_STEP, LOW);
     digitalWrite(PIN_DIR, LOW);
 
@@ -97,7 +95,7 @@ bool FeedingController::initMotor() {
     setMicrostepPins();
     return true;
 #else
-    // DM542/TB6600 only need STEP/DIR/ENABLE pins.
+    // DM542/TB6600 only need STEP/DIR pins.
     return true;
 #endif
 }
@@ -193,9 +191,7 @@ FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
         temperature = _sensorManager->getCurrentData().temperature;
     }
     float adjustedGrams = grams * q10Factor;
-    digitalWrite(PIN_ENABLE, LOW); delay(10);
     bool completed = moveSteps(gramsToSteps(adjustedGrams), true);
-    digitalWrite(PIN_ENABLE, HIGH);
     _dispensedGrams = adjustedGrams;
     _feedingActive = false;
     FeedingResult result = FeedingResult::SUCCESS;
@@ -242,7 +238,7 @@ void FeedingController::stepPulse() {
 }
 
 void FeedingController::stopFeeding() {
-    if (_feedingActive) { _feedingActive = false; digitalWrite(PIN_ENABLE, HIGH); _lastEvent.result = FeedingResult::CANCELLED; }
+    if (_feedingActive) { _feedingActive = false; _lastEvent.result = FeedingResult::CANCELLED; }
 }
 
 float FeedingController::calculateQ10Adjustment(float baseAmount, float temperature) {

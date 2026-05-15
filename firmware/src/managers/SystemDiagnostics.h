@@ -79,6 +79,7 @@ struct DiagnosticsReport {
     ComponentStatus gsmModule;
     ComponentStatus wifiModule;
     ComponentStatus mqttBroker;
+    ComponentStatus sdCard;
 
     // Pipeline (filled after ping/pong round-trip)
     PipelineHop mcuToMqtt;
@@ -173,6 +174,7 @@ private:
     void checkGSM();
     void checkWiFi();
     void checkMQTT();
+    void checkSDCard();
 
     /** Print a summary table to Serial. */
     void printReport() const;

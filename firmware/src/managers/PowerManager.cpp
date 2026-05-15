@@ -38,7 +38,9 @@ bool PowerManager::begin() {
     analogSetAttenuation(ADC_11db);  // Full range 0-3.3V
     
     // Configure pins
+#ifndef NO_BATTERY_ADC
     pinMode(PIN_BATTERY_ADC, INPUT);
+#endif
 #ifndef NO_SOLAR_INPUT
     pinMode(PIN_SOLAR_ADC, INPUT);
 #endif
@@ -90,7 +92,9 @@ void PowerManager::update() {
 }
 
 float PowerManager::readBatteryVoltage() {
-#ifdef WOKWI_SIM
+#ifdef NO_BATTERY_ADC
+    return 24.0f; // Regulated 24V DC adapter
+#elif defined(WOKWI_SIM)
     return SIM_BATTERY_VOLTAGE;
 #else
     // Read ADC value (multiple samples for stability)
@@ -102,8 +106,6 @@ float PowerManager::readBatteryVoltage() {
     int rawValue = total / 10;
     
     // Convert to voltage
-    // T-A7670 R2 has built-in voltage divider on GPIO35
-    // Divider ratio is approximately 2:1
     float adcVoltage = (rawValue / (float)ADC_MAX_VALUE) * ADC_VREF;
     float batteryVoltage = adcVoltage * BATTERY_DIVIDER_RATIO;
     
@@ -190,15 +192,6 @@ PowerSource PowerManager::determinePowerSource() {
 }
 
 float PowerManager::voltageToPercent(float voltage) {
-    // 18650 Li-Ion battery discharge curve (approximate)
-    // 4.20V = 100% (fully charged)
-    // 4.00V = 80%
-    // 3.80V = 60%
-    // 3.70V = 40% (nominal)
-    // 3.60V = 20%
-    // 3.40V = 10%
-    // 3.00V = 0% (cutoff - don't go below!)
-    
     if (voltage >= BATTERY_FULL_VOLTAGE) {
         return 100.0f;
     }
@@ -207,27 +200,8 @@ float PowerManager::voltageToPercent(float voltage) {
         return 0.0f;
     }
     
-    // Piecewise linear approximation for Li-Ion
-    float percent;
-    if (voltage >= 4.00f) {
-        // 4.00V - 4.20V = 80% - 100%
-        percent = 80.0f + (voltage - 4.00f) / (4.20f - 4.00f) * 20.0f;
-    } else if (voltage >= 3.80f) {
-        // 3.80V - 4.00V = 60% - 80%
-        percent = 60.0f + (voltage - 3.80f) / (4.00f - 3.80f) * 20.0f;
-    } else if (voltage >= 3.70f) {
-        // 3.70V - 3.80V = 40% - 60%
-        percent = 40.0f + (voltage - 3.70f) / (3.80f - 3.70f) * 20.0f;
-    } else if (voltage >= 3.60f) {
-        // 3.60V - 3.70V = 20% - 40%
-        percent = 20.0f + (voltage - 3.60f) / (3.70f - 3.60f) * 20.0f;
-    } else if (voltage >= 3.40f) {
-        // 3.40V - 3.60V = 10% - 20%
-        percent = 10.0f + (voltage - 3.40f) / (3.60f - 3.40f) * 10.0f;
-    } else {
-        // 3.00V - 3.40V = 0% - 10%
-        percent = (voltage - 3.00f) / (3.40f - 3.00f) * 10.0f;
-    }
+    // Linear approximation for 24V system
+    float percent = (voltage - BATTERY_EMPTY_VOLTAGE) / (BATTERY_FULL_VOLTAGE - BATTERY_EMPTY_VOLTAGE) * 100.0f;
     
     return constrain(percent, 0.0f, 100.0f);
 }

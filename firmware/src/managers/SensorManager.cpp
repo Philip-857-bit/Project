@@ -67,6 +67,7 @@ bool SensorManager::begin() {
     Serial.println("[SensorManager] HX711 disabled - using ultrasonic only");
 #endif
     
+#ifndef NO_ULTRASONIC_SENSOR
     // Initialize JSN-SR04T Ultrasonic Sensor (backup)
     _sonar = new NewPing(PIN_ULTRASONIC_TRIG, PIN_ULTRASONIC_ECHO, ULTRASONIC_MAX_DISTANCE);
     
@@ -79,6 +80,10 @@ bool SensorManager::begin() {
     } else {
         Serial.println("[SensorManager] Ultrasonic sensor not responding");
     }
+#else
+    _status.ultrasonicOK = false;
+    Serial.println("[SensorManager] Ultrasonic sensor disabled via NO_ULTRASONIC_SENSOR");
+#endif
     
     // Initialize DS18B20 Temperature Sensor
     _oneWire = new OneWire(PIN_ONEWIRE);

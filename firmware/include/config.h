@@ -61,10 +61,12 @@
 #define GPS_WAKE            23      // GPS Wake (IO23)
 
 // SD Card (SPI interface)
+#ifndef NO_SD_CARD
 #define SD_MISO             2       // SPI MISO
 #define SD_MOSI             15      // SPI MOSI
 #define SD_SCLK             14      // SPI Clock
 #define SD_CS               13      // SPI Chip Select
+#endif
 
 // I2C Bus (for sensors)
 #define PIN_I2C_SDA         21      // Wire_SDA
@@ -72,37 +74,35 @@
 
 // Battery ADC (built-in 18650 monitoring)
 // GPIO35 is reserved for PIN_FEED_BTN (schematic). Battery ADC moved to GPIO39 (ADC1_CH3).
+#ifndef NO_BATTERY_ADC
 #define PIN_BATTERY_ADC     39      // ADC1_CH3 - Battery voltage (input-only, VN)
+#endif
 
 // VBUS Detection
 #define PIN_VBUS            36      // USB power detection (VP)
 
 // =============================================================================
-// DM542 / TB6600 Stepper Motor Driver (Step/Dir/Enable mode)
+// DM542 / TB6600 Stepper Motor Driver (Step/Dir mode)
 // For NEMA 23 stepper motor with 20mm wood drill auger
 // Available GPIOs on T-A7670: 0, 32, 33, 34, 35, 39 (input only: 34, 35, 39)
 // =============================================================================
+#define USE_DM542
 #ifdef USE_DM542
 #define PIN_STEP    GPIO_NUM_32   // PUL- via R3(1kOhm) series resistor on PCB
 #define PIN_DIR     GPIO_NUM_25   // DIR- via R4(1kOhm) series resistor on PCB
-#define PIN_ENABLE  GPIO_NUM_2    // ENA- (active LOW to enable driver)
-// GPIO2 is shared with the T-A7670 built-in LED; LED blink disabled when USE_DM542 active
-#undef PIN_LED_STATUS
+// PIN_ENABLE removed - not connected in hardware
 #endif
 
 #ifdef USE_TB6600
 #define PIN_STEP            GPIO_NUM_32     // PUL+ (Step pulse)
 #define PIN_DIR             GPIO_NUM_33     // DIR+ (Direction)
-#define PIN_ENABLE          GPIO_NUM_0      // ENA+ (Enable, active LOW)
-// Note: PUL-, DIR-, ENA- connect to GND
-// TB6600 can work with 3.3V logic directly
+// PIN_ENABLE removed
 #endif
 
 // Legacy TMC2209 support (for smaller motors)
 #ifdef USE_TMC2209
 #define PIN_STEP            GPIO_NUM_32     // Step pulse
 #define PIN_DIR             GPIO_NUM_33     // Direction
-#define PIN_ENABLE          GPIO_NUM_0      // Enable (active LOW)
 #define PIN_TMC_TX          GPIO_NUM_17     // TMC2209 UART TX (shared)
 #define PIN_TMC_RX          GPIO_NUM_16     // TMC2209 UART RX (shared)
 #define PIN_DIAG            GPIO_NUM_34     // StallGuard diagnostic (input only)
@@ -118,9 +118,6 @@
 #ifndef PIN_DIR
 #define PIN_DIR             GPIO_NUM_33     // Direction
 #endif
-#ifndef PIN_ENABLE
-#define PIN_ENABLE          GPIO_NUM_0      // Enable (active LOW)
-#endif
 #define PIN_MS1             GPIO_NUM_17     // Microstepping select 1
 #define PIN_MS2             GPIO_NUM_16     // Microstepping select 2
 #define PIN_MS3             GPIO_NUM_18     // Microstepping select 3
@@ -129,21 +126,29 @@
 // =============================================================================
 // HX711 Load Cell Amplifier (for precise weight measurement)
 // =============================================================================
+#ifndef NO_LOADCELL
 #define PIN_HX711_DOUT      GPIO_NUM_39     // Data out (VN - input only)
 #define PIN_HX711_SCK       GPIO_NUM_5      // Clock
+#endif
 
 // =============================================================================
 // JSN-SR04T Ultrasonic Sensor (Waterproof) - Backup feed level
 // =============================================================================
+#ifndef NO_ULTRASONIC_SENSOR
 #define PIN_ULTRASONIC_TRIG GPIO_NUM_33     // GPIO33 - safe, not modem EN
 #define PIN_ULTRASONIC_ECHO GPIO_NUM_34     // Echo pin (input only)
+#endif
 
 // Note: If using TMC2209, GPIO17 is TMC_TX - use different pin
 #ifdef USE_TMC2209
+#ifndef NO_ULTRASONIC_SENSOR
 #undef PIN_ULTRASONIC_TRIG
 #define PIN_ULTRASONIC_TRIG GPIO_NUM_5      // Alternative trigger pin
+#endif
+#ifndef NO_LOADCELL
 #undef PIN_HX711_SCK
 #define PIN_HX711_SCK       GPIO_NUM_18     // Move HX711 clock
+#endif
 #endif
 
 // =============================================================================
@@ -156,7 +161,9 @@
 // Power Monitoring (18650 battery via built-in divider)
 // =============================================================================
 // PIN_BATTERY_ADC defined above as GPIO39 (GPIO35 is reserved for PIN_FEED_BTN)
+#ifndef NO_SOLAR_INPUT
 #define PIN_SOLAR_ADC       GPIO_NUM_36     // Solar panel voltage (VP, with external divider)
+#endif
 
 // =============================================================================
 // Status LEDs
@@ -166,13 +173,14 @@
 // =============================================================================
 // Communication with ESP32-CAM (Serial1)
 // =============================================================================
+#ifndef NO_ESP32_CAM
 #define PIN_CAM_TX          GPIO_NUM_18     // CAM_TX -> ESP32-CAM UART RX (UART2)
 #define PIN_CAM_RX          GPIO_NUM_19     // CAM_RX -> ESP32-CAM UART TX (UART2)
+#endif
 
 #ifdef SCHEMATIC_PINMAP
 #undef PIN_STEP
 #undef PIN_DIR
-#undef PIN_ENABLE
 #undef PIN_ULTRASONIC_TRIG
 #undef PIN_ULTRASONIC_ECHO
 #undef PIN_ONEWIRE
@@ -182,12 +190,16 @@
 // Verified schematic pin mapping (DRC-clean, 2026-04-19)
 #define PIN_STEP            GPIO_NUM_32   // MOTOR_STEP -> DM542T PUL- via R3(1kOhm)
 #define PIN_DIR             GPIO_NUM_25   // MOTOR_DIR -> DM542T DIR- via R4(1kOhm)
-#define PIN_ENABLE          GPIO_NUM_2    // ENA -> DM542T ENA- (active LOW)
+// PIN_ENABLE removed
+#ifndef NO_ULTRASONIC_SENSOR
 #define PIN_ULTRASONIC_TRIG GPIO_NUM_33   // TRIG -> JSN-SR04T (safe GPIO, not modem EN)
 #define PIN_ULTRASONIC_ECHO GPIO_NUM_13   // ECHO_S -> JSN-SR04T via R1/R2 divider
+#endif
 #define PIN_ONEWIRE         GPIO_NUM_14   // DATA -> DS18B20 adapter module
+#ifndef NO_ESP32_CAM
 #define PIN_CAM_TX          GPIO_NUM_18   // CAM_TX -> ESP32-CAM UART RX (UART2)
 #define PIN_CAM_RX          GPIO_NUM_19   // CAM_RX -> ESP32-CAM UART TX (UART2)
+#endif
 #endif
 
 #endif // LILYGO_T_A7670
@@ -226,13 +238,14 @@
 
 // =============================================================================
 // Motor Configuration (NEMA 23 + DM542/TB6600 + 20mm Wood Drill Auger)
+// Optimized for 24V operation (30 RPM)
 // =============================================================================
 #define MOTOR_STEPS_PER_REV     200         // 1.8° per step (NEMA 23)
 #define MOTOR_MICROSTEPS        8           // DM542/TB6600 microstepping (set via DIP switches)
-#define MOTOR_MAX_SPEED         800         // Steps per second (lower for NEMA 23 torque)
-#define MOTOR_ACCELERATION      400         // Steps per second²
-#define MOTOR_CURRENT_MA        2800        // Motor current in mA (set on DM542/TB6600)
-#define MOTOR_PULSE_WIDTH_US    5           // Minimum pulse width for DM542/TB6600
+#define MOTOR_MAX_SPEED         800         // 30 RPM at 1600 steps/rev
+#define MOTOR_ACCELERATION      400         // Acceleration steps per second²
+#define MOTOR_CURRENT_MA        2000        // Set DM542 DIP switches for 2.0A RMS (2.8A Peak)
+#define MOTOR_PULSE_WIDTH_US    10          // Increased for opto-isolated driver stability (DM542)
 
 // 20mm Wood Drill Auger Calibration
 // Auger pitch ~20mm, so one revolution moves ~20mm of feed
@@ -269,19 +282,19 @@
 #define TEMP_READ_DELAY_MS      750         // Conversion time for 12-bit
 
 // =============================================================================
-// Power Management (18650 Li-Ion Battery + Solar)
-// T-A7670 R2 has built-in 18650 holder with charging circuit
+// Power Management (24V Lead-Acid Battery System)
 // =============================================================================
-#define BATTERY_FULL_VOLTAGE    4.2f        // 18650 Li-Ion full charge
-#define BATTERY_EMPTY_VOLTAGE   3.0f        // 18650 Li-Ion empty (cutoff)
-#define BATTERY_NOMINAL_VOLTAGE 3.7f        // Nominal voltage
+#define BATTERY_FULL_VOLTAGE    27.6f       // 24V Lead-Acid float charge
+#define BATTERY_EMPTY_VOLTAGE   21.0f       // 24V Lead-Acid discharge limit
+#define BATTERY_NOMINAL_VOLTAGE 24.0f       // Nominal voltage
 #define BATTERY_LOW_THRESHOLD   20.0f       // Low battery percentage
 #define BATTERY_CRITICAL        10.0f       // Critical battery percentage
-#define SOLAR_MIN_VOLTAGE       5.0f        // Minimum solar charging voltage (5V panel)
+#define SOLAR_MIN_VOLTAGE       26.0f       // Minimum solar charging voltage (for 24V system)
 
-// Voltage divider ratios (T-A7670 has built-in divider on GPIO35)
-#define BATTERY_DIVIDER_RATIO   2.0f        // Built-in divider ratio
-#define SOLAR_DIVIDER_RATIO     3.0f        // External divider for solar panel
+// Voltage divider ratios
+// For 24V system: use 100k + 10k divider (ratio 11.0) to map 33V -> 3.0V
+#define BATTERY_DIVIDER_RATIO   11.0f       
+#define SOLAR_DIVIDER_RATIO     11.0f       // Same for solar if used later
 
 // ADC Configuration
 #define ADC_RESOLUTION          12
@@ -401,6 +414,12 @@
 
 // HX711 Load Cell - NOT POPULATED in current schematic revision
 #define NO_LOADCELL
+
+// Ultrasonic Sensor - NOT USED in this experiment (relying on timer/load cell if available)
+#define NO_ULTRASONIC_SENSOR
+
+// ESP32-CAM - NOT USED in this experiment (relying on hardware only)
+#define NO_ESP32_CAM
 
 // Solar panel - NOT USED in this deployment (battery only)
 // Suppresses solar ADC reads and "no solar" warnings.
