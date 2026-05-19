@@ -151,6 +151,12 @@ public:
      */
     void setFeedLevelSource(FeedLevelSource source);
 
+    /**
+     * Print a blocking DS18B20 bus diagnostic to Serial.
+     * Use this for bench testing wiring and probe detection.
+     */
+    void printTemperatureDiagnostics();
+
 private:
     HX711* _loadCell;
     NewPing* _sonar;

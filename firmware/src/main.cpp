@@ -62,13 +62,21 @@ void controlTaskFunc(void* parameter);
 void handleWakeupReason();
 void enterDeepSleep();
 void checkSensorAlerts();
+void printSerialTestHelp();
+
+void printSerialTestHelp() {
+    Serial.println("[Serial] Test commands: f=feed dose, t=temp test, b=print binding code, B=new binding code, d=motor config, m=1 rev forward, r=1 rev reverse, j=100 steps forward, k=100 steps reverse, ?=help");
+}
 
 void setup() {
     Serial.begin(115200);
     delay(1000);
     
     Serial.println("\n========================================");
-    Serial.println("Smart Fish Feeder - ESP32-WROVER");
+    Serial.println("Smart Fish Feeder - LILYGO T-A7670E R2");
+#ifdef USE_DM542
+    Serial.println("Motor Driver: DM542");
+#endif
     Serial.printf("Firmware Version: %s\n", FIRMWARE_VERSION);
     Serial.printf("Build: %s %s\n", FIRMWARE_BUILD_DATE, FIRMWARE_BUILD_TIME);
     Serial.println("========================================\n");
@@ -110,17 +118,15 @@ void setup() {
         Serial.println("[ERROR] Failed to initialize sensor manager");
     }
     pinMode(PIN_FEED_BTN, INPUT);  // External pull-up R7(10kOhm) on PCB - do NOT use INPUT_PULLUP
+    Serial.printf("[SW1] Feed button GPIO%d ready, active LOW, current=%s\n",
+                  (int)PIN_FEED_BTN,
+                  digitalRead(PIN_FEED_BTN) == LOW ? "LOW/PRESSED" : "HIGH/RELEASED");
     
     // Initialize feeding controller
     if (!feedingController.begin(&sensorManager, &nvsStorage)) {
         Serial.println("[ERROR] Failed to initialize feeding controller");
     }
     
-    // Initialize communication manager
-    if (!commManager.begin(&deviceManager, &nvsStorage)) {
-        Serial.println("[ERROR] Failed to initialize communication manager");
-    }
-
     // Wire MQTT command handler
     commManager.setCommandCallback([](CommandType type, const JsonDocument& doc) {
         if (type == CommandType::FEED_NOW) {
@@ -218,22 +224,9 @@ void setup() {
                 rtcNextFeeds[1].valid ? rtcNextFeeds[1].hour : 0, rtcNextFeeds[1].valid ? rtcNextFeeds[1].minute : 0);
         }
     });
-    
-    // Initialize system diagnostics (runs full hardware check)
-    systemDiagnostics.begin(&sensorManager, &powerManager, &feedingController, &commManager);
-    
-    // Create communication task on Core 0
-    xTaskCreatePinnedToCore(
-        communicationTaskFunc,
-        "CommTask",
-        8192,
-        NULL,
-        1,
-        &communicationTask,
-        0  // Core 0
-    );
-    
-    // Create control task on Core 1
+
+    // Start motor/button control before cellular init. Modem startup can take a
+    // long time or fail, but local feeding must remain available.
     xTaskCreatePinnedToCore(
         controlTaskFunc,
         "ControlTask",
@@ -242,6 +235,21 @@ void setup() {
         1,
         &controlTask,
         1  // Core 1
+    );
+    
+    // Initialize system diagnostics (runs full hardware check)
+    systemDiagnostics.begin(&sensorManager, &powerManager, &feedingController, &commManager);
+    
+    // Create communication task on Core 0. It initializes GSM/WiFi itself so
+    // setup() cannot be blocked by a slow or missing modem.
+    xTaskCreatePinnedToCore(
+        communicationTaskFunc,
+        "CommTask",
+        8192,
+        NULL,
+        1,
+        &communicationTask,
+        0  // Core 0
     );
     
     Serial.println("[INFO] System initialization complete");
@@ -265,13 +273,30 @@ void loop() {
  */
 void communicationTaskFunc(void* parameter) {
     Serial.println("[Core 0] Communication task started");
+
+    bool communicationReady = false;
+    unsigned long lastCommInitAttempt = 0;
     
     for (;;) {
+        unsigned long now = millis();
+
+        if (!communicationReady) {
+            if (lastCommInitAttempt == 0 || now - lastCommInitAttempt >= 60000) {
+                lastCommInitAttempt = now;
+                Serial.println("[Core 0] Initializing communication manager");
+                communicationReady = commManager.begin(&deviceManager, &nvsStorage);
+                if (!communicationReady) {
+                    Serial.println("[Core 0] Communication unavailable; will retry while local motor control remains active");
+                }
+            }
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+
         // Maintain connectivity
         commManager.loop();
         
         // Send telemetry at configured interval
-        unsigned long now = millis();
         if (now - lastTelemetryTime >= TELEMETRY_INTERVAL_MS) {
             lastTelemetryTime = now;
             
@@ -328,6 +353,7 @@ void communicationTaskFunc(void* parameter) {
  */
 void controlTaskFunc(void* parameter) {
     Serial.println("[Core 1] Control task started");
+    printSerialTestHelp();
     
     for (;;) {
         unsigned long now = millis();
@@ -341,18 +367,77 @@ void controlTaskFunc(void* parameter) {
             checkSensorAlerts();
         }
         
-        // Manual feed button polling (200ms debounce)
-        static bool lastBtnState = HIGH;
+        // Manual feed button polling (200ms debounce). GPIO35 has no internal
+        // pull-up, so the PCB/external resistor must hold it HIGH when released.
+        static bool lastBtnState = digitalRead(PIN_FEED_BTN);
         static unsigned long lastTriggerMs = 0;
+        static unsigned long lastBtnReportMs = 0;
         bool currentBtnState = digitalRead(PIN_FEED_BTN);
+        if (currentBtnState != lastBtnState) {
+            Serial.printf("[SW1] Button state: %s\n", currentBtnState == LOW ? "LOW/PRESSED" : "HIGH/RELEASED");
+        }
+        if (now - lastBtnReportMs >= 10000) {
+            lastBtnReportMs = now;
+            Serial.printf("[SW1] GPIO%d=%s\n",
+                          (int)PIN_FEED_BTN,
+                          currentBtnState == LOW ? "LOW/PRESSED" : "HIGH/RELEASED");
+        }
         if (lastBtnState == HIGH && currentBtnState == LOW) {
             if (millis() - lastTriggerMs > 200) {
                 Serial.println("[SW1] Manual feed button pressed");
-                feedingController.feedNow(MANUAL_FEED_GRAMS_DEFAULT);
+                bool started = feedingController.feedNow(MANUAL_FEED_GRAMS_DEFAULT);
+                Serial.printf("[SW1] Manual feed %s (%.2fg)\n",
+                              started ? "started" : "rejected",
+                              MANUAL_FEED_GRAMS_DEFAULT);
                 lastTriggerMs = millis();
             }
         }
         lastBtnState = currentBtnState;
+
+        while (Serial.available() > 0) {
+            char command = (char)Serial.read();
+            if (command == 'f' || command == 'F') {
+                Serial.println("[Serial] Manual feed test requested");
+                bool started = feedingController.feedNow(MANUAL_FEED_GRAMS_DEFAULT);
+                Serial.printf("[Serial] Manual feed %s (%.2fg)\n",
+                              started ? "started" : "rejected",
+                              MANUAL_FEED_GRAMS_DEFAULT);
+            } else if (command == 't' || command == 'T') {
+                Serial.println("[Serial] Temperature sensor test requested");
+                sensorManager.printTemperatureDiagnostics();
+            } else if (command == 'b') {
+                String bindCode = deviceManager.getBindingCode(false);
+                Serial.printf("[Binding] Device serial: %s\n", deviceManager.getDeviceID().c_str());
+                Serial.printf("[Binding] Binding code: %s\n", bindCode.c_str());
+            } else if (command == 'B') {
+                String bindCode = deviceManager.getBindingCode(true);
+                Serial.printf("[Binding] New binding code: %s\n", bindCode.c_str());
+                commManager.requestSelfRegistrationPublish();
+                Serial.println("[Binding] Registration republish queued");
+            } else if (command == 'd' || command == 'D') {
+                feedingController.printMotorDiagnostics();
+            } else if (command == 'm' || command == 'M') {
+                long steps = feedingController.getStepsPerRevolution();
+                Serial.printf("[Serial] Motor test: forward one revolution (%ld steps)\n", steps);
+                bool ok = feedingController.jogSteps(steps, true);
+                Serial.printf("[Serial] Motor forward test %s\n", ok ? "completed" : "failed/rejected");
+            } else if (command == 'r' || command == 'R') {
+                long steps = feedingController.getStepsPerRevolution();
+                Serial.printf("[Serial] Motor test: reverse one revolution (%ld steps)\n", steps);
+                bool ok = feedingController.jogSteps(steps, false);
+                Serial.printf("[Serial] Motor reverse test %s\n", ok ? "completed" : "failed/rejected");
+            } else if (command == 'j' || command == 'J') {
+                Serial.println("[Serial] Motor jog: forward 100 steps");
+                bool ok = feedingController.jogSteps(100, true);
+                Serial.printf("[Serial] Motor jog forward %s\n", ok ? "completed" : "failed/rejected");
+            } else if (command == 'k' || command == 'K') {
+                Serial.println("[Serial] Motor jog: reverse 100 steps");
+                bool ok = feedingController.jogSteps(100, false);
+                Serial.printf("[Serial] Motor jog reverse %s\n", ok ? "completed" : "failed/rejected");
+            } else if (command == '?' || command == 'h' || command == 'H') {
+                printSerialTestHelp();
+            }
+        }
 
         // Update device manager (provisioning timeout + status LED)
         deviceManager.update();

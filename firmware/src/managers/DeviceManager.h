@@ -126,6 +126,13 @@ public:
      * @return Cellular APN
      */
     String getCellularAPN() const;
+
+    /**
+     * Get the current 6-digit binding code, generating one if missing.
+     * @param regenerate true to rotate to a new code
+     * @return 6-digit binding code
+     */
+    String getBindingCode(bool regenerate = false);
     
     // BLE callbacks
     void onConnect(BLEServer* pServer) override;

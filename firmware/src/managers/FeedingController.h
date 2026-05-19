@@ -128,6 +128,19 @@ public:
     void calibrateGramsPerRev(float grams);
     void setMicrosteps(int microsteps);
     void setMaxSpeed(int stepsPerSecond);
+
+    /**
+     * Move the motor by a fixed step count for bench testing.
+     * This bypasses grams/Q10 calculation and only exercises STEP/DIR output.
+     */
+    bool jogSteps(long steps, bool direction);
+
+    /**
+     * Print motor pin and timing configuration to Serial.
+     */
+    void printMotorDiagnostics() const;
+
+    long getStepsPerRevolution() const;
     
     // Species parameters
     void setSpeciesParams(const SpeciesParams& params);

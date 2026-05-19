@@ -50,9 +50,10 @@
 #define MODEM_RX            27      // ESP32 RX <- A7670 TX
 #define MODEM_PWRKEY        4       // Power key (LOW pulse to toggle)
 #define MODEM_EN            12      // Enable pin
-// MODEM_DTR (GPIO25) and MODEM_RI (GPIO33) intentionally NOT defined.
-// GPIO25 = PIN_DIR (DM542T), GPIO33 = PIN_ULTRASONIC_TRIG per verified schematic.
-// Modem runs without DTR sleep control; RI ring-indicator not used.
+#define MODEM_RESET         5       // LilyGO modem reset pin
+#define MODEM_RESET_LEVEL   HIGH    // Official T-A7670X ESP32 reset level
+#define MODEM_DTR           25      // Keep modem awake when LOW
+// MODEM_RI (GPIO33) intentionally not used; it is the modem ring indicator.
 
 // GPS (A7670G variant only - shares UART with modem via AT commands)
 #define GPS_TX              21      // GPS TX (IO21)
@@ -73,7 +74,8 @@
 #define PIN_I2C_SCL         22      // Wire_SCL
 
 // Battery ADC (built-in 18650 monitoring)
-// GPIO35 is reserved for PIN_FEED_BTN (schematic). Battery ADC moved to GPIO39 (ADC1_CH3).
+// GPIO35 is the LilyGO board battery ADC. Battery ADC moved to GPIO39 (ADC1_CH3)
+// for custom carrier boards; the official board should keep NO_BATTERY_ADC set.
 #ifndef NO_BATTERY_ADC
 #define PIN_BATTERY_ADC     39      // ADC1_CH3 - Battery voltage (input-only, VN)
 #endif
@@ -84,12 +86,15 @@
 // =============================================================================
 // DM542 / TB6600 Stepper Motor Driver (Step/Dir mode)
 // For NEMA 23 stepper motor with 20mm wood drill auger
-// Available GPIOs on T-A7670: 0, 32, 33, 34, 35, 39 (input only: 34, 35, 39)
+// GPIO25 is modem DTR on the official LilyGO T-A7670X ESP32 board.
+// Keep motor control on GPIOs that do not overlap with modem pins.
 // =============================================================================
+#if !defined(USE_DM542) && !defined(USE_TB6600) && !defined(USE_TMC2209) && !defined(USE_A4988)
 #define USE_DM542
+#endif
 #ifdef USE_DM542
 #define PIN_STEP    GPIO_NUM_32   // PUL- via R3(1kOhm) series resistor on PCB
-#define PIN_DIR     GPIO_NUM_25   // DIR- via R4(1kOhm) series resistor on PCB
+#define PIN_DIR     GPIO_NUM_18   // DIR- via R4(1kOhm), moved off GPIO25 modem DTR
 // PIN_ENABLE removed - not connected in hardware
 #endif
 
@@ -160,7 +165,8 @@
 // =============================================================================
 // Power Monitoring (18650 battery via built-in divider)
 // =============================================================================
-// PIN_BATTERY_ADC defined above as GPIO39 (GPIO35 is reserved for PIN_FEED_BTN)
+// PIN_BATTERY_ADC defined above as GPIO39 for custom carrier boards.
+// On the official LilyGO board, GPIO35 is the built-in battery ADC.
 #ifndef NO_SOLAR_INPUT
 #define PIN_SOLAR_ADC       GPIO_NUM_36     // Solar panel voltage (VP, with external divider)
 #endif
@@ -189,7 +195,7 @@
 
 // Verified schematic pin mapping (DRC-clean, 2026-04-19)
 #define PIN_STEP            GPIO_NUM_32   // MOTOR_STEP -> DM542T PUL- via R3(1kOhm)
-#define PIN_DIR             GPIO_NUM_25   // MOTOR_DIR -> DM542T DIR- via R4(1kOhm)
+#define PIN_DIR             GPIO_NUM_18   // MOTOR_DIR -> DM542T DIR- via R4(1kOhm), avoids modem DTR GPIO25
 // PIN_ENABLE removed
 #ifndef NO_ULTRASONIC_SENSOR
 #define PIN_ULTRASONIC_TRIG GPIO_NUM_33   // TRIG -> JSN-SR04T (safe GPIO, not modem EN)
@@ -338,7 +344,12 @@
 // Cellular (A7670G 4G LTE Cat1)
 #define MODEM_BAUD_RATE         115200
 #define MODEM_TIMEOUT_MS        30000
-#define MODEM_APN               "internet"
+#define MODEM_POWERON_PULSE_WIDTH_MS 100
+#define MODEM_START_WAIT_MS     3000
+#define MODEM_NETWORK_WAIT_MS   180000
+#define MODEM_APN               "gloflat"
+#define MODEM_APN_USER          ""
+#define MODEM_APN_PASS          ""
 #define MODEM_MODEL             "A7670"
 
 #ifdef WOKWI_SIM
@@ -413,20 +424,30 @@
 
 
 // HX711 Load Cell - NOT POPULATED in current schematic revision
+#ifndef NO_LOADCELL
 #define NO_LOADCELL
+#endif
 
 // Ultrasonic Sensor - NOT USED in this experiment (relying on timer/load cell if available)
+#ifndef NO_ULTRASONIC_SENSOR
 #define NO_ULTRASONIC_SENSOR
+#endif
 
 // ESP32-CAM - NOT USED in this experiment (relying on hardware only)
+#ifndef NO_ESP32_CAM
 #define NO_ESP32_CAM
+#endif
 
 // Solar panel - NOT USED in this deployment (battery only)
 // Suppresses solar ADC reads and "no solar" warnings.
+#ifndef NO_SOLAR_INPUT
 #define NO_SOLAR_INPUT
+#endif
 
 // Manual feed button and status LED
-#define PIN_FEED_BTN            GPIO_NUM_35
+// Official LilyGO T-A7670X ESP32 exposes IO0 as the user/download button.
+// GPIO35 is the board battery ADC and is input-only with no internal pull-up.
+#define PIN_FEED_BTN            GPIO_NUM_0
 #define MANUAL_FEED_GRAMS_DEFAULT 18.75f
 // 18.75g = 15 fish x 50g avg x 2.5% per feeding event (5% BW/day / 2 feeds)
 

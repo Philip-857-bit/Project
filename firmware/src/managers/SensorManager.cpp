@@ -103,7 +103,7 @@ bool SensorManager::begin() {
         _lastTempRequest = millis();
         _tempConversionPending = true;
     } else {
-        Serial.println("[SensorManager] No DS18B20 sensors found");
+        Serial.printf("[SensorManager] No DS18B20 sensors found on GPIO%d\n", (int)PIN_ONEWIRE);
     }
     
     _status.hopperCalibration = _hopperFullDistance;
@@ -225,6 +225,85 @@ float SensorManager::readTemperature() {
         return -127.0f;
     }
     return _tempSensor->getTempCByIndex(0);
+}
+
+void SensorManager::printTemperatureDiagnostics() {
+    Serial.println();
+    Serial.println("[TempTest] ======== DS18B20 TEST ========");
+    Serial.printf("[TempTest] OneWire data pin: GPIO%d\n", (int)PIN_ONEWIRE);
+    Serial.println("[TempTest] Wiring: VDD=3V3, GND=GND, DATA=OneWire pin, 4.7k pullup DATA->3V3");
+
+    if (!_oneWire) {
+        _oneWire = new OneWire(PIN_ONEWIRE);
+    }
+    if (!_tempSensor) {
+        _tempSensor = new DallasTemperature(_oneWire);
+    }
+
+    _tempSensor->begin();
+    int deviceCount = _tempSensor->getDeviceCount();
+    Serial.printf("[TempTest] Device count: %d\n", deviceCount);
+
+    if (deviceCount <= 0) {
+        _status.temperatureOK = false;
+        _currentData.temperatureValid = false;
+        Serial.println("[TempTest] FAIL: no DS18B20 detected on the OneWire bus");
+        Serial.println("[TempTest] Check DATA pin, pullup resistor/module VCC, and common ground");
+        Serial.println("[TempTest] =============================");
+        Serial.println();
+        return;
+    }
+
+    _status.temperatureOK = true;
+    _tempSensor->setResolution(TEMP_RESOLUTION);
+    _tempSensor->setWaitForConversion(true);
+
+    DeviceAddress address;
+    for (int i = 0; i < deviceCount; i++) {
+        if (_tempSensor->getAddress(address, i)) {
+            Serial.printf("[TempTest] Sensor %d address: ", i);
+            for (uint8_t j = 0; j < 8; j++) {
+                if (address[j] < 16) {
+                    Serial.print('0');
+                }
+                Serial.print(address[j], HEX);
+            }
+            Serial.println();
+        } else {
+            Serial.printf("[TempTest] Sensor %d address: unavailable\n", i);
+        }
+    }
+
+    Serial.println("[TempTest] Requesting temperature conversion...");
+    _tempSensor->requestTemperatures();
+
+    for (int i = 0; i < deviceCount; i++) {
+        float temp = _tempSensor->getTempCByIndex(i);
+        if (temp == DEVICE_DISCONNECTED_C) {
+            Serial.printf("[TempTest] Sensor %d read failed: DEVICE_DISCONNECTED_C\n", i);
+            continue;
+        }
+
+        bool valid = validateReading(temp, TEMP_MIN_VALID, TEMP_MAX_VALID);
+        Serial.printf("[TempTest] Sensor %d temperature: %.2f C (%s)\n",
+                      i,
+                      temp,
+                      valid ? "valid" : "outside configured range");
+
+        if (i == 0 && valid) {
+            _currentData.temperature = temp;
+            _currentData.temperatureValid = true;
+            _temperatureSamples[_sampleIndex % SAMPLE_COUNT] = temp;
+        }
+    }
+
+    _tempSensor->setWaitForConversion(false);
+    _tempSensor->requestTemperatures();
+    _lastTempRequest = millis();
+    _tempConversionPending = true;
+
+    Serial.println("[TempTest] =============================");
+    Serial.println();
 }
 
 float SensorManager::weightToPercent(float weightGrams) {

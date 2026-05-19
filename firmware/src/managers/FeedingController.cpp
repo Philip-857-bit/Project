@@ -292,6 +292,52 @@ void FeedingController::setMaxSpeed(int stepsPerSecond) {
     }
     _stepDelayUs = 1000000UL / (unsigned long)stepsPerSecond;
 }
+
+bool FeedingController::jogSteps(long steps, bool direction) {
+    if (!_motorInitialized || _feedingActive || steps <= 0) {
+        return false;
+    }
+
+    _feedingActive = true;
+    _feedingStartTime = millis();
+    bool completed = moveSteps(steps, direction);
+    _feedingActive = false;
+    return completed;
+}
+
+void FeedingController::printMotorDiagnostics() const {
+    Serial.println();
+    Serial.println("[MotorTest] ======== MOTOR CONFIG ========");
+#ifdef USE_DM542
+    Serial.println("[MotorTest] Driver: DM542");
+#elif defined(USE_TB6600)
+    Serial.println("[MotorTest] Driver: TB6600");
+#elif defined(USE_TMC2209)
+    Serial.println("[MotorTest] Driver: TMC2209");
+#elif defined(USE_A4988)
+    Serial.println("[MotorTest] Driver: A4988");
+#else
+    Serial.println("[MotorTest] Driver: Step/Dir");
+#endif
+    Serial.printf("[MotorTest] STEP pin: GPIO%d\n", (int)PIN_STEP);
+    Serial.printf("[MotorTest] DIR pin: GPIO%d\n", (int)PIN_DIR);
+    Serial.println("[MotorTest] ENABLE pin: not connected/skipped");
+    Serial.printf("[MotorTest] Motor initialized: %s\n", _motorInitialized ? "yes" : "no");
+    Serial.printf("[MotorTest] Full steps/rev: %d\n", MOTOR_STEPS_PER_REV);
+    Serial.printf("[MotorTest] Microsteps: %d\n", _microSteps);
+    Serial.printf("[MotorTest] Test steps/rev: %ld\n", getStepsPerRevolution());
+    Serial.printf("[MotorTest] Step delay: %lu us\n", _stepDelayUs);
+    Serial.printf("[MotorTest] Pulse width: %d us\n", MOTOR_PULSE_WIDTH_US);
+    Serial.printf("[MotorTest] Calibration: %.2f g/rev\n", _gramsPerRevolution);
+    Serial.println("[MotorTest] DM542 wiring: ESP32 STEP/DIR -> PUL-/DIR-, driver PUL+/DIR+ -> 5V or driver logic V+");
+    Serial.println("[MotorTest] ==============================");
+    Serial.println();
+}
+
+long FeedingController::getStepsPerRevolution() const {
+    return (long)MOTOR_STEPS_PER_REV * (long)_microSteps;
+}
+
 bool FeedingController::setSchedule(ScheduleEntry* entries, int count) {
     if (count > SCHEDULE_MAX_ENTRIES) count = SCHEDULE_MAX_ENTRIES;
     memcpy(_schedule, entries, count * sizeof(ScheduleEntry));

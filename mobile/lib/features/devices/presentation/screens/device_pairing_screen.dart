@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -33,6 +34,13 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   StreamSubscription? _scanSubscription;
   String? _bindingCode;
   String? _errorMessage;
+
+  bool get _canBindDirectly =>
+      _selectedDeviceId == null && _isValidBindingCode(_bindingCode);
+
+  bool _isValidBindingCode(String? code) {
+    return code != null && RegExp(r'^\d{6}$').hasMatch(code);
+  }
 
   @override
   void initState() {
@@ -171,6 +179,49 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     }
   }
 
+  Future<void> _bindWithExistingCode() async {
+    if (_scannedSerialNumber == null || !_isValidBindingCode(_bindingCode)) {
+      setState(
+        () =>
+            _errorMessage = 'Enter the device serial and 6-digit binding code',
+      );
+      return;
+    }
+
+    setState(() {
+      _isProvisioning = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final bindSuccess = await ref
+          .read(deviceListProvider.notifier)
+          .bindDevice(
+            _scannedSerialNumber!,
+            _bindingCode!,
+            _deviceNameController.text.trim().isEmpty
+                ? 'My Fish Feeder'
+                : _deviceNameController.text.trim(),
+          );
+
+      if (bindSuccess) {
+        setState(() => _currentStep = 3);
+      } else {
+        setState(
+          () =>
+              _errorMessage =
+                  'Failed to bind device. Check the serial number and binding code.',
+        );
+      }
+    } catch (e) {
+      setState(() => _errorMessage = 'Binding error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isProvisioning = false);
+      }
+    }
+  }
+
   void _showQrScanner() {
     showModalBottomSheet(
       context: context,
@@ -198,11 +249,12 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                         }
 
                         String? serial;
+                        String? scannedBindingCode;
                         if (code.startsWith('SFF-BIND|')) {
                           final parts = code.split('|');
                           if (parts.length >= 3) {
                             serial = parts[1];
-                            _bindingCode = parts[2];
+                            scannedBindingCode = parts[2];
                           }
                         } else if (code.startsWith('SFF-')) {
                           serial = code;
@@ -212,9 +264,13 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                           Navigator.pop(ctx);
                           setState(() {
                             _scannedSerialNumber = serial;
-                            _currentStep = 1;
+                            _bindingCode = scannedBindingCode;
+                            _currentStep =
+                                _isValidBindingCode(_bindingCode) ? 2 : 1;
                           });
-                          _startScan();
+                          if (!_isValidBindingCode(_bindingCode)) {
+                            _startScan();
+                          }
                         }
                       }
                     },
@@ -235,42 +291,95 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   }
 
   void _showManualEntry() {
-    final controller = TextEditingController();
+    final serialController = TextEditingController();
+    final codeController = TextEditingController();
+    String? dialogError;
     showDialog(
       context: context,
       builder:
-          (ctx) => AlertDialog(
-            title: const Text('Enter Serial Number'),
-            content: TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'Serial Number',
-                hintText: 'SFF-XXX-XXXXXX',
-                border: OutlineInputBorder(),
-              ),
-              textCapitalization: TextCapitalization.characters,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (controller.text.isNotEmpty) {
-                    Navigator.pop(ctx);
-                    setState(() {
-                      _scannedSerialNumber = controller.text;
-                      _currentStep = 1;
-                    });
-                    _startScan();
-                  }
-                },
-                child: const Text('Continue'),
-              ),
-            ],
+          (ctx) => StatefulBuilder(
+            builder:
+                (ctx, setDialogState) => AlertDialog(
+                  title: const Text('Enter Device Details'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: serialController,
+                        decoration: const InputDecoration(
+                          labelText: 'Serial Number',
+                          hintText: 'smartaqua-mcu',
+                          border: OutlineInputBorder(),
+                        ),
+                        textCapitalization: TextCapitalization.none,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: codeController,
+                        decoration: const InputDecoration(
+                          labelText: 'Binding Code',
+                          hintText: '6 digits from Serial Monitor',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(6),
+                        ],
+                      ),
+                      if (dialogError != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          dialogError!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ],
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        final serial = serialController.text.trim();
+                        final bindingCode = codeController.text.trim();
+
+                        if (serial.isEmpty) {
+                          setDialogState(
+                            () => dialogError = 'Serial number is required',
+                          );
+                          return;
+                        }
+                        if (bindingCode.isNotEmpty &&
+                            !_isValidBindingCode(bindingCode)) {
+                          setDialogState(
+                            () => dialogError = 'Binding code must be 6 digits',
+                          );
+                          return;
+                        }
+
+                        Navigator.pop(ctx);
+                        setState(() {
+                          _scannedSerialNumber = serial;
+                          _bindingCode =
+                              bindingCode.isEmpty ? null : bindingCode;
+                          _currentStep = _bindingCode == null ? 1 : 2;
+                        });
+                        if (bindingCode.isEmpty) {
+                          _startScan();
+                        }
+                      },
+                      child: const Text('Continue'),
+                    ),
+                  ],
+                ),
           ),
-    );
+    ).whenComplete(() {
+      serialController.dispose();
+      codeController.dispose();
+    });
   }
 
   @override
@@ -333,7 +442,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                       child: _ActionCard(
                         icon: Icons.keyboard,
                         title: 'Enter Manually',
-                        subtitle: 'Type serial number',
+                        subtitle: 'Serial and code',
                         onTap: _showManualEntry,
                       ),
                     ),
@@ -349,7 +458,11 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                         color: Colors.green,
                       ),
                       title: const Text('Device Found'),
-                      subtitle: Text(_scannedSerialNumber!),
+                      subtitle: Text(
+                        _bindingCode == null
+                            ? _scannedSerialNumber!
+                            : '$_scannedSerialNumber - Code $_bindingCode',
+                      ),
                     ),
                   ),
                 ],
@@ -460,58 +573,72 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
 
           // Step 2: Configure Network
           Step(
-            title: const Text('Configure Network'),
+            title: Text(_canBindDirectly ? 'Bind Device' : 'Configure Network'),
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Choose how your device connects to the internet:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                _NetworkOption(
-                  icon: Icons.cell_tower,
-                  title: 'Cellular (Recommended)',
-                  subtitle: 'Uses SIM card for remote locations',
-                  isSelected: _networkType == 'cellular',
-                  onTap: () => setState(() => _networkType = 'cellular'),
-                ),
-                const SizedBox(height: 8),
-                _NetworkOption(
-                  icon: Icons.wifi,
-                  title: 'WiFi',
-                  subtitle: 'Requires nearby WiFi network',
-                  isSelected: _networkType == 'wifi',
-                  onTap: () => setState(() => _networkType = 'wifi'),
-                ),
-                const SizedBox(height: 16),
-
-                if (_networkType == 'cellular')
-                  TextFormField(
-                    controller: _apnController,
-                    decoration: const InputDecoration(
-                      labelText: 'APN',
-                      hintText: 'e.g., internet',
-                      border: OutlineInputBorder(),
-                    ),
-                  )
-                else ...[
-                  TextFormField(
-                    controller: _ssidController,
-                    decoration: const InputDecoration(
-                      labelText: 'WiFi Network Name',
-                      border: OutlineInputBorder(),
+                if (_canBindDirectly) ...[
+                  const Text(
+                    'This device is already online. Bind it to your account with the code shown on the device serial monitor.',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.cloud_done),
+                      title: Text(_scannedSerialNumber ?? 'Device'),
+                      subtitle: Text('Binding code: $_bindingCode'),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'WiFi Password',
-                      border: OutlineInputBorder(),
-                    ),
+                ] else ...[
+                  const Text(
+                    'Choose how your device connects to the internet:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
+                  const SizedBox(height: 16),
+                  _NetworkOption(
+                    icon: Icons.cell_tower,
+                    title: 'Cellular (Recommended)',
+                    subtitle: 'Uses SIM card for remote locations',
+                    isSelected: _networkType == 'cellular',
+                    onTap: () => setState(() => _networkType = 'cellular'),
+                  ),
+                  const SizedBox(height: 8),
+                  _NetworkOption(
+                    icon: Icons.wifi,
+                    title: 'WiFi',
+                    subtitle: 'Requires nearby WiFi network',
+                    isSelected: _networkType == 'wifi',
+                    onTap: () => setState(() => _networkType = 'wifi'),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_networkType == 'cellular')
+                    TextFormField(
+                      controller: _apnController,
+                      decoration: const InputDecoration(
+                        labelText: 'APN',
+                        hintText: 'e.g., internet',
+                        border: OutlineInputBorder(),
+                      ),
+                    )
+                  else ...[
+                    TextFormField(
+                      controller: _ssidController,
+                      decoration: const InputDecoration(
+                        labelText: 'WiFi Network Name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'WiFi Password',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 16),
                 TextFormField(
@@ -530,7 +657,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                       children: [
                         CircularProgressIndicator(),
                         SizedBox(height: 16),
-                        Text('Configuring device...'),
+                        Text('Working...'),
                       ],
                     ),
                   ),
@@ -594,7 +721,8 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
       case 1:
         return _selectedDeviceId != null && !_isConnecting;
       case 2:
-        return !_isProvisioning;
+        return !_isProvisioning &&
+            (!_canBindDirectly || _scannedSerialNumber != null);
       default:
         return true;
     }
@@ -608,12 +736,20 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
       );
     }
-    return Text(_currentStep == 2 ? 'Configure' : 'Continue');
+    return Text(
+      _currentStep == 2
+          ? (_canBindDirectly ? 'Bind Device' : 'Configure')
+          : 'Continue',
+    );
   }
 
   void _handleStepContinue() {
     if (_currentStep == 2) {
-      _provisionDevice();
+      if (_canBindDirectly) {
+        _bindWithExistingCode();
+      } else {
+        _provisionDevice();
+      }
     } else if (_currentStep < 3) {
       setState(() => _currentStep++);
     }

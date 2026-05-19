@@ -1,0 +1,112 @@
+; Sulog.INF file
+
+[Version]
+Signature = "$Windows NT$"
+Class = USB
+ClassGUID={36FC9E60-C465-11CF-8056-444553540000}
+Provider = %ProviderName%
+DriverVer=02/27/2018,1.3.0.0
+CatalogFile.NTx86   = WinUSB\WTPTP_WinUSB_i386.cat
+CatalogFile.NTamd64 = WinUSB\WTPTP_WinUSB_amd64.cat
+
+[Manufacturer]
+%MfgName% = MarvellHw,NTx86,NTamd64
+
+
+
+;------------------------------------NTx86------------------------------------
+[MarvellHw.NTx86]
+%USB\VID_1286&PID_8130.DeviceDesc%=MarvellHw.Install, USB\VID_1286&PID_8130
+%USB\VID_1286&PID_8181.DeviceDesc%=MarvellHw.Install, USB\VID_1286&PID_8181
+
+%USB\VID_2ECC&PID_3001.DeviceDesc%=MarvellHw.Install, USB\VID_2ECC&PID_3001
+%USB\VID_2ECC&PID_3002.DeviceDesc%=MarvellHw.Install, USB\VID_2ECC&PID_3002
+%USB\VID_2ECC&PID_3003.DeviceDesc%=MarvellHw.Install, USB\VID_2ECC&PID_3003
+
+%USB\VID_19D2&PID_1491.DeviceDesc%=MarvellHw.Install, USB\VID_19D2&PID_1491
+
+
+;------------------------------------NTamd64------------------------------------
+[MarvellHw.NTamd64]
+%USB\VID_1286&PID_8130.DeviceDesc%=MarvellHw.Install, USB\VID_1286&PID_8130
+%USB\VID_1286&PID_8181.DeviceDesc%=MarvellHw.Install, USB\VID_1286&PID_8181
+
+%USB\VID_2ECC&PID_3001.DeviceDesc%=MarvellHw.Install, USB\VID_2ECC&PID_3001
+%USB\VID_2ECC&PID_3002.DeviceDesc%=MarvellHw.Install, USB\VID_2ECC&PID_3002
+%USB\VID_2ECC&PID_3003.DeviceDesc%=MarvellHw.Install, USB\VID_2ECC&PID_3003
+
+%USB\VID_19D2&PID_1491.DeviceDesc%=MarvellHw.Install, USB\VID_19D2&PID_1491
+
+
+; =================== Installation ===================
+
+[MarvellHw.Install.nt]
+Include=winusb.inf
+Needs=WINUSB.NT
+
+[MarvellHw.Install.nt.Services]
+Include=winusb.inf
+AddService=WINUSB,0x00000002,WinUSB_ServiceInstall
+
+[WinUSB_ServiceInstall]
+DisplayName = %WinUSB_SvcDesc%
+ServiceType = 1
+StartType = 3
+ErrorControl = 1
+ServiceBinary   = %12%\winusb.sys
+
+[MarvellHw.Install.nt.Wdf]
+KmdfService = WINUSB, WinUSB.Install
+
+[WinUSB.Install]
+KmdfLibraryVersion=1.9
+
+[MarvellHw.Install.nt.HW]
+AddReg=Dev_AddReg
+
+[Dev_AddReg]
+HKR,,DeviceInterfaceGUIDs,0x10000,"{0C8AB63E-040C-428C-8050-1776087AD742}"
+
+[MarvellHw.Install.nt.CoInstallers]
+AddReg=CoInstallers_AddReg
+CopyFiles=CoInstallers_CopyFiles
+
+[CoInstallers_AddReg]
+HKR,,CoInstallers32,0x00010000,"WdfCoInstaller01009.dll,WdfCoInstaller","WinUSBCoInstaller.dll"
+
+[CoInstallers_CopyFiles]
+WinUSBCoInstaller.dll
+WdfCoInstaller01009.dll
+
+[DestinationDirs]
+DefaultDestDir=12
+CoInstallers_CopyFiles=11
+
+; ================= Source Media Section =====================
+
+[SourceDisksNames]
+1 = %DISK_NAME%,,,\WinUSB\i386
+2 = %DISK_NAME%,,,\WinUSB\amd64
+
+[SourceDisksFiles.x86]
+WinUSBCoInstaller.dll  = 1
+WdfCoInstaller01009.dll=1
+
+[SourceDisksFiles.amd64]
+WinUSBCoInstaller.dll  = 2
+WdfCoInstaller01009.dll=2
+
+; =================== Strings ===================
+
+[Strings]
+USB\VID_1286&PID_8130.DeviceDesc="ASR(R) WTP_WinUSB: Tools package USB Driver for 1802"
+USB\VID_1286&PID_8181.DeviceDesc="ASR(R) WTP_WinUSB: Tools package USB Driver for 1826"
+USB\VID_2ECC&PID_3001.DeviceDesc="ASR(R) WTP_WinUSB: Tools package USB Driver for 1802S"
+USB\VID_2ECC&PID_3002.DeviceDesc="ASR(R) WTP_WinUSB: Tools package USB Driver"
+USB\VID_2ECC&PID_3003.DeviceDesc="ASR(R) WTP_WinUSB: Tools package USB Driver"
+USB\VID_19D2&PID_1491.DeviceDesc="ZTE OBM USB Device"
+
+MfgName				= "ASR"
+WinUSB_SvcDesc		= "WTP: WinUSB Host Driver"
+ProviderName		= "ASR HeFei Branch"
+DISK_NAME		= "ASR WTPTP WinUSB Install Disk"

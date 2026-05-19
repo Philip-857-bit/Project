@@ -35,6 +35,9 @@ bool DeviceManager::begin(NVSStorage* storage) {
     
     // Load credentials
     _isProvisioned = loadCredentials();
+
+    String bindCode = getBindingCode(false);
+    Serial.printf("[DeviceManager] Binding code: %s\n", bindCode.c_str());
     
 #ifdef PIN_LED_STATUS
     pinMode(PIN_LED_STATUS, OUTPUT);
@@ -62,19 +65,32 @@ bool DeviceManager::loadCredentials() {
     _mqttPassword = _storage->getString(NVS_KEY_MQTT_PASS);
     _cellularAPN = _storage->getString(NVS_KEY_CELL_APN);
 
+    // Use build-time defaults if storage is empty
+    if (_mqttHost.isEmpty()) {
+#ifdef MQTT_HOST
+        _mqttHost = MQTT_HOST;
+#endif
+    }
+    if (_mqttUsername.isEmpty()) {
+#ifdef MQTT_USER
+        _mqttUsername = MQTT_USER;
+#endif
+    }
+    if (_mqttPassword.isEmpty()) {
+#ifdef MQTT_PASS
+        _mqttPassword = MQTT_PASS;
+#endif
+    }
+    
+#ifdef MQTT_CLIENT_ID
+    // If client ID is hardcoded, override the generated one
+    _deviceID = MQTT_CLIENT_ID;
+#endif
+
 #ifdef WOKWI_SIM
     if (_wifiSSID.isEmpty()) {
         _wifiSSID = WOKWI_DEFAULT_WIFI_SSID;
         _wifiPassword = WOKWI_DEFAULT_WIFI_PASS;
-    }
-    if (_mqttHost.isEmpty()) {
-        _mqttHost = WOKWI_DEFAULT_MQTT_HOST;
-    }
-    if (_mqttUsername.isEmpty()) {
-        _mqttUsername = WOKWI_DEFAULT_MQTT_USER;
-    }
-    if (_mqttPassword.isEmpty()) {
-        _mqttPassword = WOKWI_DEFAULT_MQTT_PASS;
     }
 #endif
     
@@ -140,6 +156,24 @@ String DeviceManager::generateBindingCode() {
     return result;
 }
 
+String DeviceManager::getBindingCode(bool regenerate) {
+    if (_storage == nullptr) {
+        return "";
+    }
+
+    String code;
+    if (!regenerate && _storage->isKey(NVS_KEY_BINDING_CODE)) {
+        code = _storage->getString(NVS_KEY_BINDING_CODE);
+    }
+
+    if (regenerate || code.length() != 6) {
+        code = generateBindingCode();
+        Serial.printf("[DeviceManager] Generated binding code: %s\n", code.c_str());
+    }
+
+    return code;
+}
+
 void DeviceManager::initBLE() {
     BLEDevice::init("SmartFishFeeder");
 
@@ -191,7 +225,7 @@ void DeviceManager::initBLE() {
         CHAR_BINDING_CODE_UUID,
         BLECharacteristic::PROPERTY_READ
     );
-    String bindCode = generateBindingCode();
+    String bindCode = getBindingCode(false);
     _charBindingCode->setValue(bindCode.c_str());
     Serial.printf("[DeviceManager] Binding code: %s\n", bindCode.c_str());
 

@@ -7,6 +7,16 @@
 #define COMMUNICATION_MANAGER_H
 
 #include <Arduino.h>
+#include "../../include/config.h"
+
+// TinyGSM configuration must be visible before TinyGsmClient.h is included.
+#ifdef LILYGO_T_A7670
+#ifndef TINY_GSM_RX_BUFFER
+#define TINY_GSM_RX_BUFFER 1024
+#endif
+
+#include <TinyGsmClient.h>
+#endif
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
@@ -17,6 +27,28 @@
 #include "FeedingController.h"
 #include "SystemDiagnostics.h"
 #include "../storage/NVSStorage.h"
+
+#ifndef COMM_MANAGER_HAS_GSM_SECURE_CLIENT
+#if defined(TINY_GSM_MODEM_SIM800) || defined(TINY_GSM_MODEM_SIM808) || \
+    defined(TINY_GSM_MODEM_SIM868) || defined(TINY_GSM_MODEM_SIM7000SSL) || \
+    defined(TINY_GSM_MODEM_SIM7070) || defined(TINY_GSM_MODEM_SIM7080) || \
+    defined(TINY_GSM_MODEM_SIM7090) || defined(TINY_GSM_MODEM_UBLOX) || \
+    defined(TINY_GSM_MODEM_SARAR4) || defined(TINY_GSM_MODEM_ESP8266) || \
+    defined(TINY_GSM_MODEM_XBEE) || defined(TINY_GSM_MODEM_SEQUANS_MONARCH) || \
+    defined(TINY_GSM_MODEM_A76XXSSL)
+#define COMM_MANAGER_HAS_GSM_SECURE_CLIENT 1
+#else
+#define COMM_MANAGER_HAS_GSM_SECURE_CLIENT 0
+#endif
+#endif
+
+#ifndef COMM_MANAGER_HAS_GSM_NATIVE_MQTT
+#if defined(TINY_GSM_MODEM_A76XXSSL) || defined(TINY_GSM_MODEM_A7670) || defined(TINY_GSM_MODEM_A7608)
+#define COMM_MANAGER_HAS_GSM_NATIVE_MQTT 1
+#else
+#define COMM_MANAGER_HAS_GSM_NATIVE_MQTT 0
+#endif
+#endif
 
 // Connection state
 enum class ConnectionState {
@@ -160,6 +192,12 @@ public:
      * @return true if sent
      */
     bool sendPipelinePing(uint32_t nonce);
+
+    /**
+     * Queue device registration and binding code to be published by the
+     * communication task that owns the modem UART.
+     */
+    void requestSelfRegistrationPublish();
     
     /**
      * Process incoming messages
@@ -208,12 +246,20 @@ private:
     
     WiFiClient _wifiClient;
     WiFiClientSecure _wifiSecureClient;
+    TinyGsmClient* _gsmClient;
+#if COMM_MANAGER_HAS_GSM_SECURE_CLIENT
+    TinyGsmClientSecure* _gsmSecureClient;
+#endif
     PubSubClient _mqttClient;
     
     ConnectionState _state;
     bool _useGSM;
     bool _wifiAvailable;
     bool _gsmAvailable;
+    bool _gsmNativeMqttConnected;
+    bool _gsmApplicationStackAvailable;
+    bool _gsmMqttTransportAvailable;
+    volatile bool _registrationPublishRequested;
     
     unsigned long _lastConnectAttempt;
     unsigned long _lastReconnectAttempt;
@@ -260,16 +306,44 @@ private:
      * @return true if connected
      */
     bool connectMQTT();
+
+    /**
+     * Connect using the modem-native SIMCom MQTT client.
+     * Used on A7670 firmware that exposes CMQTT but rejects CCH/CSSLCFG sockets.
+     */
+    bool connectNativeGsmMQTT(const String& host,
+                              uint16_t port,
+                              bool useTLS,
+                              const String& clientID,
+                              const String& username,
+                              const String& password);
+    bool connectNativeGsmMQTTRaw(const String& host,
+                                 uint16_t port,
+                                 bool useTLS,
+                                 const String& clientID,
+                                 const String& username,
+                                 const String& password);
+    void cleanupNativeGsmMQTT(const char* reason);
+
+    bool publishNativeGsmMQTT(const String& topic, const uint8_t* payload, size_t length, uint8_t qos);
+    bool subscribeNativeGsmMQTT(const String& topic, uint8_t qos);
+    void processNativeGsmMQTT();
     
     /**
      * Subscribe to device topics
      */
     void subscribeTopics();
+
+    /**
+     * Publish device registration and binding code.
+     */
+    void publishSelfRegistration();
     
     /**
      * MQTT message callback
      */
     static void mqttCallback(char* topic, byte* payload, unsigned int length);
+    static void nativeMqttCallback(const char* topic, const uint8_t* payload, uint32_t length);
     
     /**
      * Handle incoming command
@@ -309,9 +383,18 @@ private:
      * Send AT command to GSM module
      * @param command AT command
      * @param timeout Timeout in ms
+     * @param stopToken Optional token to wait for instead of stopping at OK/ERROR
      * @return Response string
      */
-    String sendATCommand(const String& command, unsigned long timeout = 1000);
+    String sendATCommand(const String& command, unsigned long timeout = 1000, const char* stopToken = nullptr);
+    String sendATPayloadCommand(const String& command,
+                                const uint8_t* payload,
+                                size_t length,
+                                unsigned long promptTimeout = 10000,
+                                unsigned long responseTimeout = 10000);
+    String readATResponse(unsigned long timeout, const char* stopToken = nullptr);
+    void probeModemApplicationCommandSupport();
+    bool probeATCommand(const char* command, unsigned long timeout = 5000);
     
     /**
      * Build topic string
@@ -320,11 +403,6 @@ private:
      */
     String buildTopic(const char* suffix);
 
-    /**
-     * Publish self-registration message after MQTT connect
-     */
-    void publishSelfRegistration();
-    
     // Singleton instance for static callback
     static CommunicationManager* _instance;
 };

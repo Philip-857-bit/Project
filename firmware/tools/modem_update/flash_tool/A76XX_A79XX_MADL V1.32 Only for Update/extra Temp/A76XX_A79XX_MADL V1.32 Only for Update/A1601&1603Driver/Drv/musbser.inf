@@ -1,0 +1,356 @@
+;
+;   MUSBSer.INF (for Windows XP/Win7/Win8)
+;
+;   Copyright (c) 2011 - 2014, ASR Technology.
+
+[version]
+signature="$Windows NT$"
+Class=Ports
+ClassGuid={4D36E978-E325-11CE-BFC1-08002BE10318}
+Provider=%Pro%
+DriverVer=02/03/2021, 2.0.1.0
+CatalogFile.NTx86 = MUSBSer\musbser_i386.cat
+CatalogFile.NTamd64 = MUSBSer\musbser_amd64.cat
+
+
+[ControlFlags]
+;
+
+[DestinationDirs]
+DefaultDestDir=12
+ComPort.NT.Copy=12
+
+[Manufacturer]
+%Pro%=Pro, NTx86, NTamd64
+
+
+
+;========================================= 32bit ==================================================
+[Pro.NTx86]
+
+;Add for ASR mobilephone product
+;diag,acm,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_2100&MI_01
+;diag,acm,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_2101&MI_01
+;diag,acm
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_2102&MI_01
+;rndis,diag,acm,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_2103&MI_03
+
+;Add for ASR data product
+%DeviceDesc_download% = ComPort, USB\VID_2ECC&PID_3004
+%DeviceDesc_download% = ComPort, USB\VID_2ECC&PID_3004&MI_00
+;rndis,acm,diag,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3010&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3010&MI_08
+;acm,diag,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3011&MI_00
+;rndis,acm,diag,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3012&MI_02
+;rndis,acm,acm,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3013&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3013&MI_04
+;rndis,acm,acm,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3014&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3014&MI_04
+;rndis,acm,acm,diag,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3015&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3015&MI_04
+;rndis,acm,acm,diag,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3016&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3016&MI_04
+;acm
+%DeviceDesc_download% = ComPort, USB\VID_2ECC&PID_3017
+%DeviceDesc_download% = ComPort, USB\VID_2ECC&PID_3017&MI_00
+;acm,diag,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3018&MI_00
+;acm,acm,diag,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3019&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3019&MI_02
+;acm,acm,diag,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_301A&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_301A&MI_02
+;acm,acm,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_301B&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_301B&MI_02
+;acm,acm,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_301C&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_301C&MI_02
+;rndis,generic,generic,generic
+;
+;acm,generic,generic,generic
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_301E&MI_00
+;generic,generic,generic,generic
+;
+
+;zte
+;rndis,acm,diag,adb
+%DeviceDesc_zte% = ComPort, USB\VID_19D2&PID_1489&MI_02
+;acm,diag
+%DeviceDesc_zte% = ComPort, USB\VID_19D2&PID_1490&MI_00
+
+
+
+
+
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E39&MI_03
+%DeviceDescOnTD%=ComPort, USB\VID_0BB4&PID_4E2A&MI_04
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E2A&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E4A&MI_06
+%DeviceDesc%=ComPort, USB\VID_18d1&PID_4e21&MI_00
+%DeviceDesc_Serial% = ComPort, USB\Vid_1286&Pid_4e31&MI_0A   ;MIFI AT port in Generic mode
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E2B&MI_00
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E41&MI_01
+%DeviceDescOnTD%=ComPort, USB\VID_0BB4&PID_4E22&MI_05
+%DeviceDesc%=ComPort, USB\VID_0525&PID_a4a7
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E44&MI_02
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E2A&MI_00
+%DeviceDesc%=ComPort, USB\VID_1286&PID_810F&MI_00
+%DeviceDesc_Serial% = ComPort, USB\Vid_1286&Pid_4e33
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E30&MI_01
+%DeviceDesc%=ComPort, USB\VID_0AEB&PID_004F&MI_00
+%DeviceDesc%=ComPort, USB\VID_0AEB&PID_002A&MI_00
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E27&MI_00
+%DeviceDescOnTD%=ComPort, USB\VID_0BB4&PID_4E20&MI_07
+%DeviceDescOnTD%=ComPort, USB\VID_1286&PID_4E27&MI_03
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E38&MI_02
+%DeviceDesc%=ComPort, USB\VID_0525&PID_a4a9
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_0C02&MI_02
+%DeviceDesc%=ComPort, USB\VID_0bb4&PID_4e23&MI_02
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E24&MI_02
+%DeviceDesc%=ComPort, USB\VID_1286&PID_810E&MI_00
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E39&MI_01
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E21&MI_00
+%TTPCom01% = ComPort, USB\VID_0AEB&PID_0012       ;Identifies Vendor = TTPCom, Product = Modem
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E30&MI_03
+%DeviceDesc%=ComPort, USB\VID_0AEB&PID_0023&MI_00
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E3A&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E3D&MI_04
+%DeviceDesc%=ComPort, USB\VID_0bb4&PID_4e27
+%DeviceDesc_Serial% = ComPort, USB\Vid_1286&Pid_4e31&MI_04   ;MIFI AT port in Mrvl mode
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E43&MI_01
+%DeviceDescOnTD%=ComPort, USB\VID_1286&PID_4E23&MI_05
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E28&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E21&MI_04
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E1A&MI_02
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E37&MI_01
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E3D&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E41&MI_04
+%DeviceDescOnTD%=ComPort, USB\VID_0BB4&PID_4E24&MI_06
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4e20&MI_02
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E23&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E37&MI_03
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_0C01&MI_02
+%DeviceDesc%=ComPort, USB\VID_18d1&PID_4e27
+%DeviceDescOnTD%=ComPort, USB\VID_1286&PID_4E2B&MI_03
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E4A&MI_02
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E21&MI_01
+%DeviceDesc%=ComPort, USB\VID_0bb4&PID_4e2b&MI_00
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E4D&MI_01
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E38&MI_05
+%DeviceDesc_SerialDiag% = ComPort, USB\Vid_1286&Pid_4e31&MI_08   ;MIFI Serial Diag port in Generic mode
+%DeviceDesc%=ComPort, USB\VID_0AEB&PID_0037&MI_00
+%DeviceDesc%=ComPort, USB\VID_1286&PID_810D&MI_00
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E20&MI_02
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E22&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E43&MI_04
+%DeviceDescOnTD%=ComPort, USB\VID_1286&PID_4E21&MI_04
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E4C&MI_00
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E1C&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E44&MI_05
+
+
+
+;========================================= 64bit ==================================================
+[Pro.NTamd64]
+
+;Add for ASR mobilephone product
+%DeviceDesc_download% = ComPort, USB\VID_2ECC&PID_3004
+%DeviceDesc_download% = ComPort, USB\VID_2ECC&PID_3004&MI_00
+;diag,acm,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_2100&MI_01
+;diag,acm,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_2101&MI_01
+;diag,acm
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_2102&MI_01
+;rndis,diag,acm,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_2103&MI_03
+
+;Add for ASR data product
+;rndis,acm,diag,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3010&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3010&MI_08
+;acm,diag,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3011&MI_00
+;rndis,acm,diag,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3012&MI_02
+;rndis,acm,acm,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3013&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3013&MI_04
+;rndis,acm,acm,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3014&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3014&MI_04
+;rndis,acm,acm,diag,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3015&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3015&MI_04
+;rndis,acm,acm,diag,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3016&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3016&MI_04
+;acm
+%DeviceDesc_download% = ComPort, USB\VID_2ECC&PID_3017
+%DeviceDesc_download% = ComPort, USB\VID_2ECC&PID_3017&MI_00
+;acm,diag,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3018&MI_00
+;acm,acm,diag,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_3019&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_3019&MI_02
+;acm,acm,diag,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_301A&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_301A&MI_02
+;acm,acm,sulog,adb
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_301B&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_301B&MI_02
+;acm,acm,adb,sulog
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_301C&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_2ECC&PID_301C&MI_02
+;rndis,generic,generic,generic
+;
+;acm,generic,generic,generic
+%DeviceDesc% = ComPort, USB\VID_2ECC&PID_301E&MI_00
+;generic,generic,generic,generic
+;
+
+;zte
+;rndis,acm,diag,adb
+%DeviceDesc_zte% = ComPort, USB\VID_19D2&PID_1489&MI_02
+;acm,diag
+%DeviceDesc_zte% = ComPort, USB\VID_19D2&PID_1490&MI_00
+
+
+
+
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E39&MI_03
+%DeviceDescOnTD%=ComPort, USB\VID_0BB4&PID_4E2A&MI_04
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E2A&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E4A&MI_06
+%DeviceDesc%=ComPort, USB\VID_18d1&PID_4e21&MI_00
+%DeviceDesc_Serial% = ComPort, USB\Vid_1286&Pid_4e31&MI_0A   ;MIFI AT port in Generic mode
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E2B&MI_00
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E41&MI_01
+%DeviceDescOnTD%=ComPort, USB\VID_0BB4&PID_4E22&MI_05
+%DeviceDesc%=ComPort, USB\VID_0525&PID_a4a7
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E44&MI_02
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E2A&MI_00
+%DeviceDesc%=ComPort, USB\VID_1286&PID_810F&MI_00
+%DeviceDesc_Serial% = ComPort, USB\Vid_1286&Pid_4e33
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E30&MI_01
+%DeviceDesc%=ComPort, USB\VID_0AEB&PID_004F&MI_00
+%DeviceDesc%=ComPort, USB\VID_0AEB&PID_002A&MI_00
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E27&MI_00
+%DeviceDescOnTD%=ComPort, USB\VID_0BB4&PID_4E20&MI_07
+%DeviceDescOnTD%=ComPort, USB\VID_1286&PID_4E27&MI_03
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E38&MI_02
+%DeviceDesc%=ComPort, USB\VID_0525&PID_a4a9
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_0C02&MI_02
+%DeviceDesc%=ComPort, USB\VID_0bb4&PID_4e23&MI_02
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E24&MI_02
+%DeviceDesc%=ComPort, USB\VID_1286&PID_810E&MI_00
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E39&MI_01
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E21&MI_00
+%TTPCom01% = ComPort, USB\VID_0AEB&PID_0012       ;Identifies Vendor = TTPCom, Product = Modem
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E30&MI_03
+%DeviceDesc%=ComPort, USB\VID_0AEB&PID_0023&MI_00
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E3A&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E3D&MI_04
+%DeviceDesc%=ComPort, USB\VID_0bb4&PID_4e27
+%DeviceDesc_Serial% = ComPort, USB\Vid_1286&Pid_4e31&MI_04   ;MIFI AT port in Mrvl mode
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E43&MI_01
+%DeviceDescOnTD%=ComPort, USB\VID_1286&PID_4E23&MI_05
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E28&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E21&MI_04
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E1A&MI_02
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E37&MI_01
+%DeviceDesc% = ComPort, USB\VID_1286&PID_4E3D&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E41&MI_04
+%DeviceDescOnTD%=ComPort, USB\VID_0BB4&PID_4E24&MI_06
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4e20&MI_02
+%DeviceDesc%=ComPort, USB\VID_1286&PID_4E23&MI_02
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E37&MI_03
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_0C01&MI_02
+%DeviceDesc%=ComPort, USB\VID_18d1&PID_4e27
+%DeviceDescOnTD%=ComPort, USB\VID_1286&PID_4E2B&MI_03
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E4A&MI_02
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E21&MI_01
+%DeviceDesc%=ComPort, USB\VID_0bb4&PID_4e2b&MI_00
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E4D&MI_01
+%DeviceDesc_2nd% = ComPort, USB\VID_1286&PID_4E38&MI_05
+%DeviceDesc_SerialDiag% = ComPort, USB\Vid_1286&Pid_4e31&MI_08   ;MIFI Serial Diag port in Generic mode
+%DeviceDesc%=ComPort, USB\VID_0AEB&PID_0037&MI_00
+%DeviceDesc%=ComPort, USB\VID_1286&PID_810D&MI_00
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E20&MI_02
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E22&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E43&MI_04
+%DeviceDescOnTD%=ComPort, USB\VID_1286&PID_4E21&MI_04
+%DeviceDesc% = ComPort, USB\VID_0BB4&PID_4E4C&MI_00
+%DeviceDesc%=ComPort, USB\VID_0BB4&PID_4E1C&MI_00
+%DeviceDesc_2nd% = ComPort, USB\VID_0BB4&PID_4E44&MI_05
+
+
+[ComPort.NT]
+CopyFiles=ComPort.NT.Copy
+AddReg=ComPort.NT.AddReg
+
+[ComPort.NT.HW]
+AddReg=ComPort.NT.HW.AddReg
+
+[ComPort.NT.Copy]
+MUSBSer.sys
+
+[ComPort.NT.AddReg]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,MUSBSer.sys
+HKR,,EnumPropPages32,,"MsPorts.dll,SerialPortPropPageProvider"
+
+[ComPort.AddReg]
+HKR,"Parameters","DebugLevel",0x10001,5
+
+[ComPort.NT.HW.AddReg]
+;HKR,,"UpperFilters",0x00010000,"mfilter"
+
+[ComPort.NT.Services]
+AddService = MUSBSer, 0x00000002, Serial_Service_Inst
+
+[Serial_Service_Inst]
+DisplayName    = %Serial.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_SYSTEM_START (this driver may do detection)
+ErrorControl   = 1               ; SERVICE_ERROR_IGNORE
+ServiceBinary  = %12%\MUSBSer.sys
+AddReg         = ComPort.AddReg
+LoadOrderGroup = Base
+
+[SourceDisksNames.x86]
+1=%Pro.Disk%,Disk1,,\MUSBSer\i386
+
+[SourceDisksNames.amd64]
+1=%Pro.Disk%,Disk1,,\MUSBSer\amd64
+
+
+[SourceDisksFiles]
+MUSBSer.sys=1
+
+[Strings]
+Pro = "ASR Hefei"
+Pro.Disk="ASR AT Interface Installtion Disk"
+Serial.SVCDESC   = "AT Interface driver"
+; ACM device name on single CP DKB or WB(TTC) ACM device name On DSDT DKB
+DeviceDesc = "ASR Modem Device"
+DeviceDesc_download = "ASR Serial Download Device"
+DeviceDesc_2nd = "ASR Modem Device 2"
+DeviceDesc_zte = "ZTE AT USB Port"
+
+TTPCom01 = "TTPCom Embedded USB Modem"
+DeviceDescOnTD = "ASR TD Modem Device"
+DeviceDesc_Serial = "ASR Serial Port"
+DeviceDesc_SerialDiag = "ASR Serial Diag Port"

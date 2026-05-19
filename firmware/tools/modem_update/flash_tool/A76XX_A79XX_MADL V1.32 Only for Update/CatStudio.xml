@@ -1,0 +1,38 @@
+<config>
+	<Logger>
+		<LogPath/>
+		<LogNameRule>1</LogNameRule>
+		<MinMaxFilesizeInMB>60</MinMaxFilesizeInMB>
+		<MaxFilesizeInMB>200</MaxFilesizeInMB>
+		<MinFreeDiskSpace>2500</MinFreeDiskSpace>
+		<DiskFullOperation>0</DiskFullOperation>
+		<NumOfHoursAgoForDelLog>168</NumOfHoursAgoForDelLog>
+		<AutoRepaireLogFile>false</AutoRepaireLogFile>
+		<SyncPCTimeFromUECPInfo>true</SyncPCTimeFromUECPInfo>
+	</Logger>
+	<DevComm>
+		<Device_0_Settings>
+			<Enabled>1</Enabled>
+			<ProtocolType>Diag</ProtocolType>
+			<CommunicationType>USB</CommunicationType>
+			<DriverName>MDiagUSB</DriverName>
+			<AutoDetect>0</AutoDetect>
+			<DumpRecvData>0</DumpRecvData>
+			<USBName/>
+			<USBRecognitionString/>
+			<SavedUSBNames/>
+			<COMName/>
+			<COMNumber>0</COMNumber>
+			<BaudRate>0</BaudRate>
+			<SavedCOMNames/>
+			<ReliableSerial>0</ReliableSerial>
+			<SplitLineSerial>0</SplitLineSerial>
+			<IPAddress/>
+			<PortNumber>0</PortNumber>
+			<RemoteIPAddress/>
+			<RemotePortNumber>0</RemotePortNumber>
+			<ADBSerialNum/>
+		</Device_0_Settings>
+	</DevComm>
+</config>
+
