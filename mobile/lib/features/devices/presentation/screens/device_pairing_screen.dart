@@ -30,10 +30,13 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   final _ssidController = TextEditingController();
   final _passwordController = TextEditingController();
   final _deviceNameController = TextEditingController(text: 'My Fish Feeder');
+  final _manualSerialController = TextEditingController();
+  final _manualCodeController = TextEditingController();
   List<BleDevice> _discoveredDevices = [];
   StreamSubscription? _scanSubscription;
   String? _bindingCode;
   String? _errorMessage;
+  bool _showManualFields = false;
 
   bool get _canBindDirectly =>
       _selectedDeviceId == null && _isValidBindingCode(_bindingCode);
@@ -57,6 +60,8 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     _ssidController.dispose();
     _passwordController.dispose();
     _deviceNameController.dispose();
+    _manualSerialController.dispose();
+    _manualCodeController.dispose();
     super.dispose();
   }
 
@@ -302,444 +307,404 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     }
   }
 
-  Future<void> _showManualEntry() async {
-    final serialController = TextEditingController(
-      text: _scannedSerialNumber ?? '',
-    );
-    final codeController = TextEditingController(text: _bindingCode ?? '');
-    String? dialogError;
-    final result = await showDialog<Map<String, String?>>(
-      context: context,
-      builder:
-          (ctx) => StatefulBuilder(
-            builder:
-                (ctx, setDialogState) => AlertDialog(
-                  title: const Text('Enter Device Details'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: serialController,
-                        decoration: const InputDecoration(
-                          labelText: 'Serial Number',
-                          hintText: 'smartaqua-mcu',
-                          border: OutlineInputBorder(),
-                        ),
-                        textCapitalization: TextCapitalization.none,
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: codeController,
-                        decoration: const InputDecoration(
-                          labelText: 'Binding Code',
-                          hintText: '6 digits from Serial Monitor',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(6),
-                        ],
-                      ),
-                      if (dialogError != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          dialogError!,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      ],
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      onPressed: () {
-                        final serial = serialController.text.trim();
-                        final bindingCode = codeController.text.trim();
+  void _showManualEntry() {
+    _manualSerialController.text = _scannedSerialNumber ?? '';
+    _manualCodeController.text = _bindingCode ?? '';
+    setState(() {
+      _showManualFields = true;
+      _errorMessage = null;
+    });
+  }
 
-                        if (serial.isEmpty) {
-                          setDialogState(
-                            () => dialogError = 'Serial number is required',
-                          );
-                          return;
-                        }
-                        if (bindingCode.isNotEmpty &&
-                            !_isValidBindingCode(bindingCode)) {
-                          setDialogState(
-                            () => dialogError = 'Binding code must be 6 digits',
-                          );
-                          return;
-                        }
+  bool _applyManualEntry() {
+    final serial = _manualSerialController.text.trim();
+    final bindingCode = _manualCodeController.text.trim();
 
-                        FocusScope.of(ctx).unfocus();
-                        Navigator.pop(ctx, {
-                          'serial': serial,
-                          'bindingCode':
-                              bindingCode.isEmpty ? null : bindingCode,
-                        });
-                      },
-                      child: const Text('Continue'),
-                    ),
-                  ],
-                ),
-          ),
-    );
-
-    if (!mounted) {
-      serialController.dispose();
-      codeController.dispose();
-      return;
+    if (serial.isEmpty) {
+      setState(() => _errorMessage = 'Serial number is required');
+      return false;
+    }
+    if (bindingCode.isNotEmpty && !_isValidBindingCode(bindingCode)) {
+      setState(() => _errorMessage = 'Binding code must be 6 digits');
+      return false;
     }
 
-    serialController.dispose();
-    codeController.dispose();
-
-    if (result == null) return;
-    final serial = result['serial'];
-    final bindingCode = result['bindingCode'];
-    if (serial == null || serial.isEmpty) return;
-
+    FocusScope.of(context).unfocus();
     setState(() {
       _scannedSerialNumber = serial;
-      _bindingCode = bindingCode;
-      _currentStep = _bindingCode == null ? 1 : 2;
+      _bindingCode = bindingCode.isEmpty ? null : bindingCode;
+      _errorMessage = null;
     });
-    if (bindingCode == null) {
-      unawaited(_startScan());
-    }
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Add Device')),
-      body: Stepper(
-        currentStep: _currentStep,
-        onStepContinue: _handleStepContinue,
-        onStepCancel: _handleStepCancel,
-        controlsBuilder: (context, details) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Row(
-              children: [
-                if (_currentStep < 3)
-                  FilledButton(
-                    onPressed: _canContinue() ? details.onStepContinue : null,
-                    child: _getButtonChild(),
-                  ),
-                if (_currentStep == 3)
-                  FilledButton(
-                    onPressed: () => context.go('/devices'),
-                    child: const Text('Done'),
-                  ),
-                const SizedBox(width: 12),
-                if (_currentStep > 0 && _currentStep < 3)
-                  TextButton(
-                    onPressed: details.onStepCancel,
-                    child: const Text('Back'),
-                  ),
-              ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            _PairingStepHeader(currentStep: _currentStep, title: _stepTitle),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                child: _buildStepContent(),
+              ),
             ),
-          );
-        },
-        steps: [
-          // Step 0: Scan QR or Enter Serial
-          Step(
-            title: const Text('Identify Device'),
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Scan the QR code on your device or enter the serial number manually.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ActionCard(
-                        icon: Icons.qr_code_scanner,
-                        title: 'Scan QR Code',
-                        subtitle: 'Quick and easy',
-                        onTap: _showQrScanner,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ActionCard(
-                        icon: Icons.keyboard,
-                        title: 'Enter Manually',
-                        subtitle: 'Serial and code',
-                        onTap: _showManualEntry,
-                      ),
-                    ),
-                  ],
-                ),
-                if (_scannedSerialNumber != null) ...[
-                  const SizedBox(height: 16),
-                  Card(
-                    color: Colors.green.shade50,
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                      ),
-                      title: const Text('Device Found'),
-                      subtitle: Text(
-                        _bindingCode == null
-                            ? _scannedSerialNumber!
-                            : '$_scannedSerialNumber - Code $_bindingCode',
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+            _buildBottomControls(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String get _stepTitle {
+    switch (_currentStep) {
+      case 0:
+        return 'Identify Device';
+      case 1:
+        return 'Connect Device';
+      case 2:
+        return _canBindDirectly ? 'Bind Device' : 'Configure Network';
+      default:
+        return 'Complete Setup';
+    }
+  }
+
+  Widget _buildStepContent() {
+    switch (_currentStep) {
+      case 0:
+        return _buildIdentifyDeviceStep();
+      case 1:
+        return _buildConnectDeviceStep();
+      case 2:
+        return _buildConfigureDeviceStep();
+      default:
+        return _buildCompleteStep();
+    }
+  }
+
+  Widget _buildIdentifyDeviceStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Scan the QR code on your device or enter the serial number manually.',
+          style: TextStyle(color: Colors.grey),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: _ActionCard(
+                icon: Icons.qr_code_scanner,
+                title: 'Scan QR Code',
+                subtitle: 'Quick and easy',
+                onTap: _showQrScanner,
+              ),
             ),
-            isActive: _currentStep >= 0,
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ActionCard(
+                icon: Icons.keyboard,
+                title: 'Enter Manually',
+                subtitle: 'Serial and code',
+                onTap: _showManualEntry,
+              ),
+            ),
+          ],
+        ),
+        if (_showManualFields) ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _manualSerialController,
+            decoration: const InputDecoration(
+              labelText: 'Serial Number',
+              hintText: 'smartaqua-mcu',
+              border: OutlineInputBorder(),
+            ),
+            textCapitalization: TextCapitalization.none,
+            textInputAction: TextInputAction.next,
           ),
-
-          // Step 1: Find and Connect via BLE
-          Step(
-            title: const Text('Connect Device'),
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_scannedSerialNumber != null)
-                  Text('Looking for: $_scannedSerialNumber'),
-                const SizedBox(height: 16),
-
-                if (_isScanning)
-                  const Center(
-                    child: Column(
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Scanning for nearby devices...'),
-                      ],
-                    ),
-                  )
-                else if (_isConnecting)
-                  const Center(
-                    child: Column(
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Connecting to device...'),
-                      ],
-                    ),
-                  )
-                else ...[
-                  if (_discoveredDevices.isEmpty)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.bluetooth_searching,
-                              size: 48,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            const Text('No devices found'),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Make sure your device is powered on and in pairing mode',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    ...(_discoveredDevices.map(
-                      (device) => _DeviceListItem(
-                        name: device.name,
-                        signal: _getSignalStrength(device.rssi),
-                        isSelected: _selectedDeviceId == device.id,
-                        onTap: () => _connectToDevice(device),
-                      ),
-                    )),
-
-                  const SizedBox(height: 16),
-                  Center(
-                    child: OutlinedButton.icon(
-                      onPressed: _startScan,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Scan Again'),
-                    ),
-                  ),
-                ],
-
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 16),
-                  Card(
-                    color: Colors.red.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error, color: Colors.red),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _manualCodeController,
+            decoration: const InputDecoration(
+              labelText: 'Binding Code',
+              hintText: '6 digits from Serial Monitor',
+              border: OutlineInputBorder(),
             ),
-            isActive: _currentStep >= 1,
-          ),
-
-          // Step 2: Configure Network
-          Step(
-            title: Text(_canBindDirectly ? 'Bind Device' : 'Configure Network'),
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_canBindDirectly) ...[
-                  const Text(
-                    'This device is already online. Bind it to your account with the code shown on the device serial monitor.',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.cloud_done),
-                      title: Text(_scannedSerialNumber ?? 'Device'),
-                      subtitle: Text('Binding code: $_bindingCode'),
-                    ),
-                  ),
-                ] else ...[
-                  const Text(
-                    'Choose how your device connects to the internet:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  _NetworkOption(
-                    icon: Icons.cell_tower,
-                    title: 'Cellular (Recommended)',
-                    subtitle: 'Uses SIM card for remote locations',
-                    isSelected: _networkType == 'cellular',
-                    onTap: () => setState(() => _networkType = 'cellular'),
-                  ),
-                  const SizedBox(height: 8),
-                  _NetworkOption(
-                    icon: Icons.wifi,
-                    title: 'WiFi',
-                    subtitle: 'Requires nearby WiFi network',
-                    isSelected: _networkType == 'wifi',
-                    onTap: () => setState(() => _networkType = 'wifi'),
-                  ),
-                  const SizedBox(height: 16),
-                  if (_networkType == 'cellular')
-                    TextFormField(
-                      controller: _apnController,
-                      decoration: const InputDecoration(
-                        labelText: 'APN',
-                        hintText: 'e.g., internet',
-                        border: OutlineInputBorder(),
-                      ),
-                    )
-                  else ...[
-                    TextFormField(
-                      controller: _ssidController,
-                      decoration: const InputDecoration(
-                        labelText: 'WiFi Network Name',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'WiFi Password',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                ],
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _deviceNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Device Name',
-                    hintText: 'e.g., Pond 1 Feeder',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-
-                if (_isProvisioning) ...[
-                  const SizedBox(height: 24),
-                  const Center(
-                    child: Column(
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Working...'),
-                      ],
-                    ),
-                  ),
-                ],
-
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 16),
-                  Card(
-                    color: Colors.red.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error, color: Colors.red),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            isActive: _currentStep >= 2,
-          ),
-
-          // Step 3: Complete
-          Step(
-            title: const Text('Complete Setup'),
-            content: const Column(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 64),
-                SizedBox(height: 16),
-                Text(
-                  'Device Added Successfully!',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Your SmartAqua feeder is now connected and ready to use.',
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-            isActive: _currentStep >= 3,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+            onFieldSubmitted: (_) => _handleStepContinue(),
           ),
         ],
+        if (_scannedSerialNumber != null) ...[
+          const SizedBox(height: 16),
+          Card(
+            color: Colors.green.shade50,
+            child: ListTile(
+              leading: const Icon(Icons.check_circle, color: Colors.green),
+              title: const Text('Device Found'),
+              subtitle: Text(
+                _bindingCode == null
+                    ? _scannedSerialNumber!
+                    : '$_scannedSerialNumber - Code $_bindingCode',
+              ),
+            ),
+          ),
+        ],
+        if (_errorMessage != null) _buildErrorCard(),
+      ],
+    );
+  }
+
+  Widget _buildConnectDeviceStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_scannedSerialNumber != null)
+          Text('Looking for: $_scannedSerialNumber'),
+        const SizedBox(height: 16),
+        if (_isScanning)
+          const Center(
+            child: Column(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Scanning for nearby devices...'),
+              ],
+            ),
+          )
+        else if (_isConnecting)
+          const Center(
+            child: Column(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Connecting to device...'),
+              ],
+            ),
+          )
+        else ...[
+          if (_discoveredDevices.isEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.bluetooth_searching,
+                      size: 48,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('No devices found'),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Make sure your device is powered on and in pairing mode',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ..._discoveredDevices.map(
+              (device) => _DeviceListItem(
+                name: device.name,
+                signal: _getSignalStrength(device.rssi),
+                isSelected: _selectedDeviceId == device.id,
+                onTap: () => _connectToDevice(device),
+              ),
+            ),
+          const SizedBox(height: 16),
+          Center(
+            child: OutlinedButton.icon(
+              onPressed: _startScan,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Scan Again'),
+            ),
+          ),
+        ],
+        if (_errorMessage != null) _buildErrorCard(),
+      ],
+    );
+  }
+
+  Widget _buildConfigureDeviceStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_canBindDirectly) ...[
+          const Text(
+            'This device is already online. Bind it to your account with the code shown on the device serial monitor.',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.cloud_done),
+              title: Text(_scannedSerialNumber ?? 'Device'),
+              subtitle: Text('Binding code: $_bindingCode'),
+            ),
+          ),
+        ] else ...[
+          const Text(
+            'Choose how your device connects to the internet:',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          _NetworkOption(
+            icon: Icons.cell_tower,
+            title: 'Cellular (Recommended)',
+            subtitle: 'Uses SIM card for remote locations',
+            isSelected: _networkType == 'cellular',
+            onTap: () => setState(() => _networkType = 'cellular'),
+          ),
+          const SizedBox(height: 8),
+          _NetworkOption(
+            icon: Icons.wifi,
+            title: 'WiFi',
+            subtitle: 'Requires nearby WiFi network',
+            isSelected: _networkType == 'wifi',
+            onTap: () => setState(() => _networkType = 'wifi'),
+          ),
+          const SizedBox(height: 16),
+          if (_networkType == 'cellular')
+            TextFormField(
+              controller: _apnController,
+              decoration: const InputDecoration(
+                labelText: 'APN',
+                hintText: 'e.g., internet',
+                border: OutlineInputBorder(),
+              ),
+            )
+          else ...[
+            TextFormField(
+              controller: _ssidController,
+              decoration: const InputDecoration(
+                labelText: 'WiFi Network Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'WiFi Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ],
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _deviceNameController,
+          decoration: const InputDecoration(
+            labelText: 'Device Name',
+            hintText: 'e.g., Pond 1 Feeder',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        if (_isProvisioning) ...[
+          const SizedBox(height: 24),
+          const Center(
+            child: Column(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Working...'),
+              ],
+            ),
+          ),
+        ],
+        if (_errorMessage != null) _buildErrorCard(),
+      ],
+    );
+  }
+
+  Widget _buildCompleteStep() {
+    return const Center(
+      child: Column(
+        children: [
+          Icon(Icons.check_circle, color: Colors.green, size: 64),
+          SizedBox(height: 16),
+          Text(
+            'Device Added Successfully!',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Your SmartAqua feeder is now connected and ready to use.',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorCard() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Card(
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.red),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomControls() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Row(
+          children: [
+            if (_currentStep < 3)
+              FilledButton(
+                onPressed: _canContinue() ? _handleStepContinue : null,
+                child: _getButtonChild(),
+              ),
+            if (_currentStep == 3)
+              FilledButton(
+                onPressed: () => context.go('/devices'),
+                child: const Text('Done'),
+              ),
+            const SizedBox(width: 12),
+            if (_currentStep > 0 && _currentStep < 3)
+              TextButton(
+                onPressed: _handleStepCancel,
+                child: const Text('Back'),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -747,7 +712,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   bool _canContinue() {
     switch (_currentStep) {
       case 0:
-        return _scannedSerialNumber != null;
+        return _scannedSerialNumber != null || _showManualFields;
       case 1:
         return _selectedDeviceId != null && !_isConnecting;
       case 2:
@@ -774,7 +739,17 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
   }
 
   void _handleStepContinue() {
-    if (_currentStep == 2) {
+    if (_currentStep == 0) {
+      if (_showManualFields && !_applyManualEntry()) {
+        return;
+      }
+      if (_isValidBindingCode(_bindingCode)) {
+        setState(() => _currentStep = 2);
+      } else {
+        setState(() => _currentStep = 1);
+        unawaited(_startScan());
+      }
+    } else if (_currentStep == 2) {
       if (_canBindDirectly) {
         _bindWithExistingCode();
       } else {
@@ -798,6 +773,42 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     if (rssi >= -60) return 'Good';
     if (rssi >= -70) return 'Fair';
     return 'Weak';
+  }
+}
+
+class _PairingStepHeader extends StatelessWidget {
+  final int currentStep;
+  final String title;
+
+  const _PairingStepHeader({required this.currentStep, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Step ${currentStep + 1} of 4',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(title, style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              minHeight: 6,
+              value: (currentStep + 1) / 4,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
