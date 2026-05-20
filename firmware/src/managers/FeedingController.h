@@ -140,6 +140,19 @@ public:
      */
     void printMotorDiagnostics() const;
 
+    /**
+     * Start a continuous non-blocking motor run for feed calibration.
+     * Call stopCalibrationRun() to stop and print the measured step/time totals.
+     */
+    bool startCalibrationRun(bool direction = true);
+    bool stopCalibrationRun();
+    bool isCalibrationRunning() const;
+    bool calibrateFromLastRun(float measuredGrams);
+    bool runDoseTest(float grams);
+    long getStepsForGrams(float grams) const;
+    float getGramsPerRevolution() const;
+    float getExpectedDoseSeconds(float grams) const;
+
     long getStepsPerRevolution() const;
     
     // Species parameters
@@ -158,9 +171,16 @@ private:
     // Motor state
     bool _motorInitialized;
     bool _feedingActive;
+    bool _calibrationActive;
+    bool _calibrationDirection;
     float _targetGrams;
     float _dispensedGrams;
     unsigned long _feedingStartTime;
+    unsigned long _calibrationStartTimeMs;
+    unsigned long _lastCalibrationReportMs;
+    unsigned long _lastCalibrationStepUs;
+    unsigned long _calibrationStepCount;
+    unsigned long _lastCalibrationDurationMs;
     
     // Motor configuration
     float _gramsPerRevolution;
@@ -206,6 +226,11 @@ private:
      * Generate single step pulse
      */
     void stepPulse();
+
+    /**
+     * Continue non-blocking calibration stepping and periodic Serial reporting.
+     */
+    void updateCalibrationRun();
     
     /**
      * Check and execute scheduled feedings
@@ -225,7 +250,7 @@ private:
      * @param grams Amount in grams
      * @return Number of steps
      */
-    long gramsToSteps(float grams);
+    long gramsToSteps(float grams) const;
     
     /**
      * Load schedule from NVS

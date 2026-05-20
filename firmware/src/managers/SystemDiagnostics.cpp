@@ -109,18 +109,14 @@ void SystemDiagnostics::sendPipelinePing() {
     _lastPingSentMs = millis();
     _pingPending    = true;
 
-    JsonDocument doc;
-    doc["nonce"]     = _lastPingNonce;
-    doc["timestamp"] = (int64_t)(_lastPingSentMs);
-    doc["device_id"] = "";  // Will be set by commManager when building topic
-
-    String json;
-    serializeJson(doc, json);
-
     // Publish on diagnostics/ping topic — CommunicationManager exposes this
-    String topic = "devices/" + String("") + "/diagnostics/ping";
-    // Use the commManager's publish path so it picks up the device ID
     Serial.println("[Diagnostics] Sending pipeline ping");
+    if (!_commMgr->sendPipelinePing(_lastPingNonce)) {
+        _pingPending = false;
+        _report.mcuToMqtt.reachable = false;
+        _report.mqttToBackend.reachable = false;
+        Serial.println("[Diagnostics] Pipeline ping publish failed");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -246,13 +242,14 @@ void SystemDiagnostics::checkStepperMotor() {
     pinMode(PIN_DIR, OUTPUT);
 
     // Set direction
-    digitalWrite(PIN_DIR, HIGH);
+    digitalWrite(PIN_DIR, MOTOR_DIR_ACTIVE_LOW ? LOW : HIGH);
+    digitalWrite(PIN_STEP, MOTOR_STEP_ACTIVE_LOW ? HIGH : LOW);
 
     // Brief 1-step pulse test — enough to confirm the driver responds
     // without dispensing meaningful feed (1 step out of 1600 per revolution)
-    digitalWrite(PIN_STEP, HIGH);
+    digitalWrite(PIN_STEP, MOTOR_STEP_ACTIVE_LOW ? LOW : HIGH);
     delayMicroseconds(MOTOR_PULSE_WIDTH_US);
-    digitalWrite(PIN_STEP, LOW);
+    digitalWrite(PIN_STEP, MOTOR_STEP_ACTIVE_LOW ? HIGH : LOW);
     delayMicroseconds(MOTOR_PULSE_WIDTH_US);
 
     s.health  = ComponentHealth::OK;

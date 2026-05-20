@@ -8,6 +8,30 @@
 
 #define TMC_DRIVER_ADDRESS 0b00
 
+static uint8_t motorStepActiveLevel() {
+#if MOTOR_STEP_ACTIVE_LOW
+    return LOW;
+#else
+    return HIGH;
+#endif
+}
+
+static uint8_t motorStepInactiveLevel() {
+#if MOTOR_STEP_ACTIVE_LOW
+    return HIGH;
+#else
+    return LOW;
+#endif
+}
+
+static uint8_t motorDirLevel(bool forward) {
+#if MOTOR_DIR_ACTIVE_LOW
+    return forward ? LOW : HIGH;
+#else
+    return forward ? HIGH : LOW;
+#endif
+}
+
 FeedingController::FeedingController()
     : _sensorManager(nullptr)
     , _storage(nullptr)
@@ -22,12 +46,19 @@ FeedingController::FeedingController()
 #endif
     , _motorInitialized(false)
     , _feedingActive(false)
+    , _calibrationActive(false)
+    , _calibrationDirection(true)
     , _targetGrams(0)
     , _dispensedGrams(0)
     , _feedingStartTime(0)
+    , _calibrationStartTimeMs(0)
+    , _lastCalibrationReportMs(0)
+    , _lastCalibrationStepUs(0)
+    , _calibrationStepCount(0)
+    , _lastCalibrationDurationMs(0)
     , _gramsPerRevolution(GRAMS_PER_REVOLUTION)
     , _microSteps(MOTOR_MICROSTEPS)
-    , _stepDelayUs(1000)
+    , _stepDelayUs(1000000UL / MOTOR_MAX_SPEED)
     , _scheduleCount(0)
     , _scheduleEnabled(true)
     , _lastExecutedSchedule(-1)
@@ -66,8 +97,8 @@ bool FeedingController::begin(SensorManager* sensorManager, NVSStorage* storage)
 bool FeedingController::initMotor() {
     pinMode(PIN_STEP, OUTPUT);
     pinMode(PIN_DIR, OUTPUT);
-    digitalWrite(PIN_STEP, LOW);
-    digitalWrite(PIN_DIR, LOW);
+    digitalWrite(PIN_STEP, motorStepInactiveLevel());
+    digitalWrite(PIN_DIR, motorDirLevel(true));
 
 #ifdef USE_TMC2209
     Serial2.begin(115200, SERIAL_8N1, PIN_TMC_RX, PIN_TMC_TX);
@@ -127,9 +158,12 @@ uint16_t FeedingController::getMotorLoad() const { return _driver ? _driver->SG_
 
 void FeedingController::update() {
     unsigned long now = millis();
+    if (_calibrationActive) {
+        updateCalibrationRun();
+    }
     if (now - _lastScheduleCheck >= 60000) {
         _lastScheduleCheck = now;
-        if (_scheduleEnabled && !_feedingActive) checkSchedule();
+        if (_scheduleEnabled && !_feedingActive && !_calibrationActive) checkSchedule();
     }
     if (_feedingActive && now - _feedingStartTime > FEEDING_TIMEOUT_MS) {
         stopFeeding();
@@ -159,13 +193,13 @@ void FeedingController::checkSchedule() {
 }
 
 bool FeedingController::feedNow(float grams) {
-    if (_feedingActive || grams < MIN_FEED_GRAMS || grams > MAX_FEED_GRAMS) return false;
+    if (_feedingActive || _calibrationActive || grams < MIN_FEED_GRAMS || grams > MAX_FEED_GRAMS) return false;
     dispense(grams, FeedingTrigger::MANUAL);
     return true;
 }
 
 bool FeedingController::feedRemote(float adjustedGrams) {
-    if (_feedingActive || adjustedGrams < MIN_FEED_GRAMS || adjustedGrams > MAX_FEED_GRAMS) return false;
+    if (_feedingActive || _calibrationActive || adjustedGrams < MIN_FEED_GRAMS || adjustedGrams > MAX_FEED_GRAMS) return false;
     // Backend already applied Q10/OBM; use REMOTE trigger to bypass firmware Q10
     dispense(adjustedGrams, FeedingTrigger::REMOTE);
     return true;
@@ -191,7 +225,7 @@ FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
         temperature = _sensorManager->getCurrentData().temperature;
     }
     float adjustedGrams = grams * q10Factor;
-    bool completed = moveSteps(gramsToSteps(adjustedGrams), true);
+    bool completed = moveSteps(gramsToSteps(adjustedGrams), MOTOR_FEED_DIRECTION_FORWARD != 0);
     _dispensedGrams = adjustedGrams;
     _feedingActive = false;
     FeedingResult result = FeedingResult::SUCCESS;
@@ -216,7 +250,8 @@ FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
 }
 
 bool FeedingController::moveSteps(long steps, bool direction) {
-    digitalWrite(PIN_DIR, direction ? HIGH : LOW);
+    digitalWrite(PIN_STEP, motorStepInactiveLevel());
+    digitalWrite(PIN_DIR, motorDirLevel(direction));
     delayMicroseconds(5);
     unsigned long stepDelay = _stepDelayUs;
     for (long i = 0; i < steps; i++) {
@@ -232,12 +267,15 @@ bool FeedingController::moveSteps(long steps, bool direction) {
 }
 
 void FeedingController::stepPulse() {
-    digitalWrite(PIN_STEP, HIGH);
+    digitalWrite(PIN_STEP, motorStepActiveLevel());
     delayMicroseconds(MOTOR_PULSE_WIDTH_US);
-    digitalWrite(PIN_STEP, LOW);
+    digitalWrite(PIN_STEP, motorStepInactiveLevel());
 }
 
 void FeedingController::stopFeeding() {
+    if (_calibrationActive) {
+        stopCalibrationRun();
+    }
     if (_feedingActive) { _feedingActive = false; _lastEvent.result = FeedingResult::CANCELLED; }
 }
 
@@ -270,7 +308,7 @@ float FeedingController::calculateQ10Adjustment(float baseAmount, float temperat
     return baseAmount * q10Factor;
 }
 
-long FeedingController::gramsToSteps(float grams) {
+long FeedingController::gramsToSteps(float grams) const {
     float revolutions = grams / _gramsPerRevolution;
 #ifdef USE_TMC2209
     return (long)(revolutions * MOTOR_STEPS_PER_REV * MOTOR_MICROSTEPS);
@@ -294,7 +332,7 @@ void FeedingController::setMaxSpeed(int stepsPerSecond) {
 }
 
 bool FeedingController::jogSteps(long steps, bool direction) {
-    if (!_motorInitialized || _feedingActive || steps <= 0) {
+    if (!_motorInitialized || _feedingActive || _calibrationActive || steps <= 0) {
         return false;
     }
 
@@ -327,15 +365,199 @@ void FeedingController::printMotorDiagnostics() const {
     Serial.printf("[MotorTest] Microsteps: %d\n", _microSteps);
     Serial.printf("[MotorTest] Test steps/rev: %ld\n", getStepsPerRevolution());
     Serial.printf("[MotorTest] Step delay: %lu us\n", _stepDelayUs);
+    Serial.printf("[MotorTest] Approx speed: %.1f steps/s\n", 1000000.0f / (float)_stepDelayUs);
     Serial.printf("[MotorTest] Pulse width: %d us\n", MOTOR_PULSE_WIDTH_US);
+    Serial.printf("[MotorTest] STEP active level: %s\n", MOTOR_STEP_ACTIVE_LOW ? "LOW" : "HIGH");
+    Serial.printf("[MotorTest] DIR active level: %s\n", MOTOR_DIR_ACTIVE_LOW ? "LOW" : "HIGH");
     Serial.printf("[MotorTest] Calibration: %.2f g/rev\n", _gramsPerRevolution);
     Serial.println("[MotorTest] DM542 wiring: ESP32 STEP/DIR -> PUL-/DIR-, driver PUL+/DIR+ -> 5V or driver logic V+");
     Serial.println("[MotorTest] ==============================");
     Serial.println();
 }
 
+bool FeedingController::startCalibrationRun(bool direction) {
+    if (!_motorInitialized || _feedingActive || _calibrationActive) {
+        return false;
+    }
+
+    _calibrationActive = true;
+    _calibrationDirection = direction;
+    _calibrationStartTimeMs = millis();
+    _lastCalibrationReportMs = _calibrationStartTimeMs;
+    _lastCalibrationStepUs = micros();
+    _calibrationStepCount = 0;
+    _lastCalibrationDurationMs = 0;
+
+    digitalWrite(PIN_STEP, motorStepInactiveLevel());
+    digitalWrite(PIN_DIR, motorDirLevel(direction));
+    delayMicroseconds(5);
+
+    Serial.println();
+    Serial.println("[MotorCal] ======== CONTINUOUS MOTOR CALIBRATION ========");
+    Serial.printf("[MotorCal] Direction: %s\n", direction ? "forward" : "reverse");
+    Serial.printf("[MotorCal] STEP GPIO%d, DIR GPIO%d\n", (int)PIN_STEP, (int)PIN_DIR);
+    Serial.printf("[MotorCal] Step delay: %lu us, pulse width: %d us\n", _stepDelayUs, MOTOR_PULSE_WIDTH_US);
+    Serial.printf("[MotorCal] STEP active level: %s\n", MOTOR_STEP_ACTIVE_LOW ? "LOW" : "HIGH");
+    Serial.printf("[MotorCal] Approx speed: %.1f steps/s, %.3f rev/s\n",
+                  1000000.0f / (float)_stepDelayUs,
+                  (1000000.0f / (float)_stepDelayUs) / (float)getStepsPerRevolution());
+    Serial.println("[MotorCal] Press IO0/SW1 again, or send 'x', to stop and print totals.");
+    Serial.println("[MotorCal] =================================================");
+    return true;
+}
+
+bool FeedingController::stopCalibrationRun() {
+    if (!_calibrationActive) {
+        return false;
+    }
+
+    _lastCalibrationDurationMs = millis() - _calibrationStartTimeMs;
+    float durationSec = _lastCalibrationDurationMs / 1000.0f;
+    float stepsPerSec = durationSec > 0.0f ? (float)_calibrationStepCount / durationSec : 0.0f;
+    float revolutions = (float)_calibrationStepCount / (float)getStepsPerRevolution();
+    float revPerSec = durationSec > 0.0f ? revolutions / durationSec : 0.0f;
+
+    _calibrationActive = false;
+    digitalWrite(PIN_STEP, motorStepInactiveLevel());
+
+    Serial.println();
+    Serial.println("[MotorCal] ======== CALIBRATION STOPPED ========");
+    Serial.printf("[MotorCal] Duration: %.3f s (%lu ms)\n", durationSec, _lastCalibrationDurationMs);
+    Serial.printf("[MotorCal] Step pulses: %lu\n", _calibrationStepCount);
+    Serial.printf("[MotorCal] Revolutions: %.4f\n", revolutions);
+    Serial.printf("[MotorCal] Average speed: %.1f steps/s, %.4f rev/s\n", stepsPerSec, revPerSec);
+    Serial.println("[MotorCal] Weigh the released feed now.");
+    Serial.println("[MotorCal] grams_per_rev = measured_grams / revolutions");
+    Serial.println("[MotorCal] grams_per_second = measured_grams / duration_seconds");
+    Serial.println("[MotorCal] =====================================");
+    Serial.println();
+    return true;
+}
+
+bool FeedingController::isCalibrationRunning() const {
+    return _calibrationActive;
+}
+
+bool FeedingController::calibrateFromLastRun(float measuredGrams) {
+    if (_calibrationActive || measuredGrams <= 0.0f || _calibrationStepCount == 0) {
+        return false;
+    }
+
+    float revolutions = (float)_calibrationStepCount / (float)getStepsPerRevolution();
+    if (revolutions <= 0.0f) {
+        return false;
+    }
+
+    float gramsPerRev = measuredGrams / revolutions;
+    calibrateGramsPerRev(gramsPerRev);
+
+    float durationSec = _lastCalibrationDurationMs / 1000.0f;
+    Serial.println();
+    Serial.println("[MotorCal] ======== CALIBRATION SAVED ========");
+    Serial.printf("[MotorCal] Measured feed: %.2f g\n", measuredGrams);
+    Serial.printf("[MotorCal] Revolutions: %.4f\n", revolutions);
+    Serial.printf("[MotorCal] Saved grams/rev: %.4f\n", gramsPerRev);
+    if (durationSec > 0.0f) {
+        Serial.printf("[MotorCal] Measured rate: %.4f g/s\n", measuredGrams / durationSec);
+    }
+    Serial.println("[MotorCal] Future feed doses will use this grams/rev value.");
+    Serial.println("[MotorCal] ====================================");
+    Serial.println();
+    return true;
+}
+
+bool FeedingController::runDoseTest(float grams) {
+    if (!_motorInitialized || _feedingActive || _calibrationActive ||
+        grams < MIN_FEED_GRAMS || grams > MAX_FEED_GRAMS ||
+        _gramsPerRevolution <= 0.0f) {
+        return false;
+    }
+
+    long steps = gramsToSteps(grams);
+    float revolutions = (float)steps / (float)getStepsPerRevolution();
+    float expectedSeconds = getExpectedDoseSeconds(grams);
+
+    Serial.println();
+    Serial.println("[DoseTest] ======== DOSE TEST START ========");
+    Serial.printf("[DoseTest] Target: %.2f g\n", grams);
+    Serial.printf("[DoseTest] Calibration: %.4f g/rev\n", _gramsPerRevolution);
+    Serial.printf("[DoseTest] Direction: %s\n", (MOTOR_FEED_DIRECTION_FORWARD != 0) ? "forward" : "reverse");
+    Serial.printf("[DoseTest] Planned steps: %ld\n", steps);
+    Serial.printf("[DoseTest] Planned revolutions: %.4f\n", revolutions);
+    Serial.printf("[DoseTest] Expected motor time: %.2f s\n", expectedSeconds);
+    Serial.println("[DoseTest] Weigh the output after the run and compare with target.");
+
+    _feedingActive = true;
+    _feedingStartTime = millis();
+    bool completed = moveSteps(steps, MOTOR_FEED_DIRECTION_FORWARD != 0);
+    unsigned long durationMs = millis() - _feedingStartTime;
+    _feedingActive = false;
+
+    Serial.println("[DoseTest] ======== DOSE TEST STOP ========");
+    Serial.printf("[DoseTest] Result: %s\n", completed ? "completed" : "stopped/partial");
+    Serial.printf("[DoseTest] Actual motor time: %.3f s (%lu ms)\n", durationMs / 1000.0f, durationMs);
+    Serial.printf("[DoseTest] Commanded steps: %ld\n", steps);
+    Serial.printf("[DoseTest] Commanded revolutions: %.4f\n", revolutions);
+    Serial.println("[DoseTest] =================================");
+    Serial.println();
+    return completed;
+}
+
+long FeedingController::getStepsForGrams(float grams) const {
+    if (grams <= 0.0f || _gramsPerRevolution <= 0.0f) {
+        return 0;
+    }
+    return gramsToSteps(grams);
+}
+
+float FeedingController::getGramsPerRevolution() const {
+    return _gramsPerRevolution;
+}
+
+float FeedingController::getExpectedDoseSeconds(float grams) const {
+    long steps = getStepsForGrams(grams);
+    if (steps <= 0 || _stepDelayUs == 0) {
+        return 0.0f;
+    }
+    float stepIntervalUs = (float)_stepDelayUs + (float)MOTOR_PULSE_WIDTH_US;
+    return ((float)steps * stepIntervalUs) / 1000000.0f;
+}
+
 long FeedingController::getStepsPerRevolution() const {
     return (long)MOTOR_STEPS_PER_REV * (long)_microSteps;
+}
+
+void FeedingController::updateCalibrationRun() {
+    unsigned long nowUs = micros();
+    unsigned long stepIntervalUs = _stepDelayUs + MOTOR_PULSE_WIDTH_US;
+    uint16_t pulsesThisUpdate = 0;
+
+    while (_calibrationActive &&
+           (unsigned long)(nowUs - _lastCalibrationStepUs) >= stepIntervalUs &&
+           pulsesThisUpdate < 128) {
+        stepPulse();
+        _calibrationStepCount++;
+        pulsesThisUpdate++;
+        _lastCalibrationStepUs += stepIntervalUs;
+        nowUs = micros();
+        if ((_calibrationStepCount % 100) == 0) {
+            yield();
+        }
+    }
+
+    unsigned long nowMs = millis();
+    if (nowMs - _lastCalibrationReportMs >= 1000) {
+        _lastCalibrationReportMs = nowMs;
+        unsigned long durationMs = nowMs - _calibrationStartTimeMs;
+        float durationSec = durationMs / 1000.0f;
+        float revolutions = (float)_calibrationStepCount / (float)getStepsPerRevolution();
+        float stepsPerSec = durationSec > 0.0f ? (float)_calibrationStepCount / durationSec : 0.0f;
+        Serial.printf("[MotorCal] Running %.1fs: steps=%lu rev=%.4f avg=%.1f steps/s\n",
+                      durationSec,
+                      _calibrationStepCount,
+                      revolutions,
+                      stepsPerSec);
+    }
 }
 
 bool FeedingController::setSchedule(ScheduleEntry* entries, int count) {
@@ -349,7 +571,7 @@ void FeedingController::loadSchedule() { size_t size = _storage->getBytes(NVS_KE
 void FeedingController::saveSchedule() { _storage->putBytes(NVS_KEY_SCHEDULE, _schedule, _scheduleCount * sizeof(ScheduleEntry)); }
 void FeedingController::logEvent(const FeedingEvent& event) { Serial.printf("[Feed] %.1fg %s\n", event.actualDispensed, event.result == FeedingResult::SUCCESS ? "OK" : "ERR"); }
 
-bool FeedingController::isFeedingActive() const { return _feedingActive; }
+bool FeedingController::isFeedingActive() const { return _feedingActive || _calibrationActive; }
 FeedingEvent FeedingController::getLastEvent() const { return _lastEvent; }
 int FeedingController::getScheduleCount() const { return _scheduleCount; }
 bool FeedingController::isScheduleEnabled() const { return _scheduleEnabled; }

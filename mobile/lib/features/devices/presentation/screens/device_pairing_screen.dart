@@ -62,6 +62,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
 
   void _setupBleListener() {
     _scanSubscription = _bleService.discoveredDevices.listen((devices) {
+      if (!mounted) return;
       setState(() => _discoveredDevices = devices);
     });
   }
@@ -222,13 +223,14 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
     }
   }
 
-  void _showQrScanner() {
-    showModalBottomSheet(
+  Future<void> _showQrScanner() async {
+    var handled = false;
+    final result = await showModalBottomSheet<Map<String, String?>>(
       context: context,
       isScrollControlled: true,
       builder:
           (ctx) => SizedBox(
-            height: MediaQuery.of(context).size.height * 0.7,
+            height: MediaQuery.of(ctx).size.height * 0.7,
             child: Column(
               children: [
                 AppBar(
@@ -241,6 +243,7 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                 Expanded(
                   child: MobileScanner(
                     onDetect: (capture) {
+                      if (handled) return;
                       final barcodes = capture.barcodes;
                       if (barcodes.isNotEmpty) {
                         final code = barcodes.first.rawValue;
@@ -261,16 +264,11 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                         }
 
                         if (serial != null) {
-                          Navigator.pop(ctx);
-                          setState(() {
-                            _scannedSerialNumber = serial;
-                            _bindingCode = scannedBindingCode;
-                            _currentStep =
-                                _isValidBindingCode(_bindingCode) ? 2 : 1;
+                          handled = true;
+                          Navigator.pop(ctx, {
+                            'serial': serial,
+                            'bindingCode': scannedBindingCode,
                           });
-                          if (!_isValidBindingCode(_bindingCode)) {
-                            _startScan();
-                          }
                         }
                       }
                     },
@@ -288,13 +286,29 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
             ),
           ),
     );
+
+    if (!mounted || result == null) return;
+    final serial = result['serial'];
+    final bindingCode = result['bindingCode'];
+    if (serial == null || serial.isEmpty) return;
+
+    setState(() {
+      _scannedSerialNumber = serial;
+      _bindingCode = bindingCode;
+      _currentStep = _isValidBindingCode(_bindingCode) ? 2 : 1;
+    });
+    if (!_isValidBindingCode(_bindingCode)) {
+      unawaited(_startScan());
+    }
   }
 
-  void _showManualEntry() {
-    final serialController = TextEditingController();
-    final codeController = TextEditingController();
+  Future<void> _showManualEntry() async {
+    final serialController = TextEditingController(
+      text: _scannedSerialNumber ?? '',
+    );
+    final codeController = TextEditingController(text: _bindingCode ?? '');
     String? dialogError;
-    showDialog(
+    final result = await showDialog<Map<String, String?>>(
       context: context,
       builder:
           (ctx) => StatefulBuilder(
@@ -360,26 +374,42 @@ class _DevicePairingScreenState extends ConsumerState<DevicePairingScreen> {
                           return;
                         }
 
-                        Navigator.pop(ctx);
-                        setState(() {
-                          _scannedSerialNumber = serial;
-                          _bindingCode =
-                              bindingCode.isEmpty ? null : bindingCode;
-                          _currentStep = _bindingCode == null ? 1 : 2;
+                        FocusScope.of(ctx).unfocus();
+                        Navigator.pop(ctx, {
+                          'serial': serial,
+                          'bindingCode':
+                              bindingCode.isEmpty ? null : bindingCode,
                         });
-                        if (bindingCode.isEmpty) {
-                          _startScan();
-                        }
                       },
                       child: const Text('Continue'),
                     ),
                   ],
                 ),
           ),
-    ).whenComplete(() {
+    );
+
+    if (!mounted) {
       serialController.dispose();
       codeController.dispose();
+      return;
+    }
+
+    serialController.dispose();
+    codeController.dispose();
+
+    if (result == null) return;
+    final serial = result['serial'];
+    final bindingCode = result['bindingCode'];
+    if (serial == null || serial.isEmpty) return;
+
+    setState(() {
+      _scannedSerialNumber = serial;
+      _bindingCode = bindingCode;
+      _currentStep = _bindingCode == null ? 1 : 2;
     });
+    if (bindingCode == null) {
+      unawaited(_startScan());
+    }
   }
 
   @override

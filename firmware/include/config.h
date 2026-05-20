@@ -247,18 +247,24 @@
 // Optimized for 24V operation (30 RPM)
 // =============================================================================
 #define MOTOR_STEPS_PER_REV     200         // 1.8° per step (NEMA 23)
-#define MOTOR_MICROSTEPS        8           // DM542/TB6600 microstepping (set via DIP switches)
-#define MOTOR_MAX_SPEED         800         // 30 RPM at 1600 steps/rev
+#define MOTOR_MICROSTEPS        2           // DM542/TB6600 half-step mode: 400 pulses/rev on a 200-step motor
+#define MOTOR_MAX_SPEED         400         // 60 RPM at 400 steps/rev
 #define MOTOR_ACCELERATION      400         // Acceleration steps per second²
 #define MOTOR_CURRENT_MA        2000        // Set DM542 DIP switches for 2.0A RMS (2.8A Peak)
 #define MOTOR_PULSE_WIDTH_US    10          // Increased for opto-isolated driver stability (DM542)
+// Current board wiring drives DM542 PUL-/DIR- and ties PUL+/DIR+ to logic +5V.
+// That is common-anode/sinking control: idle HIGH, active pulse LOW.
+#define MOTOR_STEP_ACTIVE_LOW   1
+#define MOTOR_DIR_ACTIVE_LOW    1
+// In the installed auger orientation, reverse rotation dispenses feed.
+#define MOTOR_FEED_DIRECTION_FORWARD 0
 
 // 20mm Wood Drill Auger Calibration
 // Auger pitch ~20mm, so one revolution moves ~20mm of feed
 // Approximate volume per revolution depends on feed density
 #define AUGER_DIAMETER_MM       20.0f       // Auger bit diameter
 #define AUGER_PITCH_MM          20.0f       // Auger pitch (distance per revolution)
-#define GRAMS_PER_REVOLUTION    25.0f       // Grams dispensed per motor revolution (calibrate!)
+#define GRAMS_PER_REVOLUTION    10.45f      // Initial calibration from reverse auger tests; refine with s<g/rev>
 #define MIN_FEED_GRAMS          10.0f       // Minimum feed amount
 #define MAX_FEED_GRAMS          2000.0f     // Maximum feed amount per session
 

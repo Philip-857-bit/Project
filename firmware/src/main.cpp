@@ -65,7 +65,7 @@ void checkSensorAlerts();
 void printSerialTestHelp();
 
 void printSerialTestHelp() {
-    Serial.println("[Serial] Test commands: f=feed dose, t=temp test, b=print binding code, B=new binding code, d=motor config, m=1 rev forward, r=1 rev reverse, j=100 steps forward, k=100 steps reverse, ?=help");
+    Serial.println("[Serial] Test commands: f=feed dose, a<grams>=dose test, s<g/rev>=set calibration, p=pipeline ping/report, t=temp test, b=print binding code, B=new binding code, d=motor config, c=continuous motor forward, v=continuous motor reverse, x=stop continuous motor, G<grams>=save calibration from last run, m=1 rev forward, r=1 rev reverse, j=100 steps forward, k=100 steps reverse, ?=help");
 }
 
 void setup() {
@@ -367,8 +367,8 @@ void controlTaskFunc(void* parameter) {
             checkSensorAlerts();
         }
         
-        // Manual feed button polling (200ms debounce). GPIO35 has no internal
-        // pull-up, so the PCB/external resistor must hold it HIGH when released.
+        // IO0/SW1 button polling (200ms debounce). During bench calibration it
+        // toggles continuous motor run start/stop.
         static bool lastBtnState = digitalRead(PIN_FEED_BTN);
         static unsigned long lastTriggerMs = 0;
         static unsigned long lastBtnReportMs = 0;
@@ -384,11 +384,15 @@ void controlTaskFunc(void* parameter) {
         }
         if (lastBtnState == HIGH && currentBtnState == LOW) {
             if (millis() - lastTriggerMs > 200) {
-                Serial.println("[SW1] Manual feed button pressed");
-                bool started = feedingController.feedNow(MANUAL_FEED_GRAMS_DEFAULT);
-                Serial.printf("[SW1] Manual feed %s (%.2fg)\n",
-                              started ? "started" : "rejected",
-                              MANUAL_FEED_GRAMS_DEFAULT);
+                if (feedingController.isCalibrationRunning()) {
+                    Serial.println("[SW1] Stopping continuous motor calibration");
+                    feedingController.stopCalibrationRun();
+                } else {
+                    Serial.println("[SW1] Starting continuous motor calibration");
+                    bool started = feedingController.startCalibrationRun(true);
+                    Serial.printf("[SW1] Continuous motor calibration %s\n",
+                                  started ? "started" : "rejected");
+                }
                 lastTriggerMs = millis();
             }
         }
@@ -402,6 +406,16 @@ void controlTaskFunc(void* parameter) {
                 Serial.printf("[Serial] Manual feed %s (%.2fg)\n",
                               started ? "started" : "rejected",
                               MANUAL_FEED_GRAMS_DEFAULT);
+            } else if (command == 'a' || command == 'A') {
+                String gramsText = Serial.readStringUntil('\n');
+                gramsText.trim();
+                float targetGrams = gramsText.toFloat();
+                Serial.printf("[Serial] Dose test requested: %.2fg\n", targetGrams);
+                Serial.printf("[Serial] Current calibration: %.4f g/rev\n", feedingController.getGramsPerRevolution());
+                Serial.printf("[Serial] Planned steps: %ld\n", feedingController.getStepsForGrams(targetGrams));
+                Serial.printf("[Serial] Expected motor time: %.2fs\n", feedingController.getExpectedDoseSeconds(targetGrams));
+                bool ok = feedingController.runDoseTest(targetGrams);
+                Serial.printf("[Serial] Dose test %s\n", ok ? "completed" : "rejected/partial");
             } else if (command == 't' || command == 'T') {
                 Serial.println("[Serial] Temperature sensor test requested");
                 sensorManager.printTemperatureDiagnostics();
@@ -416,6 +430,49 @@ void controlTaskFunc(void* parameter) {
                 Serial.println("[Binding] Registration republish queued");
             } else if (command == 'd' || command == 'D') {
                 feedingController.printMotorDiagnostics();
+            } else if (command == 'c' || command == 'C') {
+                if (feedingController.isCalibrationRunning()) {
+                    Serial.println("[Serial] Continuous motor calibration already running");
+                } else {
+                    Serial.println("[Serial] Continuous motor calibration requested");
+                    bool ok = feedingController.startCalibrationRun(true);
+                    Serial.printf("[Serial] Continuous motor calibration %s\n", ok ? "started" : "rejected");
+                }
+            } else if (command == 'v' || command == 'V') {
+                if (feedingController.isCalibrationRunning()) {
+                    Serial.println("[Serial] Continuous motor calibration already running");
+                } else {
+                    Serial.println("[Serial] Reverse continuous motor calibration requested");
+                    bool ok = feedingController.startCalibrationRun(false);
+                    Serial.printf("[Serial] Reverse continuous motor calibration %s\n", ok ? "started" : "rejected");
+                }
+            } else if (command == 'x' || command == 'X') {
+                Serial.println("[Serial] Stop continuous motor calibration requested");
+                bool ok = feedingController.stopCalibrationRun();
+                Serial.printf("[Serial] Continuous motor calibration %s\n", ok ? "stopped" : "was not running");
+            } else if (command == 'g' || command == 'G') {
+                String gramsText = Serial.readStringUntil('\n');
+                gramsText.trim();
+                float measuredGrams = gramsText.toFloat();
+                Serial.printf("[Serial] Saving motor calibration from measured feed: %.2fg\n", measuredGrams);
+                bool ok = feedingController.calibrateFromLastRun(measuredGrams);
+                Serial.printf("[Serial] Motor calibration %s\n", ok ? "saved" : "rejected");
+            } else if (command == 's' || command == 'S') {
+                String calibrationText = Serial.readStringUntil('\n');
+                calibrationText.trim();
+                float gramsPerRev = calibrationText.toFloat();
+                if (gramsPerRev > 0.0f) {
+                    feedingController.calibrateGramsPerRev(gramsPerRev);
+                    Serial.printf("[Serial] Motor calibration set to %.4f g/rev\n", gramsPerRev);
+                } else {
+                    Serial.println("[Serial] Motor calibration rejected; use s<grams_per_rev>, for example s10.45");
+                }
+            } else if (command == 'p' || command == 'P') {
+                Serial.println("[Serial] Pipeline diagnostics requested");
+                systemDiagnostics.runFullCheck();
+                bool reportQueued = commManager.sendDiagnosticsReport(systemDiagnostics);
+                systemDiagnostics.sendPipelinePing();
+                Serial.printf("[Serial] Diagnostics report %s\n", reportQueued ? "sent/queued" : "failed");
             } else if (command == 'm' || command == 'M') {
                 long steps = feedingController.getStepsPerRevolution();
                 Serial.printf("[Serial] Motor test: forward one revolution (%ld steps)\n", steps);
@@ -448,7 +505,7 @@ void controlTaskFunc(void* parameter) {
         // Update power manager
         powerManager.update();
         
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(feedingController.isCalibrationRunning() ? 1 : 50));
     }
 }
 

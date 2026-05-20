@@ -449,6 +449,7 @@ bool CommunicationManager::initGSM() {
     bool networkConnected = false;
     unsigned long networkStart = millis();
     unsigned long lastNetworkDiag = 0;
+    bool registrationDeniedLogged = false;
     while (millis() - networkStart < MODEM_NETWORK_WAIT_MS) {
         if (modem->isNetworkConnected()) {
             networkConnected = true;
@@ -463,6 +464,19 @@ bool CommunicationManager::initGSM() {
                           compactATResponse(atResponse).c_str());
             atResponse = sendATCommand("AT+CEREG?", 3000);
             Serial.printf("[CommManager] Network wait AT+CEREG? -> %s\n",
+                          compactATResponse(atResponse).c_str());
+            if (!registrationDeniedLogged && atResponse.indexOf(",3") != -1) {
+                registrationDeniedLogged = true;
+                Serial.println("[CommManager] LTE registration denied by network (CEREG stat=3)");
+                String rejectResponse = sendATCommand("AT+CEER", 3000);
+                Serial.printf("[CommManager] AT+CEER -> %s\n",
+                              compactATResponse(rejectResponse).c_str());
+                String operatorResponse = sendATCommand("AT+COPS?", 3000);
+                Serial.printf("[CommManager] AT+COPS? after reject -> %s\n",
+                              compactATResponse(operatorResponse).c_str());
+            }
+            atResponse = sendATCommand("AT+CGREG?", 3000);
+            Serial.printf("[CommManager] Network wait AT+CGREG? -> %s\n",
                           compactATResponse(atResponse).c_str());
             atResponse = sendATCommand("AT+CPSI?", 3000);
             Serial.printf("[CommManager] Network wait AT+CPSI? -> %s\n",
@@ -1045,53 +1059,16 @@ bool CommunicationManager::connectNativeGsmMQTT(const String& host,
                   username.isEmpty() ? "<blank>" : "<set>",
                   password.isEmpty() ? "<blank>" : "<set>");
 
-    cleanupNativeGsmMQTT("pre-connect");
-
-    if (!modem->mqtt_begin(useTLS, useTLS)) {
-        Serial.println("[CommManager] CMQTTSTART failed");
-        String atResponse = sendATCommand("AT+CMQTTSTART", 30000, "+CMQTTSTART:");
-        Serial.printf("[CommManager] AT+CMQTTSTART raw -> %s\n", compactATResponse(atResponse).c_str());
+    Serial.println("[CommManager] Using raw CMQTT AT path to avoid blocking TinyGSM TLS connect");
+    bool connected = connectNativeGsmMQTTRaw(host, port, useTLS, clientID, username, password);
+    if (!connected) {
         probeModemApplicationCommandSupport();
         if (!_gsmApplicationStackAvailable) {
             _gsmMqttTransportAvailable = false;
             Serial.println("[CommManager] Native CMQTT is unavailable; GSM MQTT retries suppressed until reboot");
-            return false;
         }
-        return connectNativeGsmMQTTRaw(host, port, useTLS, clientID, username, password);
     }
-
-    modem->mqtt_set_rx_buffer_size(MQTT_BUFFER_SIZE);
-    modem->mqtt_set_callback(nativeMqttCallback);
-    modem->setWillMessage(nullptr, nullptr, 0);
-    if (useTLS && isHiveMQCloudHost(host)) {
-        Serial.println("[CommManager] Native CMQTT TLS CA: ISRG Root X1 for HiveMQ Cloud");
-        modem->mqtt_set_certificate(HIVEMQ_ROOT_CA);
-    }
-
-    const char* user = username.isEmpty() ? nullptr : username.c_str();
-    const char* pass = username.isEmpty() ? nullptr : password.c_str();
-    bool connected = modem->mqtt_connect(0,
-                                         host.c_str(),
-                                         port,
-                                         clientID.c_str(),
-                                         user,
-                                         pass,
-                                         MQTT_KEEPALIVE);
-
-    if (!connected) {
-        Serial.println("[CommManager] Native CMQTT connection failed");
-        String atResponse = sendATCommand("AT+CMQTTDISC?", 5000);
-        Serial.printf("[CommManager] AT+CMQTTDISC? -> %s\n", compactATResponse(atResponse).c_str());
-        atResponse = sendATCommand("AT+CMQTTACCQ?", 5000);
-        Serial.printf("[CommManager] AT+CMQTTACCQ? -> %s\n", compactATResponse(atResponse).c_str());
-        cleanupNativeGsmMQTT("TinyGSM connect failed");
-        return connectNativeGsmMQTTRaw(host, port, useTLS, clientID, username, password);
-    }
-
-    _gsmNativeMqttConnected = true;
-    Serial.println("[CommManager] MQTT connected via native CMQTT");
-    publishSelfRegistration();
-    return true;
+    return connected;
 #else
     (void)host;
     (void)port;
@@ -1146,6 +1123,17 @@ bool CommunicationManager::connectNativeGsmMQTTRaw(const String& host,
         atResponse = sendATCommand("AT+CSSLCFG=\"ignorelocaltime\",0,1", 5000);
         Serial.printf("[CommManager] Raw CSSLCFG ignorelocaltime -> %s\n", compactATResponse(atResponse).c_str());
         if (isHiveMQCloudHost(host)) {
+            Serial.println("[CommManager] Raw CMQTT TLS CA: ISRG Root X1 for HiveMQ Cloud");
+            String certCommand = "AT+CCERTDOWN=\"ca_cert.pem\",";
+            certCommand += String(strlen(HIVEMQ_ROOT_CA));
+            atResponse = sendATPayloadCommand(certCommand,
+                                               (const uint8_t*)HIVEMQ_ROOT_CA,
+                                               strlen(HIVEMQ_ROOT_CA),
+                                               10000,
+                                               10000);
+            Serial.printf("[CommManager] Raw AT+CCERTDOWN ca_cert.pem -> %s\n", compactATResponse(atResponse).c_str());
+            atResponse = sendATCommand("AT+CSSLCFG=\"cacert\",0,\"ca_cert.pem\"", 5000);
+            Serial.printf("[CommManager] Raw CSSLCFG cacert -> %s\n", compactATResponse(atResponse).c_str());
             atResponse = sendATCommand("AT+CMQTTSSLCFG=0,0", 5000);
             Serial.printf("[CommManager] Raw AT+CMQTTSSLCFG -> %s\n", compactATResponse(atResponse).c_str());
             atResponse = sendATCommand("AT+CSSLCFG=\"authmode\",0,1", 5000);
