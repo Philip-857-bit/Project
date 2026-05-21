@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/models/device.dart';
+import '../../../../core/models/feeding.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/feeding_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
@@ -34,9 +35,11 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
           .read(feedingHistoryProvider.notifier)
           .loadHistory(widget.deviceId, refresh: true),
     ]);
+    if (!mounted) return;
 
     final realtime = ref.read(realtimeProvider.notifier);
     final connected = await realtime.connect();
+    if (!mounted) return;
     if (connected) {
       realtime.subscribeToDevice(widget.deviceId);
     }
@@ -372,12 +375,25 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
                   time: DateFormat('h:mm a').format(event.scheduledAt),
                   amount: '${event.amount.toInt()}g',
                   type: event.type == 'manual' ? 'Manual' : 'Scheduled',
-                  status: event.status.name,
-                  isPending: event.status.name == 'pending',
+                  status: _feedingStatusLabel(event.status),
+                  isPending: event.status == FeedingEventStatus.pending,
                 ),
               ),
       ],
     );
+  }
+
+  String _feedingStatusLabel(FeedingEventStatus status) {
+    switch (status) {
+      case FeedingEventStatus.completed:
+        return 'completed';
+      case FeedingEventStatus.failed:
+        return 'failed';
+      case FeedingEventStatus.pending:
+        return 'pending';
+      case FeedingEventStatus.cancelled:
+        return 'cancelled';
+    }
   }
 
   void _showDeviceSettings(BuildContext context) {

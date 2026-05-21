@@ -255,7 +255,7 @@ func (s *DeviceService) DeleteDevice(deviceID string, userID uint) error {
 
 // UpdateDeviceLastSeen updates the last seen timestamp for a device
 func (s *DeviceService) UpdateDeviceLastSeen(deviceID string) error {
-	device, err := s.repo.Device.GetByDeviceID(deviceID)
+	device, err := s.getByDeviceIDOrSerial(deviceID)
 	if err != nil {
 		return fmt.Errorf("failed to get device: %w", err)
 	}
@@ -266,6 +266,33 @@ func (s *DeviceService) UpdateDeviceLastSeen(deviceID string) error {
 	}
 
 	return nil
+}
+
+func (s *DeviceService) ResolveCanonicalDeviceID(identifier string) string {
+	device, err := s.getByDeviceIDOrSerial(identifier)
+	if err != nil || device == nil || device.DeviceID == "" {
+		return identifier
+	}
+	return device.DeviceID
+}
+
+func (s *DeviceService) ResolveCommandTopicID(identifier string) string {
+	device, err := s.getByDeviceIDOrSerial(identifier)
+	if err != nil || device == nil || device.DeviceSerial == "" {
+		return identifier
+	}
+	return device.DeviceSerial
+}
+
+func (s *DeviceService) getByDeviceIDOrSerial(identifier string) (*models.Device, error) {
+	device, err := s.repo.Device.GetByDeviceID(identifier)
+	if err == nil {
+		return device, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	return s.repo.Device.GetBySerial(identifier)
 }
 
 // VerifyDeviceOwnership verifies that a user owns a specific device (returns boolean)

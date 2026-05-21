@@ -600,17 +600,17 @@ func TestQ10CalculatorService_calculateOptimalFeedingFrequency(t *testing.T) {
 		{
 			name:        "Medium amount",
 			dailyAmount: 300.0,
-			expected:    3,
+			expected:    2,
 		},
 		{
 			name:        "Large amount",
 			dailyAmount: 2000.0,
-			expected:    4,
+			expected:    2,
 		},
 		{
 			name:        "Very large amount",
 			dailyAmount: 5000.0,
-			expected:    5,
+			expected:    2,
 		},
 		{
 			name:        "Boundary - small/medium",
@@ -620,12 +620,12 @@ func TestQ10CalculatorService_calculateOptimalFeedingFrequency(t *testing.T) {
 		{
 			name:        "Boundary - medium/large",
 			dailyAmount: 251.0,
-			expected:    3,
+			expected:    2,
 		},
 		{
 			name:        "Boundary - large/very large",
 			dailyAmount: 1501.0,
-			expected:    4,
+			expected:    2,
 		},
 	}
 

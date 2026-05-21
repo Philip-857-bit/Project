@@ -538,7 +538,7 @@ func TestProperty_FeedCalculationAccuracy(t *testing.T) {
 		}{
 			{"small amount", 10, 10, 2, 2},   // ~4g daily
 			{"medium amount", 50, 50, 2, 2},  // ~90g daily
-			{"large amount", 200, 200, 3, 3}, // ~1152g daily
+			{"large amount", 200, 200, 2, 2}, // ~1152g daily
 		}
 
 		for _, tc := range testCases {
@@ -637,12 +637,12 @@ func TestCalculatorService_BasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("feeding frequency calculation", func(t *testing.T) {
-		assert.Equal(t, 2, service.calculateOptimalFeedingFrequency(50))   // Small amount
-		assert.Equal(t, 3, service.calculateOptimalFeedingFrequency(300))  // Medium amount
-		assert.Equal(t, 3, service.calculateOptimalFeedingFrequency(750))  // Medium amount
-		assert.Equal(t, 3, service.calculateOptimalFeedingFrequency(1500)) // Medium amount upper bound
-		assert.Equal(t, 4, service.calculateOptimalFeedingFrequency(2500)) // Large amount
-		assert.Equal(t, 5, service.calculateOptimalFeedingFrequency(5000)) // Very large amount
+		assert.Equal(t, 2, service.calculateOptimalFeedingFrequency(50))
+		assert.Equal(t, 2, service.calculateOptimalFeedingFrequency(300))
+		assert.Equal(t, 2, service.calculateOptimalFeedingFrequency(750))
+		assert.Equal(t, 2, service.calculateOptimalFeedingFrequency(1500))
+		assert.Equal(t, 2, service.calculateOptimalFeedingFrequency(2500))
+		assert.Equal(t, 2, service.calculateOptimalFeedingFrequency(5000))
 	})
 }
 

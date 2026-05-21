@@ -48,7 +48,10 @@ class BackendServiceHealth {
     required this.message,
   });
 
-  factory BackendServiceHealth.fromJson(String name, Map<String, dynamic> json) {
+  factory BackendServiceHealth.fromJson(
+    String name,
+    Map<String, dynamic> json,
+  ) {
     return BackendServiceHealth(
       name: name,
       status: json['status'] ?? 'error',
@@ -184,12 +187,14 @@ class SystemHealthNotifier extends StateNotifier<SystemHealthState> {
   SystemHealthNotifier(this._apiService) : super(const SystemHealthState());
 
   Future<void> loadSystemHealth(String deviceId) async {
+    if (!mounted) return;
     state = state.copyWith(isLoading: true, error: null, deviceId: deviceId);
 
     try {
       final response = await _apiService
           .getSystemHealth(deviceId)
           .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final body = response.data;
@@ -249,6 +254,7 @@ class SystemHealthNotifier extends StateNotifier<SystemHealthState> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: ApiService.describeError(
@@ -264,8 +270,10 @@ class SystemHealthNotifier extends StateNotifier<SystemHealthState> {
       await _apiService.triggerDiagnostics(deviceId);
       // Reload after a short delay to get the fresh report
       await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
       await loadSystemHealth(deviceId);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         error: ApiService.describeError(
           e,
@@ -281,17 +289,19 @@ class SystemHealthNotifier extends StateNotifier<SystemHealthState> {
 // ---------------------------------------------------------------------------
 
 final systemHealthProvider =
-    StateNotifierProvider<SystemHealthNotifier, SystemHealthState>((ref) {
+    StateNotifierProvider.autoDispose<SystemHealthNotifier, SystemHealthState>((
+      ref,
+    ) {
       final apiService = ref.watch(apiServiceProvider);
       return SystemHealthNotifier(apiService);
     });
 
 /// Convenience: are all hardware components healthy?
-final allComponentsHealthyProvider = Provider<bool>((ref) {
+final allComponentsHealthyProvider = Provider.autoDispose<bool>((ref) {
   return ref.watch(systemHealthProvider).allComponentsHealthy;
 });
 
 /// Convenience: is the full E2E pipeline connected?
-final pipelineFullyConnectedProvider = Provider<bool>((ref) {
+final pipelineFullyConnectedProvider = Provider.autoDispose<bool>((ref) {
   return ref.watch(systemHealthProvider).pipeline.isFullyConnected;
 });

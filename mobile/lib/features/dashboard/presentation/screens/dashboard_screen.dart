@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/models/feeding.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/feeding_provider.dart';
@@ -23,6 +24,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Future<void> _loadData() async {
     await ref.read(deviceListProvider.notifier).loadDevices();
+    if (!mounted) return;
     final devices = ref.read(devicesProvider);
     if (devices.isNotEmpty) {
       final deviceId = devices.first.id;
@@ -247,7 +249,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           subtitle: '${event.amount}g dispensed',
           time: _formatTime(event.scheduledAt),
           timestamp: event.scheduledAt,
-          isAlert: event.status.name == 'failed',
+          isAlert: event.status == FeedingEventStatus.failed,
         ),
       );
     }

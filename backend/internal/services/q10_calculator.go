@@ -327,18 +327,7 @@ func (s *Q10CalculatorService) getWeatherMultiplier(weather string) float64 {
 }
 
 func (s *Q10CalculatorService) calculateOptimalFeedingFrequency(dailyAmount float64) int {
-	// Thresholds aligned with CalculatorService.calculateOptimalFeedingFrequency.
-	// Trial scenario (15 fish x 50g x 3% = 22.5g/day) always returns 2.
-	switch {
-	case dailyAmount <= 250:
-		return 2
-	case dailyAmount <= 1500:
-		return 3
-	case dailyAmount <= 4000:
-		return 4
-	default:
-		return 5
-	}
+	return 2
 }
 
 func (s *Q10CalculatorService) generateQ10EnvironmentalNote(_ /* environmental */ models.Q10EnvironmentalFactors, biological models.BiologicalAdjustments) string {

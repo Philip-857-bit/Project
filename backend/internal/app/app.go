@@ -104,17 +104,23 @@ func (a *App) Run() error {
 		return fmt.Errorf("failed to seed default fish species: %w", err)
 	}
 
+	var shadowService *mqtt.DeviceShadowService
+	if a.mqttClient != nil {
+		shadowService = mqtt.NewDeviceShadowService(a.mqttClient, nil, a.logger)
+	}
+
 	// Wire MQTT handlers now that services are available
-	a.setupMQTTHandlers(services)
+	a.setupMQTTHandlers(services, shadowService)
 
 	// Initialize handlers
 	handlers := handlers.New(services, a.logger, a.config)
 	handlers.Device.SetMQTTClient(a.mqttClient)
 	handlers.Feeding.SetMQTTClient(a.mqttClient)
 	handlers.Health.SetMQTTClient(a.mqttClient)
+	handlers.Health.SetDeviceShadow(shadowService)
 
 	// Setup router
-	router := a.setupRouter(handlers, services.Auth)
+	router := a.setupRouter(handlers, services)
 
 	// Create HTTP server
 	a.server = &http.Server{
@@ -158,14 +164,15 @@ func (a *App) Run() error {
 }
 
 // setupMQTTHandlers configures MQTT topic subscriptions and persists incoming data.
-func (a *App) setupMQTTHandlers(svc *services.Services) {
+func (a *App) setupMQTTHandlers(svc *services.Services, shadowService *mqtt.DeviceShadowService) {
 	if a.mqttClient == nil {
 		return
 	}
 
 	// Subscribe to device sensor data - persist to database
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceSensorDataAll, 1, func(topic string, payload []byte) error {
-		deviceID := mqtt.ExtractDeviceID(topic)
+		deviceID := a.canonicalDeviceID(svc, mqtt.ExtractDeviceID(topic))
+		a.touchDevice(svc, deviceID)
 		var req models.SensorDataRequest
 		if err := json.Unmarshal(payload, &req); err != nil {
 			a.logger.WithError(err).Warn("Failed to parse sensor MQTT payload")
@@ -182,7 +189,8 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 
 	// Subscribe to device feeding events - persist to database
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceFeedingAll, 1, func(topic string, payload []byte) error {
-		deviceID := mqtt.ExtractDeviceID(topic)
+		deviceID := a.canonicalDeviceID(svc, mqtt.ExtractDeviceID(topic))
+		a.touchDevice(svc, deviceID)
 		var event models.FeedingEvent
 		if err := json.Unmarshal(payload, &event); err != nil {
 			a.logger.WithError(err).Warn("Failed to parse feeding MQTT payload")
@@ -199,7 +207,8 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 
 	// Subscribe to device telemetry - log only (full telemetry blob, no dedicated model)
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceTelemetryAll, 1, func(topic string, payload []byte) error {
-		deviceID := mqtt.ExtractDeviceID(topic)
+		deviceID := a.canonicalDeviceID(svc, mqtt.ExtractDeviceID(topic))
+		a.touchDevice(svc, deviceID)
 		a.logger.WithFields(logrus.Fields{"device_id": deviceID, "topic": topic}).Debug("Received device telemetry")
 		return nil
 	}); err != nil {
@@ -208,7 +217,8 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 
 	// Subscribe to device status updates - log only
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceStatusAll, 1, func(topic string, payload []byte) error {
-		deviceID := mqtt.ExtractDeviceID(topic)
+		deviceID := a.canonicalDeviceID(svc, mqtt.ExtractDeviceID(topic))
+		a.touchDevice(svc, deviceID)
 		a.logger.WithFields(logrus.Fields{"device_id": deviceID, "topic": topic}).Debug("Received device status update")
 		return nil
 	}); err != nil {
@@ -217,7 +227,8 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 
 	// Subscribe to device alerts - persist to database and broadcast via WebSocket
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceAlertAll, 1, func(topic string, payload []byte) error {
-		deviceID := mqtt.ExtractDeviceID(topic)
+		deviceID := a.canonicalDeviceID(svc, mqtt.ExtractDeviceID(topic))
+		a.touchDevice(svc, deviceID)
 		var raw struct {
 			Severity int    `json:"severity"`
 			Type     int    `json:"type"`
@@ -245,7 +256,8 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 
 	// Subscribe to device diagnostics - log only for now
 	if err := a.mqttClient.Subscribe("devices/+/diagnostics", 1, func(topic string, payload []byte) error {
-		deviceID := mqtt.ExtractDeviceID(topic)
+		deviceID := a.canonicalDeviceID(svc, mqtt.ExtractDeviceID(topic))
+		a.touchDevice(svc, deviceID)
 		a.logger.WithFields(logrus.Fields{"device_id": deviceID, "bytes": len(payload)}).Debug("Received device diagnostics")
 		return nil
 	}); err != nil {
@@ -254,9 +266,24 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 
 	// Subscribe to device diagnostics report - store for system-health endpoint
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceDiagReportAll, 1, func(topic string, payload []byte) error {
-		deviceID := mqtt.ExtractDeviceID(topic)
+		deviceID := a.canonicalDeviceID(svc, mqtt.ExtractDeviceID(topic))
+		a.touchDevice(svc, deviceID)
 		a.logger.WithFields(logrus.Fields{"device_id": deviceID}).Info("Received device diagnostics report")
-		// The MQTTHandlers will store this in shadow via handleDiagnosticsReport
+		var report map[string]interface{}
+		if err := json.Unmarshal(payload, &report); err != nil {
+			a.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to parse diagnostics report")
+			return nil
+		}
+		if shadowService != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if _, err := shadowService.UpdateReportedState(ctx, deviceID, map[string]interface{}{
+				"diagnostics":           report,
+				"diagnostics_timestamp": time.Now().Unix(),
+			}); err != nil {
+				a.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to store diagnostics report")
+			}
+		}
 		return nil
 	}); err != nil {
 		a.logger.WithError(err).Error("Failed to subscribe to diagnostics reports")
@@ -264,7 +291,9 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 
 	// Subscribe to device diagnostics ping - reply with pong for pipeline verification
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceDiagPingAll, 1, func(topic string, payload []byte) error {
-		deviceID := mqtt.ExtractDeviceID(topic)
+		topicDeviceID := mqtt.ExtractDeviceID(topic)
+		deviceID := a.canonicalDeviceID(svc, topicDeviceID)
+		a.touchDevice(svc, deviceID)
 		a.logger.WithFields(logrus.Fields{"device_id": deviceID}).Info("Received diagnostics ping — sending pong")
 
 		// Parse ping
@@ -288,11 +317,23 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 		}
 
 		// Publish pong
-		pongTopic := mqtt.NewTopicBuilder(deviceID).DiagPong()
+		pongTopic := mqtt.NewTopicBuilder(topicDeviceID).DiagPong()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if pubErr := a.mqttClient.Publish(ctx, pongTopic, pongPayload, 1, false); pubErr != nil {
 			a.logger.WithError(pubErr).Warn("Failed to publish pong")
+		}
+		if shadowService != nil {
+			if _, err := shadowService.UpdateReportedState(ctx, deviceID, map[string]interface{}{
+				"pipeline_health": map[string]interface{}{
+					"mcu_to_mqtt":     true,
+					"mqtt_to_backend": true,
+					"backend_to_mqtt": true,
+					"last_ping_time":  time.Now().Unix(),
+				},
+			}); err != nil {
+				a.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to store pipeline health")
+			}
 		}
 
 		return nil
@@ -321,6 +362,7 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 				a.logger.WithError(err).Warn("Failed to store firmware binding code")
 			}
 		}
+		a.touchDevice(svc, device.DeviceID)
 		a.logger.WithField("device_id", device.DeviceID).Info("Device self-registered via MQTT")
 		return nil
 	}); err != nil {
@@ -328,6 +370,22 @@ func (a *App) setupMQTTHandlers(svc *services.Services) {
 	}
 
 	a.logger.Info("MQTT handlers configured successfully")
+}
+
+func (a *App) canonicalDeviceID(svc *services.Services, identifier string) string {
+	if svc == nil || svc.Device == nil || identifier == "" {
+		return identifier
+	}
+	return svc.Device.ResolveCanonicalDeviceID(identifier)
+}
+
+func (a *App) touchDevice(svc *services.Services, deviceID string) {
+	if svc == nil || svc.Device == nil || deviceID == "" {
+		return
+	}
+	if err := svc.Device.UpdateDeviceLastSeen(deviceID); err != nil {
+		a.logger.WithError(err).WithField("device_id", deviceID).Debug("Failed to update device last_seen")
+	}
 }
 
 // firmwareSeverityName converts the firmware AlertSeverity int enum to a backend string.
@@ -375,7 +433,8 @@ func firmwareAlertTypeName(v int) string {
 }
 
 // setupRouter configures the Gin router with all routes and middleware
-func (a *App) setupRouter(h *handlers.Handlers, authService *services.AuthService) *gin.Engine {
+func (a *App) setupRouter(h *handlers.Handlers, svc *services.Services) *gin.Engine {
+	authService := svc.Auth
 	// Allow explicit GIN_MODE override, otherwise derive from server debug flag.
 	if mode := os.Getenv("GIN_MODE"); mode != "" {
 		gin.SetMode(mode)
@@ -440,6 +499,48 @@ func (a *App) setupRouter(h *handlers.Handlers, authService *services.AuthServic
 				// Map :id to device_id expected by GetSystemHealth
 				c.Params = append(c.Params, gin.Param{Key: "device_id", Value: c.Param("id")})
 				h.Health.GetSystemHealth(c)
+			})
+			devices.POST("/:id/system-health/run", middleware.AuthMiddleware(authService), func(c *gin.Context) {
+				deviceID := c.Param("id")
+				if a.mqttClient == nil || !a.mqttClient.IsConnected() {
+					c.JSON(http.StatusServiceUnavailable, gin.H{
+						"error": "Device command channel is unavailable",
+					})
+					return
+				}
+
+				command := map[string]interface{}{
+					"type":      9, // CommandType::RUN_DIAGNOSTICS
+					"timestamp": time.Now().Unix(),
+				}
+				payload, err := json.Marshal(command)
+				if err != nil {
+					a.logger.WithError(err).WithField("device_id", deviceID).Error("Failed to marshal diagnostics command")
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"error": "Failed to build diagnostics command",
+					})
+					return
+				}
+
+				ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+				defer cancel()
+				topicDeviceID := svc.Device.ResolveCommandTopicID(deviceID)
+				if err := a.mqttClient.Publish(ctx, mqtt.NewTopicBuilder(topicDeviceID).Command(), payload, 1, false); err != nil {
+					a.logger.WithError(err).WithField("device_id", deviceID).Error("Failed to publish diagnostics command")
+					c.JSON(http.StatusBadGateway, gin.H{
+						"error": "Failed to dispatch diagnostics command",
+					})
+					return
+				}
+
+				a.touchDevice(svc, deviceID)
+				c.JSON(http.StatusAccepted, gin.H{
+					"message":      "Diagnostics command dispatched successfully",
+					"device_id":    deviceID,
+					"topic_id":     topicDeviceID,
+					"command_type": "run_diagnostics",
+					"accepted_at":  time.Now().UTC(),
+				})
 			})
 		}
 

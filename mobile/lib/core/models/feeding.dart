@@ -277,8 +277,8 @@ class FeedCalculationResult {
     final normalizedSuggestedFeedings =
         parsedSuggestedFeedings <= 0
             ? 2
-            : parsedSuggestedFeedings > 10
-            ? 10
+            : parsedSuggestedFeedings > 2
+            ? 2
             : parsedSuggestedFeedings;
 
     return FeedCalculationResult(

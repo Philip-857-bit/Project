@@ -24,8 +24,7 @@ class _FeedingScheduleScreenState extends ConsumerState<FeedingScheduleScreen> {
     final result = calculatorState.result;
     if (result == null) return null;
 
-    final suggestedFeedings =
-        result.suggestedFeedings <= 0 ? 1 : result.suggestedFeedings;
+    const suggestedFeedings = 2;
     final perFeeding = result.recommendedAmount / suggestedFeedings;
     final request = calculatorState.lastRequest;
 

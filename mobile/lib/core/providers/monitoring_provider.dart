@@ -40,12 +40,14 @@ class SensorDataNotifier extends StateNotifier<SensorDataState> {
   SensorDataNotifier(this._apiService) : super(const SensorDataState());
 
   Future<void> loadSensorData(String deviceId) async {
+    if (!mounted) return;
     state = state.copyWith(isLoading: true, error: null);
 
     try {
       final response = await _apiService
           .getSensorData(deviceId)
           .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
       if (response.statusCode == 200) {
         final body = response.data;
         final payload =
@@ -68,6 +70,7 @@ class SensorDataNotifier extends StateNotifier<SensorDataState> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: ApiService.describeError(
@@ -79,6 +82,7 @@ class SensorDataNotifier extends StateNotifier<SensorDataState> {
   }
 
   void updateFromMqtt(SensorData data) {
+    if (!mounted) return;
     state = state.copyWith(currentData: data, lastUpdated: DateTime.now());
   }
 }
@@ -119,12 +123,14 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
     String sensorType, {
     int hours = 24,
   }) async {
+    if (!mounted) return;
     state = state.copyWith(isLoading: true, error: null);
 
     try {
       final response = await _apiService
           .getSensorHistory(deviceId, sensorType, hours: hours)
           .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
       if (response.statusCode == 200) {
         final body = response.data;
         final payload =
@@ -143,6 +149,7 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: ApiService.describeError(
@@ -154,6 +161,7 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
   }
 
   Future<void> loadAllHistories(String deviceId, {int hours = 24}) async {
+    if (!mounted) return;
     state = state.copyWith(isLoading: true, error: null);
 
     try {
@@ -177,8 +185,10 @@ class SensorHistoryNotifier extends StateNotifier<SensorHistoryState> {
         }
       }
 
+      if (!mounted) return;
       state = state.copyWith(histories: histories, isLoading: false);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: ApiService.describeError(
@@ -226,12 +236,14 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
   AlertsNotifier(this._apiService) : super(const AlertsState());
 
   Future<void> loadAlerts(String deviceId) async {
+    if (!mounted) return;
     state = state.copyWith(isLoading: true, error: null);
 
     try {
       final response = await _apiService
           .getAlerts(deviceId)
           .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
       if (response.statusCode == 200) {
         final body = response.data;
         final payload =
@@ -254,6 +266,7 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: ApiService.describeError(e, fallback: 'Failed to load alerts.'),
@@ -262,6 +275,7 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
   }
 
   void addAlert(DeviceAlert alert) {
+    if (!mounted) return;
     state = state.copyWith(
       alerts: [alert, ...state.alerts],
       unreadCount: state.unreadCount + 1,
@@ -271,42 +285,45 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
 
 // Providers
 final sensorDataProvider =
-    StateNotifierProvider<SensorDataNotifier, SensorDataState>((ref) {
+    StateNotifierProvider.autoDispose<SensorDataNotifier, SensorDataState>((
+      ref,
+    ) {
       final apiService = ref.watch(apiServiceProvider);
       return SensorDataNotifier(apiService);
     });
 
-final sensorHistoryProvider =
-    StateNotifierProvider<SensorHistoryNotifier, SensorHistoryState>((ref) {
-      final apiService = ref.watch(apiServiceProvider);
-      return SensorHistoryNotifier(apiService);
-    });
-
-final alertsProvider = StateNotifierProvider<AlertsNotifier, AlertsState>((
-  ref,
-) {
+final sensorHistoryProvider = StateNotifierProvider.autoDispose<
+  SensorHistoryNotifier,
+  SensorHistoryState
+>((ref) {
   final apiService = ref.watch(apiServiceProvider);
-  return AlertsNotifier(apiService);
+  return SensorHistoryNotifier(apiService);
 });
 
+final alertsProvider =
+    StateNotifierProvider.autoDispose<AlertsNotifier, AlertsState>((ref) {
+      final apiService = ref.watch(apiServiceProvider);
+      return AlertsNotifier(apiService);
+    });
+
 // Convenience providers
-final currentTemperatureProvider = Provider<double?>((ref) {
+final currentTemperatureProvider = Provider.autoDispose<double?>((ref) {
   return ref.watch(sensorDataProvider).currentData?.waterTemperature;
 });
 
-final currentFeedLevelProvider = Provider<double?>((ref) {
+final currentFeedLevelProvider = Provider.autoDispose<double?>((ref) {
   return ref.watch(sensorDataProvider).currentData?.feedLevel;
 });
 
-final currentBatteryProvider = Provider<double?>((ref) {
+final currentBatteryProvider = Provider.autoDispose<double?>((ref) {
   return ref.watch(sensorDataProvider).currentData?.batteryLevel;
 });
 
-final unreadAlertsCountProvider = Provider<int>((ref) {
+final unreadAlertsCountProvider = Provider.autoDispose<int>((ref) {
   return ref.watch(alertsProvider).unreadCount;
 });
 
-final criticalAlertsProvider = Provider<List<DeviceAlert>>((ref) {
+final criticalAlertsProvider = Provider.autoDispose<List<DeviceAlert>>((ref) {
   return ref
       .watch(alertsProvider)
       .alerts

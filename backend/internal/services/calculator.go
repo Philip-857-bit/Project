@@ -295,20 +295,9 @@ func (s *CalculatorService) getWeatherMultiplier(weather string) float64 {
 	return 1.0
 }
 
-// calculateOptimalFeedingFrequency determines optimal feeding frequency based on daily amount.
-// For the 8-week Clarias gariepinus trial (15 fish x 50g, 5% BW/day = ~37.5g/day),
-// daily amounts fall in the <=250g bucket which returns 2 feeds/day as required.
+// calculateOptimalFeedingFrequency keeps the production feeder schedule at two feeds per day.
 func (s *CalculatorService) calculateOptimalFeedingFrequency(dailyAmount float64) int {
-	switch {
-	case dailyAmount <= 250: // Small systems (e.g. trial tanks) - 2 feeds/day
-		return 2
-	case dailyAmount <= 1500: // Medium pond/tank
-		return 3
-	case dailyAmount <= 4000: // Large pond
-		return 4
-	default: // Commercial scale
-		return 5
-	}
+	return 2
 }
 
 // calculateEnvironmentalAdjustments calculates the environmental adjustment factors

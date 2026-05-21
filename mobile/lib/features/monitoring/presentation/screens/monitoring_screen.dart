@@ -27,6 +27,7 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
 
   Future<void> _loadData() async {
     await ref.read(deviceListProvider.notifier).loadDevices();
+    if (!mounted) return;
     final devices = ref.read(devicesProvider);
     if (devices.isNotEmpty && _selectedDeviceId == null) {
       _selectedDeviceId = devices.first.id;
@@ -35,11 +36,12 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
   }
 
   Future<void> _loadDeviceData() async {
-    if (_selectedDeviceId == null) return;
+    if (!mounted || _selectedDeviceId == null) return;
+    final deviceId = _selectedDeviceId!;
     await Future.wait([
-      ref.read(sensorDataProvider.notifier).loadSensorData(_selectedDeviceId!),
-      ref.read(alertsProvider.notifier).loadAlerts(_selectedDeviceId!),
-      ref.read(systemHealthProvider.notifier).loadSystemHealth(_selectedDeviceId!),
+      ref.read(sensorDataProvider.notifier).loadSensorData(deviceId),
+      ref.read(alertsProvider.notifier).loadAlerts(deviceId),
+      ref.read(systemHealthProvider.notifier).loadSystemHealth(deviceId),
     ]);
   }
 
@@ -84,12 +86,16 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                 deviceId: _selectedDeviceId,
                 onRefresh: () {
                   if (_selectedDeviceId != null) {
-                    ref.read(systemHealthProvider.notifier).loadSystemHealth(_selectedDeviceId!);
+                    ref
+                        .read(systemHealthProvider.notifier)
+                        .loadSystemHealth(_selectedDeviceId!);
                   }
                 },
                 onRunDiagnostics: () {
                   if (_selectedDeviceId != null) {
-                    ref.read(systemHealthProvider.notifier).triggerDiagnostics(_selectedDeviceId!);
+                    ref
+                        .read(systemHealthProvider.notifier)
+                        .triggerDiagnostics(_selectedDeviceId!);
                   }
                 },
               ),
@@ -973,9 +979,12 @@ class _SystemHealthSectionState extends State<_SystemHealthSection> {
                 children: [
                   Icon(
                     Icons.health_and_safety,
-                    color: h.allComponentsHealthy
-                        ? AppTheme.deviceOnline
-                        : (h.errorCount > 0 ? AppTheme.feedLevelLow : Colors.grey),
+                    color:
+                        h.allComponentsHealthy
+                            ? AppTheme.deviceOnline
+                            : (h.errorCount > 0
+                                ? AppTheme.feedLevelLow
+                                : Colors.grey),
                     size: 24,
                   ),
                   const SizedBox(width: 12),
@@ -985,23 +994,22 @@ class _SystemHealthSectionState extends State<_SystemHealthSection> {
                       children: [
                         Text(
                           'System Health',
-                          style: theme.textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         if (h.components.isNotEmpty)
                           Text(
                             '${h.okCount}/${h.components.length} components OK',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: h.allComponentsHealthy
-                                  ? AppTheme.deviceOnline
-                                  : AppTheme.feedLevelLow,
+                              color:
+                                  h.allComponentsHealthy
+                                      ? AppTheme.deviceOnline
+                                      : AppTheme.feedLevelLow,
                             ),
                           )
                         else if (h.isLoading)
-                          Text(
-                            'Loading...',
-                            style: theme.textTheme.bodySmall,
-                          )
+                          Text('Loading...', style: theme.textTheme.bodySmall)
                         else
                           Text(
                             h.message ?? 'No diagnostics yet',
@@ -1033,7 +1041,11 @@ class _SystemHealthSectionState extends State<_SystemHealthSection> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    Icon(Icons.error_outline, color: AppTheme.feedLevelLow, size: 32),
+                    Icon(
+                      Icons.error_outline,
+                      color: AppTheme.feedLevelLow,
+                      size: 32,
+                    ),
                     const SizedBox(height: 8),
                     Text(h.error!, textAlign: TextAlign.center),
                     const SizedBox(height: 12),
@@ -1075,9 +1087,7 @@ class _SystemHealthSectionState extends State<_SystemHealthSection> {
                   ),
                 )
               else
-                ...h.components.map(
-                  (c) => _ComponentTile(component: c),
-                ),
+                ...h.components.map((c) => _ComponentTile(component: c)),
 
               // ---- ESP32-CAM Independence ----
               if (h.canWorkWithoutCam == true)
@@ -1085,7 +1095,11 @@ class _SystemHealthSectionState extends State<_SystemHealthSection> {
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 16, color: Colors.blue[400]),
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.blue[400],
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1111,16 +1125,27 @@ class _SystemHealthSectionState extends State<_SystemHealthSection> {
                     style: theme.textTheme.labelLarge,
                   ),
                 ),
-                ...h.backendHealth.map((b) => ListTile(
-                      dense: true,
-                      leading: Icon(
-                        b.isOk ? Icons.check_circle : Icons.error,
-                        color: b.isOk ? AppTheme.deviceOnline : AppTheme.feedLevelLow,
-                        size: 20,
-                      ),
-                      title: Text(_capitalise(b.name), style: const TextStyle(fontSize: 14)),
-                      subtitle: Text(b.message, style: const TextStyle(fontSize: 12)),
-                    )),
+                ...h.backendHealth.map(
+                  (b) => ListTile(
+                    dense: true,
+                    leading: Icon(
+                      b.isOk ? Icons.check_circle : Icons.error,
+                      color:
+                          b.isOk
+                              ? AppTheme.deviceOnline
+                              : AppTheme.feedLevelLow,
+                      size: 20,
+                    ),
+                    title: Text(
+                      _capitalise(b.name),
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      b.message,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
                 const Divider(height: 1),
               ],
 
@@ -1327,13 +1352,9 @@ class _PipelineConnector extends StatelessWidget {
         width: 24,
         child: Row(
           children: [
-            Expanded(
-              child: Container(height: 2, color: color),
-            ),
+            Expanded(child: Container(height: 2, color: color)),
             Icon(
-              isConnected == true
-                  ? Icons.arrow_forward_ios
-                  : Icons.remove,
+              isConnected == true ? Icons.arrow_forward_ios : Icons.remove,
               size: 8,
               color: color,
             ),

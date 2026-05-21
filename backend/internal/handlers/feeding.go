@@ -330,7 +330,8 @@ func (h *FeedingHandler) ManualFeed(c *gin.Context) {
 			"grams": request.QuantityGrams,
 		}
 		if payload, marshalErr := json.Marshal(cmd); marshalErr == nil {
-			topic := mqtt.NewTopicBuilder(request.DeviceID).Command()
+			topicDeviceID := h.services.Device.ResolveCommandTopicID(request.DeviceID)
+			topic := mqtt.NewTopicBuilder(topicDeviceID).Command()
 			if pubErr := h.mqttClient.Publish(context.Background(), topic, payload, 1, false); pubErr != nil {
 				h.logger.WithError(pubErr).WithField("device_id", request.DeviceID).Warn("Failed to dispatch feed command via MQTT")
 			}

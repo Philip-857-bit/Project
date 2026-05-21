@@ -37,12 +37,14 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
     : super(const FeedingSchedulesState());
 
   Future<void> loadSchedules(String deviceId) async {
+    if (!mounted) return;
     state = state.copyWith(isLoading: true, error: null);
 
     try {
       final response = await _apiService
           .getSchedules(deviceId)
           .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
       if (response.statusCode == 200) {
         final List<dynamic> data =
             response.data['schedules'] ?? response.data ?? [];
@@ -56,6 +58,7 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: ApiService.describeError(
@@ -103,6 +106,7 @@ class FeedingSchedulesNotifier extends StateNotifier<FeedingSchedulesState> {
     try {
       final response = await _apiService.deleteSchedule(deviceId, scheduleId);
       if (response.statusCode == 200 || response.statusCode == 204) {
+        if (!mounted) return true;
         state = state.copyWith(
           schedules: state.schedules.where((s) => s.id != scheduleId).toList(),
         );
@@ -156,6 +160,7 @@ class FeedingHistoryNotifier extends StateNotifier<FeedingHistoryState> {
   FeedingHistoryNotifier(this._apiService) : super(const FeedingHistoryState());
 
   Future<void> loadHistory(String deviceId, {bool refresh = false}) async {
+    if (!mounted) return;
     if (refresh) {
       state = const FeedingHistoryState(isLoading: true);
     } else {
@@ -167,6 +172,7 @@ class FeedingHistoryNotifier extends StateNotifier<FeedingHistoryState> {
       final response = await _apiService
           .getFeedingHistory(deviceId, limit: 20, offset: offset)
           .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final List<dynamic> data =
@@ -185,6 +191,7 @@ class FeedingHistoryNotifier extends StateNotifier<FeedingHistoryState> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: ApiService.describeError(
@@ -228,12 +235,14 @@ class ManualFeedNotifier extends StateNotifier<ManualFeedState> {
   ManualFeedNotifier(this._apiService) : super(const ManualFeedState());
 
   Future<bool> triggerFeed(String deviceId, double amount) async {
+    if (!mounted) return false;
     state = state.copyWith(isFeeding: true, error: null, successMessage: null);
 
     try {
       final response = await _apiService
           .triggerManualFeed(deviceId, amount)
           .timeout(const Duration(seconds: 20));
+      if (!mounted) return false;
       if (response.statusCode == 200 || response.statusCode == 202) {
         state = state.copyWith(
           isFeeding: false,
@@ -248,6 +257,7 @@ class ManualFeedNotifier extends StateNotifier<ManualFeedState> {
         return false;
       }
     } catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         isFeeding: false,
         error: ApiService.describeError(e, fallback: 'Failed to trigger feed.'),
@@ -262,28 +272,32 @@ class ManualFeedNotifier extends StateNotifier<ManualFeedState> {
 }
 
 // Providers
-final feedingSchedulesProvider =
-    StateNotifierProvider<FeedingSchedulesNotifier, FeedingSchedulesState>((
-      ref,
-    ) {
-      final apiService = ref.watch(apiServiceProvider);
-      return FeedingSchedulesNotifier(apiService);
-    });
+final feedingSchedulesProvider = StateNotifierProvider.autoDispose<
+  FeedingSchedulesNotifier,
+  FeedingSchedulesState
+>((ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return FeedingSchedulesNotifier(apiService);
+});
 
-final feedingHistoryProvider =
-    StateNotifierProvider<FeedingHistoryNotifier, FeedingHistoryState>((ref) {
-      final apiService = ref.watch(apiServiceProvider);
-      return FeedingHistoryNotifier(apiService);
-    });
+final feedingHistoryProvider = StateNotifierProvider.autoDispose<
+  FeedingHistoryNotifier,
+  FeedingHistoryState
+>((ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return FeedingHistoryNotifier(apiService);
+});
 
 final manualFeedProvider =
-    StateNotifierProvider<ManualFeedNotifier, ManualFeedState>((ref) {
+    StateNotifierProvider.autoDispose<ManualFeedNotifier, ManualFeedState>((
+      ref,
+    ) {
       final apiService = ref.watch(apiServiceProvider);
       return ManualFeedNotifier(apiService);
     });
 
 // Convenience providers
-final todayFeedingsProvider = Provider<List<FeedingEvent>>((ref) {
+final todayFeedingsProvider = Provider.autoDispose<List<FeedingEvent>>((ref) {
   final events = ref.watch(feedingHistoryProvider).events;
   final today = DateTime.now();
   return events.where((e) {
@@ -293,7 +307,9 @@ final todayFeedingsProvider = Provider<List<FeedingEvent>>((ref) {
   }).toList();
 });
 
-final enabledSchedulesProvider = Provider<List<FeedingSchedule>>((ref) {
+final enabledSchedulesProvider = Provider.autoDispose<List<FeedingSchedule>>((
+  ref,
+) {
   return ref
       .watch(feedingSchedulesProvider)
       .schedules

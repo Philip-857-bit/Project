@@ -438,10 +438,11 @@ func (h *DeviceHandler) CaptureVideo(c *gin.Context) {
 		return
 	}
 	commandID := time.Now().Format("20060102150405")
+	topicDeviceID := h.services.Device.ResolveCommandTopicID(deviceID)
 
 	if err := h.mqttClient.Publish(
 		c.Request.Context(),
-		mqtt.NewTopicBuilder(deviceID).Command(),
+		mqtt.NewTopicBuilder(topicDeviceID).Command(),
 		payload,
 		1,
 		false,
@@ -456,6 +457,7 @@ func (h *DeviceHandler) CaptureVideo(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":      "Capture command dispatched successfully",
 		"device_id":    deviceID,
+		"topic_id":     topicDeviceID,
 		"command_id":   commandID,
 		"command_type": "capture_image",
 		"accepted_at":  time.Now().UTC(),
