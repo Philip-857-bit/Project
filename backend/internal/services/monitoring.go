@@ -38,6 +38,11 @@ func (s *MonitoringService) ProcessSensorData(request *models.SensorDataRequest)
 		return nil, fmt.Errorf("invalid sensor data request: %w", err)
 	}
 
+	temperatureValid := request.WaterTemperature > 0
+	if request.TemperatureValid != nil {
+		temperatureValid = *request.TemperatureValid
+	}
+
 	// Create sensor data record
 	sensorData := &models.SensorData{
 		DeviceID:         request.DeviceID,
@@ -45,6 +50,7 @@ func (s *MonitoringService) ProcessSensorData(request *models.SensorDataRequest)
 		WeightGrams:      request.WeightGrams,
 		WeightPercentage: request.WeightPercentage,
 		WaterTemperature: request.WaterTemperature,
+		TemperatureValid: temperatureValid,
 		BatteryLevel:     request.BatteryLevel,
 		BatteryVoltage:   request.BatteryVoltage,
 		PowerSource:      request.PowerSource,
@@ -136,7 +142,7 @@ func (s *MonitoringService) checkThresholds(data *models.SensorData) {
 	}
 
 	// Check water temperature thresholds (example: alert if outside 15-30°C range)
-	if data.WaterTemperature < 15 || data.WaterTemperature > 30 {
+	if data.TemperatureValid && (data.WaterTemperature < 15 || data.WaterTemperature > 30) {
 		s.generateAlert(data.DeviceID, "WATER_TEMP", fmt.Sprintf("Water temperature out of range: %.1f°C", data.WaterTemperature))
 	}
 }

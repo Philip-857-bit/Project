@@ -62,6 +62,8 @@ FeedingController::FeedingController()
     , _scheduleCount(0)
     , _scheduleEnabled(true)
     , _lastExecutedSchedule(-1)
+    , _lastExecutedDayOfYear(-1)
+    , _lastExecutedMinuteOfDay(-1)
     , _lastScheduleCheck(0) {
     
     // Clarias gariepinus - post-juvenile 50g+ - Akure Nigeria field trial
@@ -161,7 +163,7 @@ void FeedingController::update() {
     if (_calibrationActive) {
         updateCalibrationRun();
     }
-    if (now - _lastScheduleCheck >= 60000) {
+    if (now - _lastScheduleCheck >= 5000UL) {
         _lastScheduleCheck = now;
         if (_scheduleEnabled && !_feedingActive && !_calibrationActive) checkSchedule();
     }
@@ -180,16 +182,37 @@ void FeedingController::update() {
 
 void FeedingController::checkSchedule() {
     time_t now; struct tm ti; time(&now); localtime_r(&now, &ti);
+    if (now < 1700000000) {
+        static unsigned long lastClockWarningMs = 0;
+        unsigned long nowMs = millis();
+        if (lastClockWarningMs == 0 || nowMs - lastClockWarningMs >= 60000UL) {
+            lastClockWarningMs = nowMs;
+            Serial.println("[Schedule] Waiting for valid clock before scheduled feeding");
+        }
+        return;
+    }
+
     int dayBit = 1 << ti.tm_wday;
+    int minuteOfDay = ti.tm_hour * 60 + ti.tm_min;
     for (int i = 0; i < _scheduleCount; i++) {
         if (!_schedule[i].enabled || !(_schedule[i].daysOfWeek & dayBit)) continue;
-        if (_schedule[i].hour == ti.tm_hour && _schedule[i].minute == ti.tm_min && _lastExecutedSchedule != i) {
+        bool alreadyExecutedThisMinute =
+            _lastExecutedSchedule == i &&
+            _lastExecutedDayOfYear == ti.tm_yday &&
+            _lastExecutedMinuteOfDay == minuteOfDay;
+        if (_schedule[i].hour == ti.tm_hour && _schedule[i].minute == ti.tm_min && !alreadyExecutedThisMinute) {
             _lastExecutedSchedule = i;
+            _lastExecutedDayOfYear = ti.tm_yday;
+            _lastExecutedMinuteOfDay = minuteOfDay;
+            Serial.printf("[Schedule] Running entry %d at %02d:%02d, dose=%.2fg\n",
+                          i,
+                          _schedule[i].hour,
+                          _schedule[i].minute,
+                          _schedule[i].quantityGrams);
             dispense(_schedule[i].quantityGrams, FeedingTrigger::SCHEDULED);
             break;
         }
     }
-    if (ti.tm_hour == 0 && ti.tm_min == 0) _lastExecutedSchedule = -1;
 }
 
 bool FeedingController::feedNow(float grams) {
@@ -564,12 +587,42 @@ bool FeedingController::setSchedule(ScheduleEntry* entries, int count) {
     if (count > SCHEDULE_MAX_ENTRIES) count = SCHEDULE_MAX_ENTRIES;
     memcpy(_schedule, entries, count * sizeof(ScheduleEntry));
     _scheduleCount = count;
+    _lastExecutedSchedule = -1;
+    _lastExecutedDayOfYear = -1;
+    _lastExecutedMinuteOfDay = -1;
+    _lastScheduleCheck = 0;
     saveSchedule();
+    Serial.printf("[Schedule] Stored %d schedule entries\n", _scheduleCount);
+    for (int i = 0; i < _scheduleCount; i++) {
+        Serial.printf("[Schedule] #%d %02u:%02u %.2fg days=0x%02X enabled=%s\n",
+                      i,
+                      _schedule[i].hour,
+                      _schedule[i].minute,
+                      _schedule[i].quantityGrams,
+                      _schedule[i].daysOfWeek,
+                      _schedule[i].enabled ? "yes" : "no");
+    }
     return true;
 }
-void FeedingController::loadSchedule() { size_t size = _storage->getBytes(NVS_KEY_SCHEDULE, _schedule, sizeof(_schedule)); if (size > 0) _scheduleCount = size / sizeof(ScheduleEntry); }
+void FeedingController::loadSchedule() {
+    size_t size = _storage->getBytes(NVS_KEY_SCHEDULE, _schedule, sizeof(_schedule));
+    if (size > 0) {
+        _scheduleCount = size / sizeof(ScheduleEntry);
+        if (_scheduleCount > SCHEDULE_MAX_ENTRIES) {
+            _scheduleCount = SCHEDULE_MAX_ENTRIES;
+        }
+        Serial.printf("[Schedule] Loaded %d schedule entries from NVS\n", _scheduleCount);
+    }
+}
 void FeedingController::saveSchedule() { _storage->putBytes(NVS_KEY_SCHEDULE, _schedule, _scheduleCount * sizeof(ScheduleEntry)); }
-void FeedingController::logEvent(const FeedingEvent& event) { Serial.printf("[Feed] %.1fg %s\n", event.actualDispensed, event.result == FeedingResult::SUCCESS ? "OK" : "ERR"); }
+void FeedingController::logEvent(const FeedingEvent& event) {
+    Serial.printf("[Feed] requested=%.2fg actual=%.2fg q10=%.3f temp=%.1fC result=%s\n",
+                  event.quantityGrams,
+                  event.actualDispensed,
+                  event.q10Factor,
+                  event.temperature,
+                  event.result == FeedingResult::SUCCESS ? "OK" : "ERR");
+}
 
 bool FeedingController::isFeedingActive() const { return _feedingActive || _calibrationActive; }
 FeedingEvent FeedingController::getLastEvent() const { return _lastEvent; }

@@ -91,6 +91,11 @@ func (h *MonitoringHandler) ReceiveSensorData(c *gin.Context) {
 		return
 	}
 
+	if h.services.Device != nil {
+		request.DeviceID = h.services.Device.ResolveCanonicalDeviceID(request.DeviceID)
+		_ = h.services.Device.UpdateDeviceLastSeen(request.DeviceID)
+	}
+
 	// Process sensor data with WebSocket broadcasting
 	sensorData, err := h.services.Monitoring.ProcessSensorDataWithBroadcast(&request, h.services.WebSocketHub)
 	if err != nil {
@@ -134,6 +139,7 @@ func (h *MonitoringHandler) GetDeviceStatus(c *gin.Context) {
 		"weight_grams":      latestData.WeightGrams,
 		"weight_percentage": latestData.WeightPercentage,
 		"water_temperature": latestData.WaterTemperature,
+		"temperature_valid": latestData.TemperatureValid,
 		"battery_level":     latestData.BatteryLevel,
 		"power_source":      latestData.PowerSource,
 		"cellular_signal":   latestData.CellularSignal,
@@ -434,6 +440,7 @@ func (h *MonitoringHandler) GetEnhancedDeviceStatus(c *gin.Context) {
 		"weight_grams":      latestData.WeightGrams,
 		"weight_percentage": latestData.WeightPercentage,
 		"water_temperature": latestData.WaterTemperature,
+		"temperature_valid": latestData.TemperatureValid,
 		"battery_level":     latestData.BatteryLevel,
 		"power_source":      latestData.PowerSource,
 	}

@@ -173,15 +173,7 @@ func (a *App) setupMQTTHandlers(svc *services.Services, shadowService *mqtt.Devi
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceSensorDataAll, 1, func(topic string, payload []byte) error {
 		deviceID := a.canonicalDeviceID(svc, mqtt.ExtractDeviceID(topic))
 		a.touchDevice(svc, deviceID)
-		var req models.SensorDataRequest
-		if err := json.Unmarshal(payload, &req); err != nil {
-			a.logger.WithError(err).Warn("Failed to parse sensor MQTT payload")
-			return nil
-		}
-		req.DeviceID = deviceID
-		if _, err := svc.Monitoring.ProcessSensorData(&req); err != nil {
-			a.logger.WithError(err).Error("Failed to persist sensor data from MQTT")
-		}
+		a.persistSensorDataFromMQTT(svc, deviceID, topic, payload, "sensors")
 		return nil
 	}); err != nil {
 		a.logger.WithError(err).Error("Failed to subscribe to sensor data")
@@ -209,7 +201,9 @@ func (a *App) setupMQTTHandlers(svc *services.Services, shadowService *mqtt.Devi
 	if err := a.mqttClient.Subscribe(mqtt.TopicDeviceTelemetryAll, 1, func(topic string, payload []byte) error {
 		deviceID := a.canonicalDeviceID(svc, mqtt.ExtractDeviceID(topic))
 		a.touchDevice(svc, deviceID)
-		a.logger.WithFields(logrus.Fields{"device_id": deviceID, "topic": topic}).Debug("Received device telemetry")
+		if !a.persistSensorDataFromMQTT(svc, deviceID, topic, payload, "telemetry") {
+			a.logger.WithFields(logrus.Fields{"device_id": deviceID, "topic": topic}).Debug("Received device telemetry")
+		}
 		return nil
 	}); err != nil {
 		a.logger.WithError(err).Error("Failed to subscribe to device telemetry")
@@ -363,6 +357,7 @@ func (a *App) setupMQTTHandlers(svc *services.Services, shadowService *mqtt.Devi
 			}
 		}
 		a.touchDevice(svc, device.DeviceID)
+		a.pushDeviceScheduleConfig(svc, device.DeviceID)
 		a.logger.WithField("device_id", device.DeviceID).Info("Device self-registered via MQTT")
 		return nil
 	}); err != nil {
@@ -386,6 +381,99 @@ func (a *App) touchDevice(svc *services.Services, deviceID string) {
 	if err := svc.Device.UpdateDeviceLastSeen(deviceID); err != nil {
 		a.logger.WithError(err).WithField("device_id", deviceID).Debug("Failed to update device last_seen")
 	}
+}
+
+func (a *App) persistSensorDataFromMQTT(svc *services.Services, deviceID, topic string, payload []byte, source string) bool {
+	if svc == nil || svc.Monitoring == nil || deviceID == "" {
+		return false
+	}
+
+	var req models.SensorDataRequest
+	if err := json.Unmarshal(payload, &req); err != nil {
+		if source == "sensors" {
+			a.logger.WithError(err).WithField("topic", topic).Warn("Failed to parse sensor MQTT payload")
+		}
+		return false
+	}
+
+	if req.PowerSource == "" {
+		return false
+	}
+
+	req.DeviceID = deviceID
+	if _, err := svc.Monitoring.ProcessSensorData(&req); err != nil {
+		a.logger.WithError(err).WithFields(logrus.Fields{
+			"device_id": deviceID,
+			"topic":     topic,
+			"source":    source,
+		}).Error("Failed to persist sensor data from MQTT")
+		return false
+	}
+
+	a.logger.WithFields(logrus.Fields{
+		"device_id":         deviceID,
+		"source":            source,
+		"water_temperature": req.WaterTemperature,
+	}).Info("Persisted sensor data from MQTT")
+
+	return true
+}
+
+func (a *App) pushDeviceScheduleConfig(svc *services.Services, deviceID string) {
+	if a.mqttClient == nil || !a.mqttClient.IsConnected() ||
+		svc == nil || svc.Feeding == nil || svc.Device == nil || deviceID == "" {
+		return
+	}
+
+	schedules, err := svc.Feeding.GetSchedulesByDeviceID(deviceID)
+	if err != nil {
+		a.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to fetch schedules for reconnect push")
+		return
+	}
+
+	type entry struct {
+		Hour          int     `json:"hour"`
+		Minute        int     `json:"minute"`
+		QuantityGrams float64 `json:"quantity_grams"`
+		DaysBitmask   int     `json:"days_bitmask"`
+		IsActive      bool    `json:"is_active"`
+	}
+
+	entries := make([]entry, 0, len(schedules))
+	for _, s := range schedules {
+		mask := 0
+		for _, d := range s.DaysOfWeek {
+			if d >= 0 && d <= 6 {
+				mask |= 1 << d
+			}
+		}
+		entries = append(entries, entry{
+			Hour:          s.Hour,
+			Minute:        s.Minute,
+			QuantityGrams: s.QuantityGrams,
+			DaysBitmask:   mask,
+			IsActive:      s.IsActive,
+		})
+	}
+
+	payload, err := json.Marshal(map[string]interface{}{"schedules": entries})
+	if err != nil {
+		a.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to marshal reconnect schedule payload")
+		return
+	}
+
+	topicDeviceID := svc.Device.ResolveCommandTopicID(deviceID)
+	topic := mqtt.NewTopicBuilder(topicDeviceID).Config()
+	if err := a.mqttClient.Publish(context.Background(), topic, payload, 1, true); err != nil {
+		a.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to push schedules after device reconnect")
+		return
+	}
+
+	a.logger.WithFields(logrus.Fields{
+		"device_id":       deviceID,
+		"topic_device_id": topicDeviceID,
+		"schedules":       len(entries),
+	}).Info("Pushed schedules after device reconnect")
 }
 
 // firmwareSeverityName converts the firmware AlertSeverity int enum to a backend string.

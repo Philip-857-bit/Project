@@ -192,6 +192,8 @@ private:
     int _scheduleCount;
     bool _scheduleEnabled;
     int _lastExecutedSchedule;
+    int _lastExecutedDayOfYear;
+    int _lastExecutedMinuteOfDay;
     unsigned long _lastScheduleCheck;
     
     // Species parameters

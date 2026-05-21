@@ -378,6 +378,12 @@ private:
      * @return true if successful
      */
     bool initGSM();
+
+    /**
+     * Copy the network-updated SIMCOM clock into the ESP32 system clock.
+     * Scheduled feeding compares against ESP32 local time.
+     */
+    bool syncESPTimeFromModem();
     
     /**
      * Send AT command to GSM module

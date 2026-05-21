@@ -63,7 +63,7 @@ type FeedingEvent struct {
 	ActualDispensed float64        `json:"actual_dispensed" validate:"min=0"`
 	DurationSeconds int            `json:"duration_seconds" validate:"min=0"`
 	TriggerType     TriggerType    `json:"trigger_type"`
-	Result          int            `json:"result"`           // FeedingResult firmware enum: 0=SUCCESS 1=PARTIAL 2=TIMEOUT 3=CANCELLED 4=STALL 5=LOW_FEED 6=ERROR
+	Result          int            `json:"result"` // FeedingResult firmware enum: 0=SUCCESS 1=PARTIAL 2=TIMEOUT 3=CANCELLED 4=STALL 5=LOW_FEED 6=ERROR
 	ErrorMessage    string         `json:"error_message"`
 	Temperature     float64        `json:"temperature"`
 	Q10Factor       float64        `json:"q10_factor"`
@@ -80,6 +80,7 @@ type SensorData struct {
 	WeightGrams      float64        `json:"weight_grams" validate:"min=0"`
 	WeightPercentage float64        `json:"weight_percentage" validate:"min=0,max=100"`
 	WaterTemperature float64        `json:"water_temperature"`
+	TemperatureValid bool           `json:"temperature_valid" gorm:"default:false"`
 	BatteryLevel     int            `json:"battery_level" validate:"min=0,max=100"`
 	BatteryVoltage   float64        `json:"battery_voltage" validate:"min=0"`
 	PowerSource      PowerSource    `json:"power_source"`
@@ -306,6 +307,7 @@ type SensorDataRequest struct {
 	WeightGrams      float64     `json:"weight_grams" validate:"min=0"`
 	WeightPercentage float64     `json:"weight_percentage" validate:"min=0,max=100"`
 	WaterTemperature float64     `json:"water_temperature"`
+	TemperatureValid *bool       `json:"temperature_valid"`
 	BatteryLevel     int         `json:"battery_level" validate:"min=0,max=100"`
 	BatteryVoltage   float64     `json:"battery_voltage" validate:"min=0"`
 	PowerSource      PowerSource `json:"power_source" validate:"required"`

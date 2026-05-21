@@ -12,6 +12,17 @@ double _doubleValue(dynamic value, [double fallback = 0]) {
   return double.tryParse(value.toString()) ?? fallback;
 }
 
+bool _boolValue(dynamic value, {bool fallback = false}) {
+  if (value == null) {
+    return fallback;
+  }
+  if (value is bool) {
+    return value;
+  }
+  final text = value.toString().trim().toLowerCase();
+  return text == 'true' || text == '1' || text == 'yes';
+}
+
 DateTime _parseTimestamp(dynamic raw) {
   if (raw == null) {
     return DateTime.now();
@@ -49,6 +60,7 @@ DateTime _parseTimestamp(dynamic raw) {
 class SensorData extends Equatable {
   final String deviceId;
   final double waterTemperature;
+  final bool temperatureValid;
   final double feedLevel;
   final double batteryLevel;
   final double solarVoltage;
@@ -60,6 +72,7 @@ class SensorData extends Equatable {
   const SensorData({
     required this.deviceId,
     required this.waterTemperature,
+    required this.temperatureValid,
     required this.feedLevel,
     required this.batteryLevel,
     required this.solarVoltage,
@@ -71,10 +84,15 @@ class SensorData extends Equatable {
 
   factory SensorData.fromJson(Map<String, dynamic> json) {
     final timestampRaw = json['timestamp'] ?? json['created_at'];
+    final waterTemperature = _doubleValue(
+      json['water_temperature'] ?? json['temperature'],
+    );
     return SensorData(
       deviceId: json['device_id'] ?? '',
-      waterTemperature: _doubleValue(
-        json['water_temperature'] ?? json['temperature'],
+      waterTemperature: waterTemperature,
+      temperatureValid: _boolValue(
+        json['temperature_valid'],
+        fallback: waterTemperature > 0,
       ),
       feedLevel: _doubleValue(
         json['feed_level'] ?? json['weight_percentage'] ?? 0,
@@ -94,6 +112,7 @@ class SensorData extends Equatable {
   Map<String, dynamic> toJson() => {
     'device_id': deviceId,
     'water_temperature': waterTemperature,
+    'temperature_valid': temperatureValid,
     'feed_level': feedLevel,
     'battery_level': batteryLevel,
     'solar_voltage': solarVoltage,
@@ -107,6 +126,7 @@ class SensorData extends Equatable {
   List<Object?> get props => [
     deviceId,
     waterTemperature,
+    temperatureValid,
     feedLevel,
     batteryLevel,
     timestamp,

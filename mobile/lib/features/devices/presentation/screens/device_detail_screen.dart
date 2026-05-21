@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/models/device.dart';
 import '../../../../core/models/feeding.dart';
+import '../../../../core/models/sensor_data.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/feeding_provider.dart';
 import '../../../../core/providers/monitoring_provider.dart';
@@ -204,9 +205,31 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
   Widget _buildStatusCards(
     BuildContext context,
     Device device,
-    dynamic sensorData,
+    SensorData? sensorData,
   ) {
-    final status = device.status;
+    final baseStatus = device.status;
+    final batteryLevel = sensorData?.batteryLevel ?? baseStatus.batteryLevel;
+    final feedLevel = sensorData?.feedLevel ?? baseStatus.feedLevel;
+    final waterTemperature =
+        sensorData?.temperatureValid == true
+            ? sensorData!.waterTemperature
+            : baseStatus.waterTemperature;
+    final signalStrength =
+        sensorData?.signalStrength ?? baseStatus.signalStrength;
+    final solarVoltage = sensorData?.solarVoltage ?? baseStatus.solarVoltage;
+    final isSolarCharging =
+        sensorData?.isSolarCharging ?? baseStatus.isSolarCharging;
+    final connectionType =
+        sensorData?.connectionType ?? baseStatus.connectionType;
+    final status = DeviceStatus(
+      batteryLevel: batteryLevel,
+      feedLevel: feedLevel,
+      waterTemperature: waterTemperature,
+      signalStrength: signalStrength,
+      isSolarCharging: isSolarCharging,
+      solarVoltage: solarVoltage,
+      connectionType: connectionType,
+    );
 
     return Column(
       children: [
@@ -216,10 +239,9 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
               child: _StatusCard(
                 icon: Icons.battery_charging_full,
                 label: 'Battery',
-                value: '${status.batteryLevel.toInt()}%',
-                subtitle:
-                    status.isSolarCharging ? 'Solar charging' : 'Discharging',
-                color: _getBatteryColor(status.batteryLevel),
+                value: '${batteryLevel.toInt()}%',
+                subtitle: isSolarCharging ? 'Solar charging' : 'Discharging',
+                color: _getBatteryColor(batteryLevel),
               ),
             ),
             const SizedBox(width: 12),
@@ -227,9 +249,9 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
               child: _StatusCard(
                 icon: Icons.inventory_2,
                 label: 'Feed Level',
-                value: '${status.feedLevel.toInt()}%',
-                subtitle: _getFeedLevelText(status.feedLevel),
-                color: _getFeedLevelColor(status.feedLevel),
+                value: '${feedLevel.toInt()}%',
+                subtitle: _getFeedLevelText(feedLevel),
+                color: _getFeedLevelColor(feedLevel),
               ),
             ),
           ],
@@ -242,8 +264,8 @@ class _DeviceDetailScreenState extends ConsumerState<DeviceDetailScreen> {
                 icon: Icons.thermostat,
                 label: 'Water Temp',
                 value: '${status.waterTemperature.toStringAsFixed(1)}°C',
-                subtitle: _getTempStatus(status.waterTemperature),
-                color: _getTempColor(status.waterTemperature),
+                subtitle: _getTempStatus(waterTemperature),
+                color: _getTempColor(waterTemperature),
               ),
             ),
             const SizedBox(width: 12),

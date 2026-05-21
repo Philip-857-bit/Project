@@ -76,10 +76,17 @@ func (h *FeedingHandler) pushSchedule(deviceID string) {
 		h.logger.WithError(err).Warn("Failed to marshal schedule push payload")
 		return
 	}
-	topic := mqtt.NewTopicBuilder(deviceID).Config()
+	topicDeviceID := h.services.Device.ResolveCommandTopicID(deviceID)
+	topic := mqtt.NewTopicBuilder(topicDeviceID).Config()
 	if err := h.mqttClient.Publish(context.Background(), topic, payload, 1, true); err != nil {
 		h.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to push schedule to device")
+		return
 	}
+	h.logger.WithFields(logrus.Fields{
+		"device_id":       deviceID,
+		"topic_device_id": topicDeviceID,
+		"schedules":       len(entries),
+	}).Info("Pushed feeding schedule to device")
 }
 
 // GetSchedules handles getting feeding schedules

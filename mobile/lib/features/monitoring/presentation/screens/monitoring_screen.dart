@@ -127,8 +127,14 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                         label: 'Water Temp',
                         value:
                             '${sensorData.waterTemperature.toStringAsFixed(1)}°C',
-                        status: _getTempStatus(sensorData.waterTemperature),
-                        statusColor: _getTempColor(sensorData.waterTemperature),
+                        status:
+                            sensorData.temperatureValid
+                                ? _getTempStatus(sensorData.waterTemperature)
+                                : 'Unavailable',
+                        statusColor:
+                            sensorData.temperatureValid
+                                ? _getTempColor(sensorData.waterTemperature)
+                                : Colors.grey,
                       ),
                     ),
                     const SizedBox(width: 12),

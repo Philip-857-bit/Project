@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS sensor_data (
     weight_grams DECIMAL(10,2) DEFAULT 0,
     weight_percentage DECIMAL(5,2) DEFAULT 0,
     water_temperature DECIMAL(5,2),
+    temperature_valid BOOLEAN DEFAULT false,
     battery_level INTEGER DEFAULT 0,
     battery_voltage DECIMAL(5,2) DEFAULT 0,
     power_source VARCHAR(20) DEFAULT 'battery',

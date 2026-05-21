@@ -7,6 +7,8 @@
 #include "CommunicationManager.h"
 #include "../../include/config.h"
 #include <time.h>
+#include <sys/time.h>
+#include <stdlib.h>
 #include <pgmspace.h>
 
 // LilyGO's HiveMQ CMQTT example uses ISRG Root X1 for HiveMQ Cloud TLS.
@@ -500,6 +502,7 @@ bool CommunicationManager::initGSM() {
     }
     
     Serial.println("[CommManager] Network connected");
+    syncESPTimeFromModem();
     
     // Create GSM clients for MQTT
     _gsmClient = new TinyGsmClient(*modem);
@@ -545,6 +548,80 @@ String CommunicationManager::readATResponse(unsigned long timeout, const char* s
     }
     
     return response;
+}
+
+bool CommunicationManager::syncESPTimeFromModem() {
+#ifndef LILYGO_T_A7670
+    return false;
+#else
+    for (uint8_t attempt = 1; attempt <= 5; attempt++) {
+        String response = sendATCommand("AT+CCLK?", 3000);
+        Serial.printf("[CommManager] AT+CCLK? (%u/5) -> %s\n",
+                      attempt,
+                      compactATResponse(response).c_str());
+
+        int firstQuote = response.indexOf('"');
+        int secondQuote = response.indexOf('"', firstQuote + 1);
+        if (firstQuote < 0 || secondQuote <= firstQuote) {
+            delay(1000);
+            continue;
+        }
+
+        String clockText = response.substring(firstQuote + 1, secondQuote);
+        if (clockText.length() < 17) {
+            delay(1000);
+            continue;
+        }
+
+        int yy = clockText.substring(0, 2).toInt();
+        int month = clockText.substring(3, 5).toInt();
+        int day = clockText.substring(6, 8).toInt();
+        int hour = clockText.substring(9, 11).toInt();
+        int minute = clockText.substring(12, 14).toInt();
+        int second = clockText.substring(15, 17).toInt();
+
+        if (yy < 24 || month < 1 || month > 12 || day < 1 || day > 31 ||
+            hour > 23 || minute > 59 || second > 59) {
+            delay(1000);
+            continue;
+        }
+
+        setenv("TZ", "UTC0", 1);
+        tzset();
+
+        struct tm localTime = {};
+        localTime.tm_year = 2000 + yy - 1900;
+        localTime.tm_mon = month - 1;
+        localTime.tm_mday = day;
+        localTime.tm_hour = hour;
+        localTime.tm_min = minute;
+        localTime.tm_sec = second;
+        localTime.tm_isdst = -1;
+
+        time_t epoch = mktime(&localTime);
+        if (epoch < 1700000000) {
+            delay(1000);
+            continue;
+        }
+
+        struct timeval tv = {};
+        tv.tv_sec = epoch;
+        tv.tv_usec = 0;
+        settimeofday(&tv, nullptr);
+
+        Serial.printf("[CommManager] ESP32 clock synced from modem local time: %04d-%02d-%02d %02d:%02d:%02d\n",
+                      2000 + yy,
+                      month,
+                      day,
+                      hour,
+                      minute,
+                      second);
+        return true;
+    }
+
+    Serial.println("[CommManager] Could not sync ESP32 clock from modem; schedules will wait for valid time");
+    return false;
+#endif
 }
 
 String CommunicationManager::sendATPayloadCommand(const String& command,
@@ -1326,8 +1403,10 @@ bool CommunicationManager::sendTelemetry(const SensorData& sensorData, const Pow
     doc["device_id"]         = _deviceManager->getDeviceID();
     doc["timestamp"]         = (int64_t)time(nullptr);
     doc["water_temperature"] = sensorData.temperature;
+    doc["temperature_valid"] = sensorData.temperatureValid;
     doc["weight_grams"]      = sensorData.feedWeightGrams;
     doc["weight_percentage"] = sensorData.feedLevelPercent;
+    doc["feed_level_valid"]  = sensorData.feedLevelValid;
     doc["battery_level"]     = (int)powerStatus.batteryPercent;
     doc["battery_voltage"]   = powerStatus.batteryVoltage;
     doc["power_source"]      = powerSourceString(static_cast<uint8_t>(powerStatus.source));
@@ -1339,11 +1418,22 @@ bool CommunicationManager::sendTelemetry(const SensorData& sensorData, const Pow
     String json;
     serializeJson(doc, json);
 
-    // Publish on both topics:
-    // - "sensors" is consumed by the backend to persist SensorData to the DB
-    // - "telemetry" is the keep-alive broadcast (logged only)
+    Serial.printf("[CommManager] Telemetry: temp=%.2fC valid=%s feed=%.1f%% battery=%d%% signal=%d\n",
+                  sensorData.temperature,
+                  sensorData.temperatureValid ? "yes" : "no",
+                  sensorData.feedLevelPercent,
+                  (int)powerStatus.batteryPercent,
+                  _cellularSignal);
+
+    // The backend persists "sensors" and also accepts "telemetry" as a fallback.
+    // Avoid publishing both every interval because SIMCOM CMQTT can reject rapid
+    // back-to-back publishes while still reporting the MQTT session as connected.
     String topicSensors = buildTopic("sensors");
-    publish(topicSensors, (uint8_t*)json.c_str(), json.length(), 2);
+    if (publish(topicSensors, (uint8_t*)json.c_str(), json.length(), 2)) {
+        return true;
+    }
+
+    Serial.println("[CommManager] Sensor publish failed; trying telemetry fallback");
     return publish(_topicTelemetry, (uint8_t*)json.c_str(), json.length(), 2);
 }
 
@@ -1359,7 +1449,14 @@ bool CommunicationManager::sendFeedingEvent(const FeedingEvent& event) {
     JsonDocument doc;
 
     doc["device_id"]        = _deviceManager->getDeviceID();
-    doc["timestamp"]        = event.timestamp;
+    time_t now = time(nullptr);
+    if (now >= 1700000000) {
+        struct tm timeInfo;
+        gmtime_r(&now, &timeInfo);
+        char timestamp[25];
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", &timeInfo);
+        doc["timestamp"] = timestamp;
+    }
     doc["quantity_grams"]   = event.quantityGrams;
     doc["actual_dispensed"] = event.actualDispensed;
     doc["duration_seconds"] = event.durationMs / 1000;

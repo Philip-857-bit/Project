@@ -326,6 +326,19 @@ void communicationTaskFunc(void* parameter) {
         
         // Process incoming commands
         commManager.processIncomingMessages();
+
+        // Report local/scheduled feed results. Remote app feeds are already
+        // logged by the backend before the command is sent to the device.
+        static unsigned long lastReportedFeedEventTs = 0;
+        FeedingEvent feedEvent = feedingController.getLastEvent();
+        if (feedEvent.timestamp != 0 &&
+            feedEvent.timestamp != lastReportedFeedEventTs &&
+            feedEvent.trigger != FeedingTrigger::REMOTE &&
+            commManager.isConnected()) {
+            if (commManager.sendFeedingEvent(feedEvent)) {
+                lastReportedFeedEventTs = feedEvent.timestamp;
+            }
+        }
         
         // Update system diagnostics (handles ping timeouts, periodic checks)
         systemDiagnostics.update();
