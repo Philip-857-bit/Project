@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"smart-fish-feeder/internal/models"
@@ -277,6 +280,11 @@ func (h *FeedingHandler) ManualFeed(c *gin.Context) {
 
 	// Apply fuzzy logic validation if sensor data is available
 	if sensorErr == nil && latestSensorData != nil {
+		if latestSensorData.TemperatureValid {
+			temperature := latestSensorData.WaterTemperature
+			request.Temperature = &temperature
+		}
+
 		fuzzyInput := services.FuzzyInput{
 			Temperature: latestSensorData.WaterTemperature,
 		}
@@ -371,6 +379,12 @@ func (h *FeedingHandler) GetHistory(c *gin.Context) {
 			limit = parsedLimit
 		}
 	}
+	offset := 0
+	if offsetParam := c.Query("offset"); offsetParam != "" {
+		if parsedOffset, err := strconv.Atoi(offsetParam); err == nil && parsedOffset > 0 {
+			offset = parsedOffset
+		}
+	}
 
 	// Verify device ownership
 	userID := c.GetUint("user_id")
@@ -381,7 +395,7 @@ func (h *FeedingHandler) GetHistory(c *gin.Context) {
 		return
 	}
 
-	events, err := h.services.Feeding.GetFeedingHistory(deviceID, limit)
+	events, err := h.services.Feeding.GetFeedingHistory(deviceID, limit, offset)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to get feeding history")
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -394,6 +408,119 @@ func (h *FeedingHandler) GetHistory(c *gin.Context) {
 		"events": events,
 		"count":  len(events),
 	})
+}
+
+// ExportHistory returns feeding history as CSV for app-side export.
+func (h *FeedingHandler) ExportHistory(c *gin.Context) {
+	deviceID := c.Query("device_id")
+	if deviceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "device_id parameter is required",
+		})
+		return
+	}
+
+	limit := 1000
+	if limitParam := c.Query("limit"); limitParam != "" {
+		if parsedLimit, err := strconv.Atoi(limitParam); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+	if limit > 5000 {
+		limit = 5000
+	}
+
+	userID := c.GetUint("user_id")
+	if !h.services.Device.VerifyDeviceOwnership(deviceID, userID) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Access denied to this device",
+		})
+		return
+	}
+
+	events, err := h.services.Feeding.GetFeedingHistory(deviceID, limit, 0)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to export feeding history")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to export feeding history",
+		})
+		return
+	}
+
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+	if err := writer.Write([]string{
+		"timestamp",
+		"trigger_type",
+		"status",
+		"requested_grams",
+		"released_grams",
+		"temperature_c",
+		"q10_factor",
+		"duration_seconds",
+		"error_message",
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to build export"})
+		return
+	}
+
+	for _, event := range events {
+		if err := writer.Write([]string{
+			event.Timestamp.Format(time.RFC3339),
+			string(event.TriggerType),
+			feedingResultStatus(event.Result),
+			formatFloat(event.QuantityGrams),
+			formatFloat(releasedGrams(event)),
+			formatFloat(event.Temperature),
+			formatFloat(event.Q10Factor),
+			strconv.Itoa(event.DurationSeconds),
+			event.ErrorMessage,
+		}); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to build export"})
+			return
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to build export"})
+		return
+	}
+
+	filenameID := strings.NewReplacer("/", "_", "\\", "_", "\"", "", "\r", "", "\n", "").Replace(deviceID)
+	c.Header("Content-Disposition", `attachment; filename="feeding-history-`+filenameID+`.csv"`)
+	c.Data(http.StatusOK, "text/csv; charset=utf-8", buf.Bytes())
+}
+
+func feedingResultStatus(result int) string {
+	switch result {
+	case 0:
+		return "completed"
+	case 3:
+		return "cancelled"
+	case 1:
+		return "partial"
+	case 2:
+		return "timeout"
+	case 4:
+		return "stall"
+	case 5:
+		return "low_feed"
+	case 6:
+		return "error"
+	default:
+		return "unknown"
+	}
+}
+
+func releasedGrams(event models.FeedingEvent) float64 {
+	if event.ActualDispensed == 0 && event.Result == 0 && event.QuantityGrams > 0 {
+		return event.QuantityGrams
+	}
+	return event.ActualDispensed
+}
+
+func formatFloat(value float64) string {
+	return strconv.FormatFloat(value, 'f', 2, 64)
 }
 
 // GetAnalytics handles getting feeding analytics with algorithm-enhanced insights

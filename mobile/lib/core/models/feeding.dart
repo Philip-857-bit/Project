@@ -2,7 +2,18 @@ import 'package:equatable/equatable.dart';
 
 String _stringValue(dynamic value) => value?.toString() ?? '';
 
-double _doubleValue(dynamic value) => (value ?? 0).toDouble();
+double _doubleValue(dynamic value, {double fallback = 0}) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? fallback;
+  return fallback;
+}
+
+double? _nullableDoubleValue(dynamic value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
+}
 
 int _intValue(dynamic value, {int fallback = 0}) {
   if (value is int) return value;
@@ -143,6 +154,7 @@ class FeedingEvent extends Equatable {
   final DateTime scheduledAt;
   final DateTime? completedAt;
   final double? waterTemperature;
+  final double? q10Factor;
 
   const FeedingEvent({
     required this.id,
@@ -155,18 +167,20 @@ class FeedingEvent extends Equatable {
     required this.scheduledAt,
     this.completedAt,
     this.waterTemperature,
+    this.q10Factor,
   });
 
   factory FeedingEvent.fromJson(Map<String, dynamic> json) {
+    final requestedAmount = _doubleValue(
+      json['amount'] ?? json['quantity_grams'],
+    );
     return FeedingEvent(
       id: _stringValue(json['id']),
       deviceId: json['device_id'] ?? '',
-      amount: _doubleValue(json['amount'] ?? json['quantity_grams']),
-      actualAmount:
-          (json['actual_dispensed'] ??
-                  json['actual_amount'] ??
-                  json['quantity_grams'])
-              ?.toDouble(),
+      amount: requestedAmount,
+      actualAmount: _nullableDoubleValue(
+        json['actual_dispensed'] ?? json['actual_amount'] ?? requestedAmount,
+      ),
       status: _parseStatus(json['status'] ?? _resultToStatus(json['result'])),
       type: json['type'] ?? json['trigger_type'] ?? 'scheduled',
       errorMessage: json['error_message'],
@@ -179,8 +193,10 @@ class FeedingEvent extends Equatable {
           json['completed_at'] != null
               ? DateTime.parse(json['completed_at'])
               : null,
-      waterTemperature:
-          (json['water_temperature'] ?? json['temperature'])?.toDouble(),
+      waterTemperature: _nullableDoubleValue(
+        json['water_temperature'] ?? json['temperature'],
+      ),
+      q10Factor: _nullableDoubleValue(json['q10_factor']),
     );
   }
 
@@ -212,7 +228,17 @@ class FeedingEvent extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, deviceId, amount, status, type, scheduledAt];
+  List<Object?> get props => [
+    id,
+    deviceId,
+    amount,
+    actualAmount,
+    status,
+    type,
+    scheduledAt,
+    waterTemperature,
+    q10Factor,
+  ];
 }
 
 class FeedCalculationRequest {

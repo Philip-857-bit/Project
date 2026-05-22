@@ -93,9 +93,15 @@ func (s *FeedingService) ExecuteManualFeeding(request *models.ManualFeedRequest)
 		DeviceID:        request.DeviceID,
 		Timestamp:       time.Now(),
 		QuantityGrams:   request.QuantityGrams,
+		ActualDispensed: request.QuantityGrams,
 		DurationSeconds: request.DurationSeconds,
 		TriggerType:     models.TriggerManual,
+		Result:          0,
+		Q10Factor:       1,
 		CreatedAt:       time.Now(),
+	}
+	if request.Temperature != nil {
+		event.Temperature = *request.Temperature
 	}
 
 	// Log the feeding event
@@ -136,8 +142,8 @@ func (s *FeedingService) LogFeedingEvent(event *models.FeedingEvent) error {
 }
 
 // GetFeedingHistory retrieves feeding history for a device
-func (s *FeedingService) GetFeedingHistory(deviceID string, limit int) ([]models.FeedingEvent, error) {
-	events, err := s.repo.Feeding.GetEventsByDeviceID(deviceID, limit)
+func (s *FeedingService) GetFeedingHistory(deviceID string, limit int, offset int) ([]models.FeedingEvent, error) {
+	events, err := s.repo.Feeding.GetEventsByDeviceID(deviceID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get feeding history: %w", err)
 	}

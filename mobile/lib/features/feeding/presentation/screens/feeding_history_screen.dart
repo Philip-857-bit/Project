@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/services/api_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/models/device.dart';
 import '../../../../core/models/feeding.dart';
+import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/device_provider.dart';
 import '../../../../core/providers/feeding_provider.dart';
 
@@ -66,7 +69,7 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
     // Calculate summaries
     final todayTotal = todayFeedings.fold<double>(
       0,
-      (sum, e) => sum + e.amount,
+      (sum, e) => sum + _releasedAmount(e),
     );
     final weekTotal = _calculateWeekTotal(historyState.events);
     final monthTotal = _calculateMonthTotal(historyState.events);
@@ -75,6 +78,11 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
       appBar: AppBar(
         title: const Text('Feeding History'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.download_outlined),
+            tooltip: 'Export CSV',
+            onPressed: _selectedDeviceId == null ? null : _exportHistory,
+          ),
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: () => _showFilterDialog(context),
@@ -330,6 +338,46 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
     );
   }
 
+  Future<void> _exportHistory() async {
+    final deviceId = _selectedDeviceId;
+    if (deviceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a device before exporting.')),
+      );
+      return;
+    }
+
+    try {
+      final response = await ref
+          .read(apiServiceProvider)
+          .exportFeedingHistory(deviceId)
+          .timeout(const Duration(seconds: 20));
+      final csv = response.data ?? '';
+      if (csv.trim().isEmpty) {
+        throw Exception('Export returned no data');
+      }
+      await Clipboard.setData(ClipboardData(text: csv));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Feeding history CSV copied to clipboard.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ApiService.describeError(
+              e,
+              fallback: 'Failed to export feeding history.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   double _calculateWeekTotal(List<FeedingEvent> events) {
     final weekAgo = DateTime.now().subtract(const Duration(days: 7));
     return events
@@ -338,7 +386,7 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
               e.scheduledAt.isAfter(weekAgo) &&
               e.status == FeedingEventStatus.completed,
         )
-        .fold<double>(0, (sum, e) => sum + e.amount);
+        .fold<double>(0, (sum, e) => sum + _releasedAmount(e));
   }
 
   double _calculateMonthTotal(List<FeedingEvent> events) {
@@ -349,7 +397,18 @@ class _FeedingHistoryScreenState extends ConsumerState<FeedingHistoryScreen> {
               e.scheduledAt.isAfter(monthAgo) &&
               e.status == FeedingEventStatus.completed,
         )
-        .fold<double>(0, (sum, e) => sum + e.amount);
+        .fold<double>(0, (sum, e) => sum + _releasedAmount(e));
+  }
+
+  double _releasedAmount(FeedingEvent event) {
+    final actual = event.actualAmount;
+    if (actual == null) return event.amount;
+    if (actual == 0 &&
+        event.status == FeedingEventStatus.completed &&
+        event.amount > 0) {
+      return event.amount;
+    }
+    return actual;
   }
 
   String _formatWeight(double grams) {
@@ -416,6 +475,10 @@ class _HistoryItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final released = _releasedAmount();
+    final requestedDiffers = (released - event.amount).abs() >= 0.05;
+    final q10Factor = event.q10Factor;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -423,13 +486,16 @@ class _HistoryItem extends StatelessWidget {
           backgroundColor: _getStatusColor().withValues(alpha: 0.2),
           child: Icon(_getStatusIcon(), color: _getStatusColor()),
         ),
-        title: Text(
-          '${event.amount.toInt()}g • ${event.type == 'manual' ? 'Manual' : 'Scheduled'}',
-        ),
+        title: Text('${_formatAmount(released)} released - ${_typeLabel()}'),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(DateFormat('h:mm a').format(event.scheduledAt)),
+            if (requestedDiffers)
+              Text(
+                'Requested: ${_formatAmount(event.amount)}',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
             if (event.errorMessage != null)
               Text(
                 event.errorMessage!,
@@ -440,7 +506,12 @@ class _HistoryItem extends StatelessWidget {
               ),
             if (event.waterTemperature != null)
               Text(
-                'Temp: ${event.waterTemperature!.toStringAsFixed(1)}°C',
+                'Temp: ${event.waterTemperature!.toStringAsFixed(1)} deg C',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+            if (q10Factor != null && (q10Factor - 1).abs() >= 0.01)
+              Text(
+                'Adaptive Q10: x${q10Factor.toStringAsFixed(2)}',
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
           ],
@@ -473,6 +544,35 @@ class _HistoryItem extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  double _releasedAmount() {
+    final actual = event.actualAmount;
+    if (actual == null) return event.amount;
+    if (actual == 0 &&
+        event.status == FeedingEventStatus.completed &&
+        event.amount > 0) {
+      return event.amount;
+    }
+    return actual;
+  }
+
+  String _formatAmount(double grams) {
+    if (grams >= 1000) {
+      return '${(grams / 1000).toStringAsFixed(1)}kg';
+    }
+    if (grams == grams.roundToDouble()) {
+      return '${grams.toInt()}g';
+    }
+    return '${grams.toStringAsFixed(1)}g';
+  }
+
+  String _typeLabel() {
+    final normalized = event.type.toLowerCase();
+    if (normalized.contains('manual')) return 'Manual';
+    if (normalized.contains('scheduled')) return 'Scheduled';
+    if (normalized.contains('emergency')) return 'Emergency';
+    return event.type;
   }
 
   Color _getStatusColor() {

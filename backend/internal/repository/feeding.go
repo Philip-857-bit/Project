@@ -45,11 +45,14 @@ func (r *FeedingRepository) CreateEvent(event *models.FeedingEvent) error {
 }
 
 // GetEventsByDeviceID gets feeding events for a device
-func (r *FeedingRepository) GetEventsByDeviceID(deviceID string, limit int) ([]models.FeedingEvent, error) {
+func (r *FeedingRepository) GetEventsByDeviceID(deviceID string, limit int, offset int) ([]models.FeedingEvent, error) {
 	var events []models.FeedingEvent
 	query := r.db.Where("device_id = ?", deviceID).Order("timestamp DESC")
 	if limit > 0 {
 		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
 	}
 	err := query.Find(&events).Error
 	return events, err

@@ -566,6 +566,17 @@ class ApiService {
     );
   }
 
+  Future<Response<String>> exportFeedingHistory(
+    String deviceId, {
+    int limit = 1000,
+  }) async {
+    return _dio.get<String>(
+      '/feeding/history/export',
+      queryParameters: {'device_id': deviceId, 'limit': limit},
+      options: Options(responseType: ResponseType.plain),
+    );
+  }
+
   // Monitoring endpoints
   Future<Response> getSensorData(String deviceId) async {
     return _dio.get(

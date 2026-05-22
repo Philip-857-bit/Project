@@ -641,6 +641,7 @@ func (a *App) setupRouter(h *handlers.Handlers, svc *services.Services) *gin.Eng
 			feeding.PUT("/schedules/:id", h.Feeding.UpdateSchedule)
 			feeding.DELETE("/schedules/:id", h.Feeding.DeleteSchedule)
 			feeding.POST("/manual", h.Feeding.ManualFeed)
+			feeding.GET("/history/export", h.Feeding.ExportHistory)
 			feeding.GET("/history", h.Feeding.GetHistory)
 			feeding.GET("/analytics", h.Feeding.GetAnalytics)
 		}

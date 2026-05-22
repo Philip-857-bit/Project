@@ -317,9 +317,10 @@ type SensorDataRequest struct {
 
 // ManualFeedRequest represents manual feeding request
 type ManualFeedRequest struct {
-	DeviceID        string  `json:"device_id" validate:"required"`
-	QuantityGrams   float64 `json:"quantity_grams" validate:"min=0"`
-	DurationSeconds int     `json:"duration_seconds" validate:"min=0"`
+	DeviceID        string   `json:"device_id" validate:"required"`
+	QuantityGrams   float64  `json:"quantity_grams" validate:"min=0"`
+	DurationSeconds int      `json:"duration_seconds" validate:"min=0"`
+	Temperature     *float64 `json:"-"`
 }
 
 // FeedCalculationRequest represents feed calculation request
