@@ -125,7 +125,7 @@ public:
     void setScheduleEnabled(bool enabled);
     
     // Calibration
-    void calibrateGramsPerRev(float grams);
+    bool calibrateGramsPerRev(float grams);
     void setMicrosteps(int microsteps);
     void setMaxSpeed(int stepsPerSecond);
 
@@ -181,6 +181,8 @@ private:
     unsigned long _lastCalibrationStepUs;
     unsigned long _calibrationStepCount;
     unsigned long _lastCalibrationDurationMs;
+    unsigned long _lastMeasuredRunStepCount;
+    unsigned long _lastMeasuredRunDurationMs;
     
     // Motor configuration
     float _gramsPerRevolution;

@@ -17,6 +17,9 @@
 #include <esp_system.h>
 #include <esp_sleep.h>
 #include <esp_task_wdt.h>
+#include <freertos/queue.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include "../include/config.h"
 #include "managers/DeviceManager.h"
@@ -31,6 +34,11 @@
 TaskHandle_t communicationTask = NULL;
 TaskHandle_t controlTask = NULL;
 
+struct RemoteFeedRequest {
+    float grams;
+};
+QueueHandle_t remoteFeedQueue = NULL;
+
 // Manager instances
 DeviceManager deviceManager;
 SensorManager sensorManager;
@@ -39,6 +47,55 @@ PowerManager powerManager;
 CommunicationManager commManager;
 SystemDiagnostics systemDiagnostics;
 NVSStorage nvsStorage;
+
+static void setScheduleTimezoneOffsetMinutes(int offsetMinutes) {
+    if (offsetMinutes == 0) {
+        setenv("TZ", "UTC0", 1);
+        tzset();
+        return;
+    }
+
+    int absMinutes = abs(offsetMinutes);
+    int hours = absMinutes / 60;
+    int minutes = absMinutes % 60;
+    char tzValue[20];
+    // POSIX TZ offsets are inverted: UTC-01:00 means local time is UTC+1.
+    snprintf(tzValue,
+             sizeof(tzValue),
+             "UTC%c%02d:%02d",
+             offsetMinutes > 0 ? '-' : '+',
+             hours,
+             minutes);
+    setenv("TZ", tzValue, 1);
+    tzset();
+}
+
+static bool syncClockFromServerEpoch(int64_t epochSeconds, int offsetMinutes) {
+    if (epochSeconds < 1700000000LL) {
+        return false;
+    }
+
+    setScheduleTimezoneOffsetMinutes(offsetMinutes);
+
+    struct timeval tv = {};
+    tv.tv_sec = (time_t)epochSeconds;
+    tv.tv_usec = 0;
+    settimeofday(&tv, nullptr);
+
+    time_t now = time(nullptr);
+    struct tm ti;
+    localtime_r(&now, &ti);
+    Serial.printf("[Config] Clock synced from backend: local=%04d-%02d-%02d %02d:%02d:%02d UTC%+d:%02d\n",
+                  ti.tm_year + 1900,
+                  ti.tm_mon + 1,
+                  ti.tm_mday,
+                  ti.tm_hour,
+                  ti.tm_min,
+                  ti.tm_sec,
+                  offsetMinutes / 60,
+                  abs(offsetMinutes % 60));
+    return true;
+}
 
 // RTC Memory for persistent state during deep sleep
 struct RTCFeedingTime {
@@ -126,12 +183,22 @@ void setup() {
     if (!feedingController.begin(&sensorManager, &nvsStorage)) {
         Serial.println("[ERROR] Failed to initialize feeding controller");
     }
+
+    remoteFeedQueue = xQueueCreate(4, sizeof(RemoteFeedRequest));
+    if (remoteFeedQueue == NULL) {
+        Serial.println("[ERROR] Failed to create remote feed queue");
+    }
     
     // Wire MQTT command handler
     commManager.setCommandCallback([](CommandType type, const JsonDocument& doc) {
         if (type == CommandType::FEED_NOW) {
             float grams = doc["grams"] | MANUAL_FEED_GRAMS_DEFAULT;
-            feedingController.feedRemote(grams);
+            RemoteFeedRequest request = { grams };
+            if (remoteFeedQueue != NULL && xQueueSend(remoteFeedQueue, &request, 0) == pdTRUE) {
+                Serial.printf("[Command] Queued remote feed: %.2fg\n", grams);
+            } else {
+                Serial.printf("[Command] Remote feed rejected; queue full or unavailable: %.2fg\n", grams);
+            }
         } else if (type == CommandType::STOP_FEEDING) {
             feedingController.stopFeeding();
         } else if (type == CommandType::RUN_DIAGNOSTICS) {
@@ -148,6 +215,12 @@ void setup() {
 
     // Wire config callback - backend pushes full schedule on every create/update/delete
     commManager.setConfigCallback([](const JsonDocument& doc) {
+        JsonVariantConst serverUnix = doc["server_unix"];
+        if (!serverUnix.isNull()) {
+            int timezoneOffsetMinutes = doc["timezone_offset_minutes"] | DEVICE_TIMEZONE_OFFSET_MINUTES;
+            syncClockFromServerEpoch(serverUnix.as<int64_t>(), timezoneOffsetMinutes);
+        }
+
         JsonArrayConst entries = doc["schedules"].as<JsonArrayConst>();
         if (entries.isNull()) return;
 
@@ -411,6 +484,15 @@ void controlTaskFunc(void* parameter) {
         }
         lastBtnState = currentBtnState;
 
+        RemoteFeedRequest remoteFeed;
+        if (remoteFeedQueue != NULL && xQueueReceive(remoteFeedQueue, &remoteFeed, 0) == pdTRUE) {
+            Serial.printf("[Command] Executing remote feed on control task: %.2fg\n", remoteFeed.grams);
+            bool started = feedingController.feedRemote(remoteFeed.grams);
+            Serial.printf("[Command] Remote feed %s (%.2fg)\n",
+                          started ? "completed" : "rejected",
+                          remoteFeed.grams);
+        }
+
         while (Serial.available() > 0) {
             char command = (char)Serial.read();
             if (command == 'f' || command == 'F') {
@@ -474,11 +556,10 @@ void controlTaskFunc(void* parameter) {
                 String calibrationText = Serial.readStringUntil('\n');
                 calibrationText.trim();
                 float gramsPerRev = calibrationText.toFloat();
-                if (gramsPerRev > 0.0f) {
-                    feedingController.calibrateGramsPerRev(gramsPerRev);
+                if (feedingController.calibrateGramsPerRev(gramsPerRev)) {
                     Serial.printf("[Serial] Motor calibration set to %.4f g/rev\n", gramsPerRev);
                 } else {
-                    Serial.println("[Serial] Motor calibration rejected; use s<grams_per_rev>, for example s10.45");
+                    Serial.println("[Serial] Motor calibration rejected; use s<grams_per_rev>, for example s117.78");
                 }
             } else if (command == 'p' || command == 'P') {
                 Serial.println("[Serial] Pipeline diagnostics requested");

@@ -358,6 +358,15 @@
 #define MODEM_APN_PASS          ""
 #define MODEM_MODEL             "A7670"
 
+// Time used for scheduled feeding. The app stores schedule hour/minute in the
+// user's local time; Nigeria and current Morocco deployments are UTC+1.
+#ifndef DEVICE_TIMEZONE_OFFSET_MINUTES
+#define DEVICE_TIMEZONE_OFFSET_MINUTES 60
+#endif
+#ifndef MODEM_NTP_SERVER
+#define MODEM_NTP_SERVER        "pool.ntp.org"
+#endif
+
 #ifdef WOKWI_SIM
 // Wokwi has built-in guest WiFi and works best with a non-TLS test broker.
 #ifndef WOKWI_DEFAULT_WIFI_SSID

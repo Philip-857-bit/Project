@@ -456,7 +456,11 @@ func (a *App) pushDeviceScheduleConfig(svc *services.Services, deviceID string) 
 		})
 	}
 
-	payload, err := json.Marshal(map[string]interface{}{"schedules": entries})
+	payload, err := json.Marshal(map[string]interface{}{
+		"schedules":               entries,
+		"server_unix":             time.Now().Unix(),
+		"timezone_offset_minutes": 60,
+	})
 	if err != nil {
 		a.logger.WithError(err).WithField("device_id", deviceID).Warn("Failed to marshal reconnect schedule payload")
 		return

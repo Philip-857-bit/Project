@@ -58,6 +58,65 @@ static bool isDigitsOnly(const String& value) {
     return true;
 }
 
+static void setSystemTimezoneOffsetMinutes(int offsetMinutes) {
+    if (offsetMinutes == 0) {
+        setenv("TZ", "UTC0", 1);
+        tzset();
+        return;
+    }
+
+    int absMinutes = abs(offsetMinutes);
+    int hours = absMinutes / 60;
+    int minutes = absMinutes % 60;
+    char tzValue[20];
+    // POSIX TZ offsets are inverted: UTC-01:00 means local time is UTC+1.
+    snprintf(tzValue,
+             sizeof(tzValue),
+             "UTC%c%02d:%02d",
+             offsetMinutes > 0 ? '-' : '+',
+             hours,
+             minutes);
+    setenv("TZ", tzValue, 1);
+    tzset();
+}
+
+static bool applyLocalClockToSystem(int yy,
+                                    int month,
+                                    int day,
+                                    int hour,
+                                    int minute,
+                                    int second,
+                                    int sourceOffsetMinutes,
+                                    int localOffsetMinutes) {
+    if (yy < 24 || month < 1 || month > 12 || day < 1 || day > 31 ||
+        hour > 23 || minute > 59 || second > 59) {
+        return false;
+    }
+
+    setSystemTimezoneOffsetMinutes(sourceOffsetMinutes);
+
+    struct tm localTime = {};
+    localTime.tm_year = 2000 + yy - 1900;
+    localTime.tm_mon = month - 1;
+    localTime.tm_mday = day;
+    localTime.tm_hour = hour;
+    localTime.tm_min = minute;
+    localTime.tm_sec = second;
+    localTime.tm_isdst = -1;
+
+    time_t epoch = mktime(&localTime);
+    setSystemTimezoneOffsetMinutes(localOffsetMinutes);
+    if (epoch < 1700000000) {
+        return false;
+    }
+
+    struct timeval tv = {};
+    tv.tv_sec = epoch;
+    tv.tv_usec = 0;
+    settimeofday(&tv, nullptr);
+    return true;
+}
+
 static void parseBrokerEndpoint(const String& rawEndpoint, String& hostOut, uint16_t& portOut, bool& useTLSOut) {
     String endpoint = rawEndpoint;
     endpoint.trim();
@@ -554,21 +613,31 @@ bool CommunicationManager::syncESPTimeFromModem() {
 #ifndef LILYGO_T_A7670
     return false;
 #else
-    for (uint8_t attempt = 1; attempt <= 5; attempt++) {
+    bool requestedInternetTime = false;
+
+    for (uint8_t attempt = 1; attempt <= 8; attempt++) {
         String response = sendATCommand("AT+CCLK?", 3000);
-        Serial.printf("[CommManager] AT+CCLK? (%u/5) -> %s\n",
+        Serial.printf("[CommManager] AT+CCLK? (%u/8) -> %s\n",
                       attempt,
                       compactATResponse(response).c_str());
 
         int firstQuote = response.indexOf('"');
         int secondQuote = response.indexOf('"', firstQuote + 1);
         if (firstQuote < 0 || secondQuote <= firstQuote) {
+            if (!requestedInternetTime && attempt >= 2) {
+                requestedInternetTime = true;
+                requestModemInternetTime();
+            }
             delay(1000);
             continue;
         }
 
         String clockText = response.substring(firstQuote + 1, secondQuote);
         if (clockText.length() < 17) {
+            if (!requestedInternetTime && attempt >= 2) {
+                requestedInternetTime = true;
+                requestModemInternetTime();
+            }
             delay(1000);
             continue;
         }
@@ -579,49 +648,112 @@ bool CommunicationManager::syncESPTimeFromModem() {
         int hour = clockText.substring(9, 11).toInt();
         int minute = clockText.substring(12, 14).toInt();
         int second = clockText.substring(15, 17).toInt();
+        int modemOffsetMinutes = DEVICE_TIMEZONE_OFFSET_MINUTES;
 
-        if (yy < 24 || month < 1 || month > 12 || day < 1 || day > 31 ||
-            hour > 23 || minute > 59 || second > 59) {
-            delay(1000);
-            continue;
+        if (clockText.length() >= 20) {
+            char tzSign = clockText.charAt(17);
+            int tzQuarters = clockText.substring(18).toInt();
+            if ((tzSign == '+' || tzSign == '-') && tzQuarters >= 0 && tzQuarters <= 96) {
+                modemOffsetMinutes = tzQuarters * 15;
+                if (tzSign == '-') {
+                    modemOffsetMinutes = -modemOffsetMinutes;
+                }
+            }
         }
 
-        setenv("TZ", "UTC0", 1);
-        tzset();
-
-        struct tm localTime = {};
-        localTime.tm_year = 2000 + yy - 1900;
-        localTime.tm_mon = month - 1;
-        localTime.tm_mday = day;
-        localTime.tm_hour = hour;
-        localTime.tm_min = minute;
-        localTime.tm_sec = second;
-        localTime.tm_isdst = -1;
-
-        time_t epoch = mktime(&localTime);
-        if (epoch < 1700000000) {
-            delay(1000);
-            continue;
+        if (applyLocalClockToSystem(yy,
+                                    month,
+                                    day,
+                                    hour,
+                                    minute,
+                                    second,
+                                    modemOffsetMinutes,
+                                    DEVICE_TIMEZONE_OFFSET_MINUTES)) {
+            time_t now = time(nullptr);
+            struct tm localNow;
+            localtime_r(&now, &localNow);
+            Serial.printf("[CommManager] ESP32 clock synced: modem=%04d-%02d-%02d %02d:%02d:%02d UTC%+d:%02d, schedule-local=%04d-%02d-%02d %02d:%02d:%02d UTC%+d:%02d\n",
+                          2000 + yy,
+                          month,
+                          day,
+                          hour,
+                          minute,
+                          second,
+                          modemOffsetMinutes / 60,
+                          abs(modemOffsetMinutes % 60),
+                          localNow.tm_year + 1900,
+                          localNow.tm_mon + 1,
+                          localNow.tm_mday,
+                          localNow.tm_hour,
+                          localNow.tm_min,
+                          localNow.tm_sec,
+                          DEVICE_TIMEZONE_OFFSET_MINUTES / 60,
+                          abs(DEVICE_TIMEZONE_OFFSET_MINUTES % 60));
+            return true;
         }
 
-        struct timeval tv = {};
-        tv.tv_sec = epoch;
-        tv.tv_usec = 0;
-        settimeofday(&tv, nullptr);
+        if (!requestedInternetTime && attempt >= 2) {
+            requestedInternetTime = true;
+            requestModemInternetTime();
+        }
 
-        Serial.printf("[CommManager] ESP32 clock synced from modem local time: %04d-%02d-%02d %02d:%02d:%02d\n",
-                      2000 + yy,
-                      month,
-                      day,
-                      hour,
-                      minute,
-                      second);
-        return true;
+        delay(1000);
     }
 
-    Serial.println("[CommManager] Could not sync ESP32 clock from modem; schedules will wait for valid time");
+    Serial.println("[CommManager] Could not sync ESP32 clock from modem/internet; schedules will wait for valid time");
     return false;
 #endif
+}
+
+bool CommunicationManager::requestModemInternetTime() {
+#ifndef LILYGO_T_A7670
+    return false;
+#else
+    String configCommand = "AT+CNTP=\"";
+    configCommand += MODEM_NTP_SERVER;
+    configCommand += "\",0";
+
+    String response = sendATCommand(configCommand, 5000);
+    Serial.printf("[CommManager] %s -> %s\n",
+                  configCommand.c_str(),
+                  compactATResponse(response).c_str());
+    if (response.indexOf("ERROR") != -1) {
+        return false;
+    }
+
+    response = sendATCommand("AT+CNTP", 30000, "+CNTP:");
+    Serial.printf("[CommManager] AT+CNTP -> %s\n", compactATResponse(response).c_str());
+    return response.indexOf("+CNTP: 1") != -1 || response.indexOf("+CNTP: 0") != -1;
+#endif
+}
+
+bool CommunicationManager::syncESPTimeFromWiFi() {
+    if (WiFi.status() != WL_CONNECTED) {
+        return false;
+    }
+
+    setSystemTimezoneOffsetMinutes(DEVICE_TIMEZONE_OFFSET_MINUTES);
+    configTime(0, 0, MODEM_NTP_SERVER, "time.google.com", "time.cloudflare.com");
+
+    for (uint8_t attempt = 1; attempt <= 20; attempt++) {
+        time_t now = time(nullptr);
+        if (now >= 1700000000) {
+            struct tm ti;
+            localtime_r(&now, &ti);
+            Serial.printf("[CommManager] ESP32 clock synced from WiFi NTP: %04d-%02d-%02d %02d:%02d:%02d\n",
+                          ti.tm_year + 1900,
+                          ti.tm_mon + 1,
+                          ti.tm_mday,
+                          ti.tm_hour,
+                          ti.tm_min,
+                          ti.tm_sec);
+            return true;
+        }
+        delay(500);
+    }
+
+    Serial.println("[CommManager] WiFi NTP sync timed out; schedules will wait for valid time");
+    return false;
 }
 
 String CommunicationManager::sendATPayloadCommand(const String& command,
@@ -847,6 +979,7 @@ bool CommunicationManager::connectWiFi() {
     
     if (WiFi.status() == WL_CONNECTED) {
         Serial.printf("[CommManager] WiFi connected, IP: %s\n", WiFi.localIP().toString().c_str());
+        syncESPTimeFromWiFi();
         return true;
     }
     
@@ -971,6 +1104,7 @@ bool CommunicationManager::connectGSM() {
     }
     
     Serial.println("[CommManager] GPRS connected");
+    syncESPTimeFromModem();
     
     // Update MQTT client to use GSM
     if (!_gsmClient) {

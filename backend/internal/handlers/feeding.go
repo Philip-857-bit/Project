@@ -74,7 +74,11 @@ func (h *FeedingHandler) pushSchedule(deviceID string) {
 		})
 	}
 
-	payload, err := json.Marshal(map[string]interface{}{"schedules": entries})
+	payload, err := json.Marshal(map[string]interface{}{
+		"schedules":               entries,
+		"server_unix":             time.Now().Unix(),
+		"timezone_offset_minutes": 60,
+	})
 	if err != nil {
 		h.logger.WithError(err).Warn("Failed to marshal schedule push payload")
 		return

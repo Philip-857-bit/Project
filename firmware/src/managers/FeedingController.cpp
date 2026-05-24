@@ -32,6 +32,19 @@ static uint8_t motorDirLevel(bool forward) {
 #endif
 }
 
+static unsigned long plannedMoveDurationMs(long steps, unsigned long stepDelayUs) {
+    if (steps <= 0) {
+        return 0;
+    }
+
+    uint64_t totalUs = (uint64_t)steps * (uint64_t)(stepDelayUs + MOTOR_PULSE_WIDTH_US);
+    uint64_t totalMs = totalUs / 1000ULL;
+    if (totalMs > 0xFFFFFFFFULL) {
+        return 0xFFFFFFFFUL;
+    }
+    return (unsigned long)totalMs;
+}
+
 FeedingController::FeedingController()
     : _sensorManager(nullptr)
     , _storage(nullptr)
@@ -56,6 +69,8 @@ FeedingController::FeedingController()
     , _lastCalibrationStepUs(0)
     , _calibrationStepCount(0)
     , _lastCalibrationDurationMs(0)
+    , _lastMeasuredRunStepCount(0)
+    , _lastMeasuredRunDurationMs(0)
     , _gramsPerRevolution(GRAMS_PER_REVOLUTION)
     , _microSteps(MOTOR_MICROSTEPS)
     , _stepDelayUs(1000000UL / MOTOR_MAX_SPEED)
@@ -194,6 +209,24 @@ void FeedingController::checkSchedule() {
 
     int dayBit = 1 << ti.tm_wday;
     int minuteOfDay = ti.tm_hour * 60 + ti.tm_min;
+
+    static int lastLoggedMinuteOfDay = -1;
+    static int lastLoggedDayOfYear = -1;
+    if (_scheduleCount > 0 &&
+        (lastLoggedMinuteOfDay != minuteOfDay || lastLoggedDayOfYear != ti.tm_yday)) {
+        lastLoggedMinuteOfDay = minuteOfDay;
+        lastLoggedDayOfYear = ti.tm_yday;
+        Serial.printf("[Schedule] Local time %04d-%02d-%02d %02d:%02d:%02d, day=%d, entries=%d\n",
+                      ti.tm_year + 1900,
+                      ti.tm_mon + 1,
+                      ti.tm_mday,
+                      ti.tm_hour,
+                      ti.tm_min,
+                      ti.tm_sec,
+                      ti.tm_wday,
+                      _scheduleCount);
+    }
+
     for (int i = 0; i < _scheduleCount; i++) {
         if (!_schedule[i].enabled || !(_schedule[i].daysOfWeek & dayBit)) continue;
         bool alreadyExecutedThisMinute =
@@ -230,13 +263,6 @@ bool FeedingController::feedRemote(float adjustedGrams) {
 
 
 FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
-    _feedingActive = true;
-    _feedingStartTime = millis();
-    _targetGrams = grams;
-    _dispensedGrams = 0;
-#ifdef USE_TMC2209
-    _stallDetected = false;
-#endif
     float temperature = Q10_REFERENCE_TEMP, q10Factor = 1.0f;
     if (trigger != FeedingTrigger::REMOTE) {
         // REMOTE commands come pre-adjusted from the backend; skip firmware Q10
@@ -247,8 +273,42 @@ FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
     } else if (_sensorManager) {
         temperature = _sensorManager->getCurrentData().temperature;
     }
+
     float adjustedGrams = grams * q10Factor;
-    bool completed = moveSteps(gramsToSteps(adjustedGrams), MOTOR_FEED_DIRECTION_FORWARD != 0);
+    long plannedSteps = gramsToSteps(adjustedGrams);
+    unsigned long expectedMs = plannedMoveDurationMs(plannedSteps, _stepDelayUs);
+    if (!_motorInitialized || _gramsPerRevolution <= 0.0f || plannedSteps <= 0 || expectedMs > FEEDING_TIMEOUT_MS) {
+        Serial.printf("[Feed] Rejected dose: requested=%.2fg adjusted=%.2fg calibration=%.4f g/rev steps=%ld expected=%.1fs timeout=%.1fs\n",
+                      grams,
+                      adjustedGrams,
+                      _gramsPerRevolution,
+                      plannedSteps,
+                      expectedMs / 1000.0f,
+                      FEEDING_TIMEOUT_MS / 1000.0f);
+        _lastEvent.timestamp = millis();
+        _lastEvent.quantityGrams = grams;
+        _lastEvent.actualDispensed = 0;
+        _lastEvent.durationMs = 0;
+        _lastEvent.trigger = trigger;
+        _lastEvent.result = FeedingResult::ERROR;
+        _lastEvent.temperature = temperature;
+        _lastEvent.q10Factor = q10Factor;
+        _lastEvent.obmSafetyFactor = 1.0f;
+        _lastEvent.errorMessage = "invalid calibration or dose duration";
+        return FeedingResult::ERROR;
+    }
+
+    _feedingActive = true;
+    _feedingStartTime = millis();
+    _targetGrams = grams;
+    _dispensedGrams = 0;
+#ifdef USE_TMC2209
+    _stallDetected = false;
+#endif
+
+    bool completed = moveSteps(plannedSteps, MOTOR_FEED_DIRECTION_FORWARD != 0);
+    _lastMeasuredRunStepCount = (unsigned long)plannedSteps;
+    _lastMeasuredRunDurationMs = millis() - _feedingStartTime;
     _dispensedGrams = adjustedGrams;
     _feedingActive = false;
     FeedingResult result = FeedingResult::SUCCESS;
@@ -261,7 +321,7 @@ FeedingResult FeedingController::dispense(float grams, FeedingTrigger trigger) {
     _lastEvent.timestamp = millis();
     _lastEvent.quantityGrams = grams;
     _lastEvent.actualDispensed = _dispensedGrams;
-    _lastEvent.durationMs = (uint32_t)(millis() - _feedingStartTime);
+    _lastEvent.durationMs = (uint32_t)_lastMeasuredRunDurationMs;
     _lastEvent.trigger = trigger;
     _lastEvent.result = result;
     _lastEvent.temperature = temperature;
@@ -278,9 +338,10 @@ bool FeedingController::moveSteps(long steps, bool direction) {
     delayMicroseconds(5);
     unsigned long stepDelay = _stepDelayUs;
     for (long i = 0; i < steps; i++) {
+        if (!_feedingActive) return false;
         stepPulse();
         delayMicroseconds(stepDelay);
-        if (i % 100 == 0) yield();
+        if (i % 100 == 0) delay(1);
 #ifdef USE_TMC2209
         if (digitalRead(PIN_DIAG) == HIGH) { _stallDetected = true; return false; }
 #endif
@@ -332,6 +393,9 @@ float FeedingController::calculateQ10Adjustment(float baseAmount, float temperat
 }
 
 long FeedingController::gramsToSteps(float grams) const {
+    if (grams <= 0.0f || _gramsPerRevolution <= 0.0f) {
+        return 0;
+    }
     float revolutions = grams / _gramsPerRevolution;
 #ifdef USE_TMC2209
     return (long)(revolutions * MOTOR_STEPS_PER_REV * MOTOR_MICROSTEPS);
@@ -340,7 +404,16 @@ long FeedingController::gramsToSteps(float grams) const {
 #endif
 }
 
-void FeedingController::calibrateGramsPerRev(float grams) { _gramsPerRevolution = grams; _storage->putFloat("grams_per_rev", grams); }
+bool FeedingController::calibrateGramsPerRev(float grams) {
+    if (grams < 5.0f || grams > 500.0f) {
+        Serial.printf("[MotorCal] Rejected grams/rev %.4f; expected range is 5.0 to 500.0\n", grams);
+        return false;
+    }
+    _gramsPerRevolution = grams;
+    _storage->putFloat("grams_per_rev", grams);
+    Serial.printf("[MotorCal] Saved grams/rev: %.4f\n", grams);
+    return true;
+}
 void FeedingController::setMicrosteps(int microsteps) {
     if (microsteps < 1) {
         microsteps = 1;
@@ -410,6 +483,8 @@ bool FeedingController::startCalibrationRun(bool direction) {
     _lastCalibrationStepUs = micros();
     _calibrationStepCount = 0;
     _lastCalibrationDurationMs = 0;
+    _lastMeasuredRunStepCount = 0;
+    _lastMeasuredRunDurationMs = 0;
 
     digitalWrite(PIN_STEP, motorStepInactiveLevel());
     digitalWrite(PIN_DIR, motorDirLevel(direction));
@@ -435,6 +510,8 @@ bool FeedingController::stopCalibrationRun() {
     }
 
     _lastCalibrationDurationMs = millis() - _calibrationStartTimeMs;
+    _lastMeasuredRunStepCount = _calibrationStepCount;
+    _lastMeasuredRunDurationMs = _lastCalibrationDurationMs;
     float durationSec = _lastCalibrationDurationMs / 1000.0f;
     float stepsPerSec = durationSec > 0.0f ? (float)_calibrationStepCount / durationSec : 0.0f;
     float revolutions = (float)_calibrationStepCount / (float)getStepsPerRevolution();
@@ -462,22 +539,25 @@ bool FeedingController::isCalibrationRunning() const {
 }
 
 bool FeedingController::calibrateFromLastRun(float measuredGrams) {
-    if (_calibrationActive || measuredGrams <= 0.0f || _calibrationStepCount == 0) {
+    if (_calibrationActive || _feedingActive || measuredGrams <= 0.0f || _lastMeasuredRunStepCount == 0) {
         return false;
     }
 
-    float revolutions = (float)_calibrationStepCount / (float)getStepsPerRevolution();
+    float revolutions = (float)_lastMeasuredRunStepCount / (float)getStepsPerRevolution();
     if (revolutions <= 0.0f) {
         return false;
     }
 
     float gramsPerRev = measuredGrams / revolutions;
-    calibrateGramsPerRev(gramsPerRev);
+    if (!calibrateGramsPerRev(gramsPerRev)) {
+        return false;
+    }
 
-    float durationSec = _lastCalibrationDurationMs / 1000.0f;
+    float durationSec = _lastMeasuredRunDurationMs / 1000.0f;
     Serial.println();
     Serial.println("[MotorCal] ======== CALIBRATION SAVED ========");
     Serial.printf("[MotorCal] Measured feed: %.2f g\n", measuredGrams);
+    Serial.printf("[MotorCal] Step pulses: %lu\n", _lastMeasuredRunStepCount);
     Serial.printf("[MotorCal] Revolutions: %.4f\n", revolutions);
     Serial.printf("[MotorCal] Saved grams/rev: %.4f\n", gramsPerRev);
     if (durationSec > 0.0f) {
@@ -514,6 +594,8 @@ bool FeedingController::runDoseTest(float grams) {
     _feedingStartTime = millis();
     bool completed = moveSteps(steps, MOTOR_FEED_DIRECTION_FORWARD != 0);
     unsigned long durationMs = millis() - _feedingStartTime;
+    _lastMeasuredRunStepCount = (unsigned long)steps;
+    _lastMeasuredRunDurationMs = durationMs;
     _feedingActive = false;
 
     Serial.println("[DoseTest] ======== DOSE TEST STOP ========");

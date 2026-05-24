@@ -384,6 +384,8 @@ private:
      * Scheduled feeding compares against ESP32 local time.
      */
     bool syncESPTimeFromModem();
+    bool syncESPTimeFromWiFi();
+    bool requestModemInternetTime();
     
     /**
      * Send AT command to GSM module
