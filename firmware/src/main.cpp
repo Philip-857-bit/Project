@@ -402,12 +402,13 @@ void communicationTaskFunc(void* parameter) {
 
         // Report local/scheduled feed results. Remote app feeds are already
         // logged by the backend before the command is sent to the device.
+        // Send even when offline: sendFeedingEvent() falls back to the offline
+        // buffer, which flushOfflineBuffer() drains once connectivity returns.
         static unsigned long lastReportedFeedEventTs = 0;
         FeedingEvent feedEvent = feedingController.getLastEvent();
         if (feedEvent.timestamp != 0 &&
             feedEvent.timestamp != lastReportedFeedEventTs &&
-            feedEvent.trigger != FeedingTrigger::REMOTE &&
-            commManager.isConnected()) {
+            feedEvent.trigger != FeedingTrigger::REMOTE) {
             if (commManager.sendFeedingEvent(feedEvent)) {
                 lastReportedFeedEventTs = feedEvent.timestamp;
             }
@@ -425,7 +426,9 @@ void communicationTaskFunc(void* parameter) {
             if (now - lastDiagReportTime >= 300000UL) {  // Every 5 minutes
                 lastDiagReportTime = now;
                 commManager.sendDiagnosticsReport(systemDiagnostics);
-                systemDiagnostics.sendPipelinePing();
+                // No ping here: systemDiagnostics.update() already pings on
+                // the same 5-minute cadence; a second ping overwrites the
+                // pending nonce and invalidates the first pong
             }
         }
         

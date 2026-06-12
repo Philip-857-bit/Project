@@ -123,7 +123,9 @@ void SystemDiagnostics::sendPipelinePing() {
 // Handle pong response from backend
 // ---------------------------------------------------------------------------
 void SystemDiagnostics::handlePong(const JsonDocument& doc) {
-    uint32_t nonce = doc["nonce"] | 0;
+    // as<uint32_t>, not "| 0": the int default would reject nonces above
+    // INT32_MAX, which esp_random() produces half the time
+    uint32_t nonce = doc["nonce"].as<uint32_t>();
     if (nonce != _lastPingNonce) {
         Serial.println("[Diagnostics] Pong nonce mismatch — ignoring");
         return;

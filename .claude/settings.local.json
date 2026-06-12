@@ -3,7 +3,11 @@
     "allow": [
       "Bash(grep -E \"= nil|_ = |err = $\")",
       "Bash(cat)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "PowerShell($p = Get-Command pio -ErrorAction SilentlyContinue; if \\($p\\) { $p.Source } else { \"pio not found\" }; $pp = Get-Command platformio -ErrorAction SilentlyContinue; if \\($pp\\) { $pp.Source })",
+      "PowerShell($candidates = @\\(\"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\", \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\platformio.exe\"\\); foreach \\($c in $candidates\\) { if \\(Test-Path $c\\) { $c } })",
+      "PowerShell(& \"C:\\\\Users\\\\HP\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -d \"C:\\\\Users\\\\HP\\\\Desktop\\\\project\\\\firmware\" -e t-a7670-dm542)",
+      "PowerShell(& \"C:\\\\Users\\\\HP\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" device list)"
     ]
   }
 }

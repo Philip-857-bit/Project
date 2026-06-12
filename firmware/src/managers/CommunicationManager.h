@@ -372,6 +372,16 @@ private:
      * @return true if buffered
      */
     bool bufferMessage(const String& topic, uint8_t* payload, size_t length, uint8_t priority);
+
+    /**
+     * Persistent (NVS-backed) FIFO queue for feeding events. Unlike the RAM
+     * offline buffer, entries survive reboot and power loss. Events are
+     * enqueued before any send attempt (write-ahead) and removed only after
+     * the broker accepts the publish.
+     */
+    bool enqueuePersistedFeeding(const String& topic, const String& json);
+    int flushPersistedFeedings();
+    uint32_t persistedFeedingCount();
     
     /**
      * Initialize GSM module

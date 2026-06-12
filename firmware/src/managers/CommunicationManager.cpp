@@ -1583,10 +1583,13 @@ bool CommunicationManager::sendFeedingEvent(const FeedingEvent& event) {
     JsonDocument doc;
 
     doc["device_id"]        = _deviceManager->getDeviceID();
-    time_t now = time(nullptr);
-    if (now >= 1700000000) {
+    // Stamp the payload with the time the feeding actually happened, not the
+    // time this function runs: event.timestamp is the millis() at dispense,
+    // so subtract the elapsed time from the current epoch.
+    time_t eventTime = time(nullptr) - (time_t)((millis() - event.timestamp) / 1000UL);
+    if (eventTime >= 1700000000) {
         struct tm timeInfo;
-        gmtime_r(&now, &timeInfo);
+        gmtime_r(&eventTime, &timeInfo);
         char timestamp[25];
         strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", &timeInfo);
         doc["timestamp"] = timestamp;
@@ -1603,7 +1606,16 @@ bool CommunicationManager::sendFeedingEvent(const FeedingEvent& event) {
     
     String json;
     serializeJson(doc, json);
-    
+
+    // Write-ahead: persist to flash first so the event survives reboot or
+    // power loss, then attempt immediate delivery. The entry is removed from
+    // flash only once the broker accepts it (see flushPersistedFeedings).
+    if (enqueuePersistedFeeding(_topicFeeding, json)) {
+        flushPersistedFeedings();
+        return true;
+    }
+
+    // NVS unavailable; fall back to live publish / RAM offline buffer
     return publish(_topicFeeding, (uint8_t*)json.c_str(), json.length(), 4);
 }
 
@@ -1817,11 +1829,16 @@ bool CommunicationManager::bufferMessage(const String& topic, uint8_t* payload, 
 }
 
 int CommunicationManager::flushOfflineBuffer() {
-    if ((!_gsmNativeMqttConnected && !_mqttClient.connected()) || _offlineBufferCount == 0) {
+    if (!_gsmNativeMqttConnected && !_mqttClient.connected()) {
         return 0;
     }
-    
-    int sent = 0;
+
+    // Drain flash-persisted feeding events first (these survived any reboot)
+    int sent = flushPersistedFeedings();
+
+    if (_offlineBufferCount == 0) {
+        return sent;
+    }
     
     // Send highest priority first
     for (int p = 5; p >= 1; p--) {
@@ -1848,7 +1865,103 @@ int CommunicationManager::flushOfflineBuffer() {
     if (sent > 0) {
         Serial.printf("[CommManager] Flushed %d offline messages\n", sent);
     }
-    
+
+    return sent;
+}
+
+// ---------------------------------------------------------------------------
+// Persistent feeding-event queue (NVS-backed, survives reboot/power loss)
+//
+// Layout in NVS: monotonic head/tail counters ("fq_head"/"fq_tail") and one
+// string entry per slot ("fq_0".."fq_N-1", slot = counter % capacity). Each
+// entry stores "<topic>\n<json payload>". The payload JSON is serialized at
+// dispense time, so it already carries the true feeding timestamp.
+// ---------------------------------------------------------------------------
+
+static const uint32_t FEED_QUEUE_CAPACITY = 16;
+
+static void feedQueueKey(char* out, size_t outLen, uint32_t seq) {
+    snprintf(out, outLen, "fq_%lu", (unsigned long)(seq % FEED_QUEUE_CAPACITY));
+}
+
+uint32_t CommunicationManager::persistedFeedingCount() {
+    if (!_storage) return 0;
+    uint32_t head = _storage->getUInt("fq_head", 0);
+    uint32_t tail = _storage->getUInt("fq_tail", 0);
+    return (tail >= head) ? (tail - head) : 0;
+}
+
+bool CommunicationManager::enqueuePersistedFeeding(const String& topic, const String& json) {
+    if (!_storage) return false;
+
+    uint32_t head = _storage->getUInt("fq_head", 0);
+    uint32_t tail = _storage->getUInt("fq_tail", 0);
+    if (tail < head) {  // corrupted indices; reset the queue
+        head = 0;
+        tail = 0;
+        _storage->putUInt("fq_head", head);
+    }
+
+    if (tail - head >= FEED_QUEUE_CAPACITY) {
+        // Queue full: drop the oldest event so the newest is always kept
+        char oldKey[16];
+        feedQueueKey(oldKey, sizeof(oldKey), head);
+        _storage->remove(oldKey);
+        head++;
+        _storage->putUInt("fq_head", head);
+        Serial.println("[CommManager] Persisted feed queue full - dropped oldest");
+    }
+
+    char key[16];
+    feedQueueKey(key, sizeof(key), tail);
+    if (!_storage->putString(key, topic + "\n" + json)) {
+        Serial.println("[CommManager] Failed to persist feeding event to NVS");
+        return false;
+    }
+    _storage->putUInt("fq_tail", tail + 1);
+    return true;
+}
+
+int CommunicationManager::flushPersistedFeedings() {
+    if (!_storage) return 0;
+    if (!_gsmNativeMqttConnected && !_mqttClient.connected()) return 0;
+
+    uint32_t head = _storage->getUInt("fq_head", 0);
+    uint32_t tail = _storage->getUInt("fq_tail", 0);
+    int sent = 0;
+
+    while (head < tail) {
+        char key[16];
+        feedQueueKey(key, sizeof(key), head);
+        String entry = _storage->getString(key, "");
+
+        int sep = entry.indexOf('\n');
+        if (sep <= 0) {  // missing or corrupt entry; discard and move on
+            _storage->remove(key);
+            head++;
+            _storage->putUInt("fq_head", head);
+            continue;
+        }
+
+        String topic = entry.substring(0, sep);
+        String json  = entry.substring(sep + 1);
+
+        bool published = _gsmNativeMqttConnected
+            ? publishNativeGsmMQTT(topic, (const uint8_t*)json.c_str(), json.length(), MQTT_QOS)
+            : _mqttClient.publish(topic.c_str(), (const uint8_t*)json.c_str(), json.length());
+        if (!published) {
+            break;  // connection degraded; retry remaining entries next flush
+        }
+
+        _storage->remove(key);
+        head++;
+        _storage->putUInt("fq_head", head);
+        sent++;
+    }
+
+    if (sent > 0) {
+        Serial.printf("[CommManager] Delivered %d persisted feeding event(s)\n", sent);
+    }
     return sent;
 }
 
